@@ -868,7 +868,7 @@ function TopWeight({ entryIdx, close }) {
   // to sit after every one of them.
   const entry = A ? A.entries[entryIdx] : null
   const ex = entry && EXIDX[entry.id]
-  const maxSet = entry ? Math.max(0, ...entry.sets.filter(s => s.done).map(s => s.w || 0)) : 0
+  const maxSet = entry ? Math.max(0, ...entry.sets.filter(s => s.done && !s.warmup).map(s => s.w || 0)) : 0
   const prevBest = entry ? Math.max((st.exWeights[entry.id] || {}).w || 0, bestWeightFor(st, entry.id)) : 0
   const [v, setV] = useState(entry ? (Math.max(maxSet, prevBest) || entry.target.weight || 0) : 0)
   useEffect(() => { if (!entry) close() }, [!entry])
@@ -959,7 +959,7 @@ function doFinishWorkout() {
   const prs = []
   const e1prs = []
   A.entries.forEach(e => {
-    const mx = Math.max(0, ...e.sets.filter(s => s.done).map(s => s.w))
+    const mx = Math.max(0, ...e.sets.filter(s => s.done && !s.warmup).map(s => s.w))
     if (mx > 0 && mx > bestWeightFor(st, e.id)) prs.push(e.id)
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
@@ -979,7 +979,7 @@ function doFinishWorkout() {
   if (hrMax > 0) w.hrMax = hrMax   // peak heart rate, when a monitor was connected this session
   update(s => {
     w.entries.forEach(e => {
-      const mx = Math.max(0, ...e.sets.filter(x => x.done).map(x => x.w || 0), e.topW || 0)
+      const mx = Math.max(0, ...e.sets.filter(x => x.done && !x.warmup).map(x => x.w || 0), e.topW || 0)
       if (mx > 0) { const cur = s.exWeights[e.id]; if (!cur || mx > cur.w) s.exWeights[e.id] = { w: mx, d: w.d } }
     })
     s.workouts.push(w)

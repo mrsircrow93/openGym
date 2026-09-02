@@ -209,7 +209,8 @@ export function workoutVolume(w) {
   let v = 0
   // No special case for unilateral work: a per-side set logs its total, so both sides are
   // already in the rep count that arrives here.
-  w.entries.forEach(e => e.sets.forEach(s => { if (s.done) v += (s.w || 0) * (s.r || 0) }))
+  // Warm-up sets are logged but never count toward working volume.
+  w.entries.forEach(e => e.sets.forEach(s => { if (s.done && !s.warmup) v += (s.w || 0) * (s.r || 0) }))
   return v
 }
 export function setsDone(w) {

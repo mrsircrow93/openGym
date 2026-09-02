@@ -118,9 +118,12 @@ export default function Settings() {
 
     {/* ---------- during a workout ---------- */}
     <Section title={t('During a workout')} footer={wakeOK ? t('The screen stays on while a workout is running, so you don’t have to unlock your phone between sets.') : null}>
-      <SelectRow icon="timer" iconTint="var(--orange)" title={t('Rest timer')}
+      <SelectRow icon="timer" iconTint="var(--orange)" title={t('Rest between sets')}
         value={S.restSec} onChange={v => update(s => { s.restSec = v })}
         options={[60, 90, 120, 150, 180].map(v => ({ value: v, label: v + 's' }))} />
+      <SelectRow icon="clock" iconTint="var(--orange)" title={t('Rest between exercises')}
+        value={S.restExerciseSec ?? 120} onChange={v => update(s => { s.restExerciseSec = v })}
+        options={[0, 60, 90, 120, 150, 180, 240, 300].map(v => ({ value: v, label: v === 0 ? t('Off') : (v >= 60 ? Math.floor(v / 60) + (v % 60 ? ':' + String(v % 60).padStart(2, '0') : ':00') + ' min' : v + 's') }))} />
       {(wakeOK || !MOBILE) && (
         <Row icon="sun" iconTint="var(--yellow)" title={t('Keep screen awake')}
           subtitle={wakeOK ? null : t('Not supported in this browser.')}>
