@@ -1,0 +1,47 @@
+# Netlify config for the openGym frontend.
+#
+# CURRENTLY SET UP FOR OPTION A (free, no backend): the static build runs in on-device guest
+# mode; each person's data lives in their own browser, and AI runs on each user's own Anthropic
+# key (Settings → AI features). No accounts, no cross-device sync, no push. See docs/NETLIFY.md.
+#
+# TO UPGRADE TO OPTION B LATER (accounts + sync, backend on Render):
+#   1. change the build command below to  npm run build   (drops the static flag)
+#   2. uncomment the /api/* proxy block and set it to your Render URL
+#   3. on Render set RP_ID / ORIGIN to this Netlify domain
+# That's the only difference — nothing else changes.
+
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build:static"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Exercise images + GIFs from the dataset's CDN, so you don't ship ~140 MB into the site.
+# Pinned to the same commit the mobile build uses.
+[[redirects]]
+  from = "/img/*"
+  to = "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/gif/*"
+  to = "https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/:splat"
+  status = 200
+  force = true
+
+# --- OPTION B only: uncomment and point at your Render backend (keeps everything same-origin
+# --- for passkeys). Also switch the build command above to "npm run build".
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-BACKEND.onrender.com/api/:splat"
+#   status = 200
+#   force = true
+
+# SPA fallback — every other path serves the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

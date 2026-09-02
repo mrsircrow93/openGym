@@ -1,0 +1,42 @@
+# Render Blueprint — BACKEND ONLY (Option B: frontend on Netlify, backend here).
+#
+# This deploys just the Node API (api/). The React frontend is served by Netlify, which proxies
+# /api/* here and /img,/gif to the exercise-media CDN (see ../netlify.toml). See docs/NETLIFY.md.
+#
+# WHY "starter" (paid) and not "free":
+#   · User accounts, passkeys and training history live in files under /data. Keeping them across
+#     restarts/deploys needs a PERSISTENT DISK, and Render only allows disks on paid instances.
+#   · Free instances also sleep after ~15 min idle. With Option B that only cold-starts the API
+#     (the app itself always loads from Netlify), but the disk is the real reason for "starter".
+# If you're fine with guest-mode-only and no cross-device sync, you don't need this service at
+# all — deploy just the Netlify frontend (Option A) and let each user bring their own AI key.
+
+services:
+  - type: web
+    name: opengym-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    plan: starter                 # always-on + allows the disk below. Change to "free" only if you accept ephemeral data.
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: RP_NAME
+        value: openGym
+      # Set both of these to your Netlify site once you have it, e.g.:
+      #   RP_ID  = opengym.netlify.app        (host only, no https://)
+      #   ORIGIN = https://opengym.netlify.app
+      - key: RP_ID
+        sync: false
+      - key: ORIGIN
+        sync: false
+      # Optional — with bring-your-own-key in Settings, users supply their own Anthropic key,
+      # so the instance no longer needs one. Set it only if you want a shared fallback.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    disk:
+      name: opengym-data          # BACK THIS UP — it holds every account, passkey and workout log
+      mountPath: /data
+      sizeGB: 1
