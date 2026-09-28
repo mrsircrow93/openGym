@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore, DEF, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { ACCENTS, todayISO, localTZ } from '../lib/format.js'
+import { ACCENTS, todayISO, localTZ, fmtNum } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
 import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
@@ -246,6 +246,17 @@ function effortHelpSheet() {
 
 // Bring-your-own AI key (see lib/ai.js). Lives in localStorage on this device only — never
 // synced, never sent to the server. When set, the AI features call Anthropic directly.
+// Server-paid AI: what this profile has used this month. Read-only, from /api/ai/usage.
+function AIUsageRow() {
+  const [u, setU] = useState(null)
+  useEffect(() => { api('/api/ai/usage').then(setU).catch(() => setU(null)) }, [])
+  if (!u || !u.calls) return null
+  const usd = u.usd < 0.01 ? '< $0.01' : '$' + u.usd.toFixed(2)
+  return <Row icon="sparkles" iconTint="var(--violet)" title={t('AI used this month')}
+    subtitle={t('{0} calls · {1} tokens', u.calls, fmtNum((u.in + u.out) / 1000) + 'k') + (u.cap ? ' · ' + t('cap {0}', '$' + u.cap) : '')}
+    value={usd} />
+}
+
 function AICard({ toast }) {
   const [key, setKey] = useState(getAIKey())
   const [model, setModel] = useState(getAIModel())
@@ -279,6 +290,7 @@ function AICard({ toast }) {
     </div>
     {has && <SelectRow icon="sparkles" iconTint="var(--violet)" title={t('AI model')}
       value={model} onChange={changeModel} options={AI_MODELS} />}
+    {!has && !STATIC && !MOBILE && <AIUsageRow />}
   </Section>
 }
 

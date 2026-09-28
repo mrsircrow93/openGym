@@ -267,7 +267,38 @@ function aiRateLimited(uid, limit, windowMs) {
   aiHits.set(uid, hits);
   return false;
 }
-async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }) {
+// USD per million tokens, matched by model-id prefix. Used for the per-user usage ledger below
+// — this is what a paid tier has to cover, so it's tracked from day one (see docs/AI_COSTS.md).
+const PRICING = [
+  ['claude-haiku-4-5', { in: 1, out: 5 }],
+  ['claude-sonnet-5', { in: 2, out: 10 }],
+  ['claude-sonnet-4', { in: 3, out: 15 }],
+  ['claude-opus-5', { in: 5, out: 25 }],
+  ['claude-opus-4', { in: 5, out: 25 }]
+];
+const priceOf = model => (PRICING.find(([p]) => model.startsWith(p)) || [null, { in: 5, out: 25 }])[1];
+const AI_MONTHLY_USD_CAP = +process.env.AI_MONTHLY_USD_CAP || 0;   // 0 = unlimited (personal instance)
+const monthKey = () => new Date().toISOString().slice(0, 7);
+db.aiUsage = db.aiUsage || {};                                       // uid -> { 'YYYY-MM': { calls, in, out, usd, features: { name: calls } } }
+function aiUsageOf(uid, month = monthKey()) {
+  const u = db.aiUsage[uid] = db.aiUsage[uid] || {};
+  return u[month] = u[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} };
+}
+function recordAiUsage(uid, feature, usage) {
+  if (!uid || !usage) return;
+  const p = priceOf(ANTHROPIC_MODEL);
+  const inTok = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
+  const outTok = usage.output_tokens || 0;
+  const row = aiUsageOf(uid);
+  row.calls++; row.in += inTok; row.out += outTok;
+  row.usd = Math.round((row.usd + (inTok * p.in + outTok * p.out) / 1e6) * 1e4) / 1e4;
+  row.features[feature] = (row.features[feature] || 0) + 1;
+  saveDb();
+}
+// Per-user monthly spend ceiling. Off by default; a paid plan sets it per tier (docs/BILLING.md).
+const aiOverBudget = uid => AI_MONTHLY_USD_CAP > 0 && aiUsageOf(uid).usd >= AI_MONTHLY_USD_CAP;
+
+async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }, meta) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -278,7 +309,9 @@ async function callAnthropic({ system, messages, tools, tool_choice, max_tokens 
     body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: max_tokens || 1024, system, messages, tools, tool_choice })
   });
   if (!r.ok) throw new Error('anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
-  return r.json();
+  const j = await r.json();
+  if (meta) recordAiUsage(meta.uid, meta.feature, j.usage);
+  return j;
 }
 
 
@@ -709,6 +742,39 @@ const routes = {
 
   // Turns "did 3x10 at 60kg" into { sets, reps, weight }. Forced tool-use keeps the reply
   // machine-readable — no prose to strip, no JSON-in-a-string to hope the model got right.
+  // What this profile has spent on AI this month (tokens + USD at list price) and the cap, if any.
+  'GET /api/ai/usage': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: AI_MONTHLY_USD_CAP || null, model: ANTHROPIC_MODEL });
+  },
+  'GET /api/admin/ai-usage': async (req, res) => {
+    const user = readSession(req);
+    if (!isAdmin(user)) return json(res, 403, { error: 'admin only' });
+    const month = monthKey();
+    const rows = db.users.map(u => ({ id: u.id, name: u.name, ...(db.aiUsage[u.id]?.[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} }) }));
+    json(res, 200, { month, model: ANTHROPIC_MODEL, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
+  },
+
+  /* ---------- billing (scaffold — see docs/BILLING.md) ---------- */
+  // Everything is free until billing ships; the client reads the tier from here and never
+  // hard-codes it. Checkout/webhook are stubs so the client wiring can be built against them.
+  'GET /api/billing/status': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { enabled: false, tier: 'free', renewsAt: null, aiCapUsd: AI_MONTHLY_USD_CAP || null });
+  },
+  'POST /api/billing/checkout': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
+  'POST /api/billing/portal': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
+  'POST /api/billing/webhook': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
+
+  /* ---------- progress photos (scaffold — see docs/PROGRESS_PHOTOS.md) ---------- */
+  // Contract only. The real implementation needs object storage; the JSON state file is the
+  // wrong place for images. Metadata (date, pose, weight that day) stays in the profile state.
+  'POST /api/progress-photos/upload-url': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
+  'GET /api/progress-photos': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
+  'DELETE /api/progress-photos': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
+
   'POST /api/ai/parse-set': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
@@ -717,6 +783,7 @@ const routes = {
     const text = String(body.text || '').trim().slice(0, 300);
     if (!text) return json(res, 400, { error: 'text required' });
     if (aiRateLimited(user.id, 20, 60_000)) return json(res, 429, { error: 'too many requests — slow down' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
       const r = await callAnthropic({
         max_tokens: 300,
@@ -740,7 +807,7 @@ const routes = {
           }
         }],
         tool_choice: { type: 'tool', name: 'log_set' }
-      });
+      }, { uid: user.id, feature: 'parse-set' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
@@ -754,6 +821,7 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
     if (aiRateLimited(user.id, 5, 60 * 60_000)) return json(res, 429, { error: 'you can ask for a new read-out again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     const S = readState(user.id);
     if (!S || !(S.workouts || []).length) return json(res, 400, { error: 'log a few workouts first' });
     // Keep the prompt small and cheap: last 15 sessions, only what a coach would actually look
@@ -779,7 +847,7 @@ const routes = {
           `suggestions (e.g. a deload, a technique check, adding a set). No markdown headers, just prose. ` +
           `Respond in ${S.lang === 'es' ? 'Spanish' : 'English'}.`,
         messages: [{ role: 'user', content: JSON.stringify({ routines, recent }) }]
-      });
+      }, { uid: user.id, feature: 'coach' });
       const text = (r.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
       if (!text) return json(res, 502, { error: 'no reply from model' });
       json(res, 200, { ok: true, text });
@@ -798,6 +866,7 @@ const routes = {
     const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
     if (!image || image.length > 4_000_000) return json(res, 400, { error: 'image required (send it resized client-side)' });
     if (aiRateLimited(user.id, 10, 60 * 60_000)) return json(res, 429, { error: 'too many photos — try again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
       const r = await callAnthropic({
         max_tokens: 300,
@@ -827,7 +896,7 @@ const routes = {
           }
         }],
         tool_choice: { type: 'tool', name: 'identify_exercise' }
-      });
+      }, { uid: user.id, feature: 'identify-exercise' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
@@ -863,8 +932,9 @@ const routes = {
     if (image.length > 4_000_000) return json(res, 400, { error: 'image too large (send it resized client-side)' });
     if (!image && !text && !previous) return json(res, 400, { error: 'photo or description required' });
     if (aiRateLimited(user.id, 15, 60 * 60_000)) return json(res, 429, { error: 'too many meals analysed — try again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
-      const r = await callAnthropic(mealAnalysisRequest({ image, mediaType, text, lang, previous, correction }));
+      const r = await callAnthropic(mealAnalysisRequest({ image, mediaType, text, lang, previous, correction }), { uid: user.id, feature: 'analyze-meal' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
@@ -891,8 +961,9 @@ const routes = {
       .filter(c => c.id && c.n);
     if (candidates.length < 10) return json(res, 400, { error: 'exercise candidates required' });
     if (aiRateLimited(user.id, 6, 60 * 60_000)) return json(res, 429, { error: 'you can build a new plan again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
-      const r = await callAnthropic(trainerPlanRequest({ profile, candidates }));
+      const r = await callAnthropic(trainerPlanRequest({ profile, candidates }), { uid: user.id, feature: 'trainer-plan' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
@@ -911,6 +982,7 @@ const routes = {
       .filter(c => c.id && c.n);
     if (!ex.name || !candidates.length) return json(res, 400, { error: 'exercise and candidates required' });
     if (aiRateLimited(user.id, 20, 60_000)) return json(res, 429, { error: 'too many requests — slow down' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
       const r = await callAnthropic({
         max_tokens: 500,
@@ -945,7 +1017,7 @@ const routes = {
           }
         }],
         tool_choice: { type: 'tool', name: 'suggest_alternatives' }
-      });
+      }, { uid: user.id, feature: 'alternatives' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       // Keep only ids the client actually offered — the model is grounded, but this is cheap insurance

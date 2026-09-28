@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { DAYN, uid, exCount } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { dayAssignSheet, loadStarterPlan, planToolsSheet } from '../sheets.jsx'
+import { dayAssignSheet, loadStarterPlan, planToolsSheet, deleteRoutine } from '../sheets.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
+import SwipeRow from '../components/SwipeRow.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
@@ -48,10 +49,14 @@ export default function Plan() {
         <h4 className="sec" style={{ margin: 0 }}>{t('Routines')}</h4>
         <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New')}</Button>
       </div>
-      {S.routines.length ? <div className="list">{S.routines.map(r => <div key={r.id} className="item" onClick={() => nav('/plan/r/' + r.id)}>
+      {S.routines.length > 0 && <div className="small dim" style={{ margin: '-4px 2px 8px' }}>{t('Swipe a routine left to edit or delete it.')}</div>}
+      {S.routines.length ? <div className="list">{S.routines.map(r => <SwipeRow key={r.id} actions={[
+        { icon: 'pencil', label: t('Edit'), onClick: () => nav('/plan/r/' + r.id) },
+        { icon: 'trash', label: t('Delete'), danger: true, onClick: () => deleteRoutine(r.id) }
+      ]}><div className="item" onClick={() => nav('/plan/r/' + r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
-        <Icon name="chevronRight" className="chev" /></div>)}</div> : <>
+        <Icon name="chevronRight" className="chev" /></div></SwipeRow>)}</div> : <>
         <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Create one or load the starter plan.')}</div>
         <Button variant="primary" icon="sparkles" onClick={trainerSheet}>{t('Build my plan with the AI trainer')}</Button>
         <div style={{ height: 8 }} /><Button onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>

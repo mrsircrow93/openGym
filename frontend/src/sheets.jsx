@@ -20,7 +20,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
-import { aiParseSet, aiCoach, aiIdentifyExercise, aiAlternatives, fileToResizedBase64 } from './lib/api.js'
+import { aiParseSet, aiCoach, aiIdentifyExercise, aiAlternatives, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
 import { hrSupported, hrConnect, hrDisconnect } from './lib/heartrate.js'
 
 const S = () => useStore.getState().S
@@ -52,6 +52,25 @@ export function loadStarterPlan() {
     st.week[1] = push.id; st.week[3] = pull.id; st.week[5] = legs.id
   })
   toast(t('Starter plan loaded — Mon Push · Wed Pull · Fri Legs'))
+}
+
+// Removes a routine and every schedule slot that pointed at it. Shared by the routine editor
+// and the swipe-to-delete on the Plan list.
+export function deleteRoutine(id, afterDelete) {
+  const r = S().routines.find(x => x.id === id)
+  if (!r) return
+  confirmSheet({
+    title: t('Delete routine?'), message: t('“{0}” and its exercises will be removed.', r.name), confirmText: t('Delete'), danger: true,
+    onConfirm: () => {
+      update(s => {
+        s.routines = s.routines.filter(x => x.id !== id)
+        Object.keys(s.week).forEach(k => { if (s.week[k] === id) delete s.week[k] })
+        Object.keys(s.dayPlan).forEach(k => { if (s.dayPlan[k] === id) delete s.dayPlan[k] })
+      })
+      toast(t('Routine deleted'))
+      if (afterDelete) afterDelete()
+    }
+  })
 }
 
 /* ============================ weight picker (shared: body weight + goal) ============================ */
@@ -1006,7 +1025,7 @@ function AiQuickLog({ ex, unit, close, onApply }) {
       const r = await aiParseSet(v, ex.n, unit)
       if (!r.confident && r.sets == null && r.reps == null && r.weight == null) setErr(t('Couldn’t make sense of that — try again with the numbers spelled out.'))
       else setResult(r)
-    } catch (e) { setErr(e.message || t('AI request failed')) }
+    } catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
   }
   return <>
@@ -1040,7 +1059,7 @@ function AiCoach({ close }) {
   const run = async () => {
     setBusy(true); setErr(''); setTextR('')
     try { const r = await aiCoach(); setTextR(r.text) }
-    catch (e) { setErr(e.message || t('AI request failed')) }
+    catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
   }
   useEffect(() => { run() }, [])
@@ -1081,7 +1100,7 @@ function IdentifyExercise({ file, close }) {
       try {
         const { base64, mediaType } = await fileToResizedBase64(file)
         setGuess(await aiIdentifyExercise(base64, mediaType))
-      } catch (e) { setErr(e.message || t('AI request failed')) }
+      } catch (e) { setErr(aiErrorMessage(e)) }
       setBusy(false)
     })()
     return () => URL.revokeObjectURL(photoUrl)
@@ -1167,6 +1186,23 @@ function SwapExercise({ entryIdx, close }) {
   const [err, setErr] = useState('')
   const [reason, setReason] = useState('')
   const [alts, setAlts] = useState([])
+  // "This machine is free — what can I do on it?": photograph it, identify it, and rank the
+  // library matches with the same-muscle candidates boosted so a like-for-like swap comes first.
+  const photoInput = useRef(null)
+  const [photo, setPhoto] = useState(null)   // { busy, err, guess, matches: [{ e, sameMuscle }] }
+  const identify = async file => {
+    setPhoto({ busy: true })
+    try {
+      const { base64, mediaType } = await fileToResizedBase64(file)
+      const guess = await aiIdentifyExercise(base64, mediaType)
+      if (guess.confidence === 'none') { setPhoto({ guess, matches: [] }); return }
+      const sameMuscle = new Set(cands.map(c => c.id))
+      const matches = allExercises(st).filter(e => e.id !== ex.id && isCardio(e.id) === isCardio(ex.id))
+        .map(e => ({ e, score: scoreMatch(guess, e) + (sameMuscle.has(e.id) ? 0.35 : 0), sameMuscle: sameMuscle.has(e.id) }))
+        .filter(x => x.score > 0.15).sort((a, b) => b.score - a.score).slice(0, 4)
+      setPhoto({ guess, matches })
+    } catch (e) { setPhoto({ err: aiErrorMessage(e) }) }
+  }
 
   const run = async rsn => {
     setBusy(true); setErr(''); setAlts([])
@@ -1174,7 +1210,7 @@ function SwapExercise({ entryIdx, close }) {
       const r = await aiAlternatives({ name: ex.n, bodyPart: ex.bp, target: ex.tg, equipment: ex.eq }, cands, rsn)
       const byId = {}; allExercises(st).forEach(e => { byId[e.id] = e })
       setAlts((r.alternatives || []).map(a => ({ ex: byId[a.id], why: a.why })).filter(a => a.ex))
-    } catch (e) { setErr(e.message || t('AI request failed')) }
+    } catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
   }
   useEffect(() => { if (ex) run(''); else close() }, [])
@@ -1189,6 +1225,30 @@ function SwapExercise({ entryIdx, close }) {
       {SWAP_REASONS.map(r => <button key={r.label} className={'chip' + (reason === r.k ? ' on' : '')}
         onClick={() => { setReason(r.k); run(r.k) }}>{t(r.label)}</button>)}
     </div>
+    <input ref={photoInput} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) identify(f) }} />
+    <Button variant="tinted" icon="camera" onClick={() => photoInput.current?.click()} style={{ marginBottom: 12 }}>{t('Photograph the free machine')}</Button>
+    {photo && <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+      {photo.busy && <div className="row small dim" style={{ gap: 8 }}><span className="spin" />{t('Looking at your photo…')}</div>}
+      {photo.err && <div className="small" style={{ color: 'var(--red)' }}>{photo.err}</div>}
+      {photo.guess && photo.guess.confidence === 'none' && <div className="small dim">{t('Couldn’t spot an exercise in that photo — try getting closer to the machine.')}</div>}
+      {photo.guess && photo.guess.confidence !== 'none' && <>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span className="small muted">{t('In the photo:')}</span>
+          <span className="tag acc capitalize">{photo.guess.name}</span>
+          <span className="tag capitalize">{t(photo.guess.bodyPart)}</span>
+        </div>
+        {photo.matches.length === 0 && <div className="small dim">{t('No library match for that machine — browse all exercises below.')}</div>}
+        {photo.matches.length > 0 && !photo.matches[0].sameMuscle && <div className="small" style={{ color: 'var(--orange)', marginBottom: 8 }}>{t('That machine trains a different muscle than “{0}” — fine as a swap, but it won’t cover the same work.', ex.n)}</div>}
+        {photo.matches.length > 0 && <div className="list">
+          {photo.matches.map(m => <div key={m.e.id} className="item" onClick={() => pick(m.e)}>
+            <Thumb ex={m.e} />
+            <div className="grow"><div className="tt capitalize">{m.e.n}</div><div className="ss capitalize">{t(m.e.tg || m.e.bp)} · {t(m.e.eq)}{m.sameMuscle ? ' · ' + t('same muscle') : ''}</div></div>
+            <span className="tag acc">{t('Swap')}</span>
+          </div>)}
+        </div>}
+      </>}
+    </div>}
     {busy && <div className="small dim">{t('Finding alternatives…')}</div>}
     {err && <div className="small" style={{ color: 'var(--red)', marginBottom: 10 }}>{err}</div>}
     {!busy && !err && alts.length === 0 && <div className="small dim">{t('No suggestions for that — browse the full library below.')}</div>}

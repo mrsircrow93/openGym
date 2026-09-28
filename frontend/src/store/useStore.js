@@ -4,6 +4,7 @@ import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED, STATIC } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
+import { refreshBilling } from '../lib/entitlements.js'
 
 const KEY = 'gym_state_v1'
 export const DEF = {
@@ -20,6 +21,8 @@ export const DEF = {
   // AI trainer: last questionnaire answers + a note of the plan it produced, so re-running
   // starts from what you said last time.
   trainer: null,
+  // Progress photos: metadata only (lib/progress-photos.js) — the images live in object storage.
+  progressPhotos: [],
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
@@ -191,6 +194,7 @@ export const useStore = create((set, get) => {
       try {
         const me = await api('/api/me')
         get().setUser(me.user)
+        refreshBilling()   // fire-and-forget: tier + AI cap for feature gating (lib/entitlements.js)
         await get().pullState()
         // Re-stamp the reminder's timezone on every load — keeps it correct if you're travelling,
         // without needing to revisit Settings.

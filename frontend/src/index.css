@@ -952,3 +952,17 @@ h4.sec{
 .micro .mv{font-size:13px;letter-spacing:-.006em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .micro .mb{height:3px;background:var(--surface-2);border-radius:99px;overflow:hidden}
 .micro .mb i{display:block;height:100%;border-radius:99px;transition:width var(--med) var(--ease)}
+/* ---- swipe-to-reveal rows ---- */
+.swipe{position:relative;overflow:hidden;border-radius:var(--r-card)}
+.swipe-actions{position:absolute;top:0;right:0;bottom:0;display:flex;visibility:hidden}
+.swipe.open .swipe-actions{visibility:visible}
+.swipe-act{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  background:var(--surface-3);color:var(--label);font-size:11px;font-weight:500;
+}
+.swipe-act .icn{font-size:18px}
+.swipe-act.danger{background:var(--red);color:#fff}
+.swipe-act:active{filter:brightness(.85)}
+.swipe-body{position:relative;touch-action:pan-y;transition:transform .22s var(--ease);will-change:transform}
+.swipe-body.dragging{transition:none}
+.swipe-body>.item{min-width:100%}
