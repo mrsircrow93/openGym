@@ -73,3 +73,26 @@ talks to the API. First step for mobile billing is therefore sign-in from the ap
 4. Upsell sheet in the client behind `can()`.
 5. RevenueCat for the store builds, after sign-in exists on mobile.
 6. Admin: MRR, churn, per-user AI spend vs plan price (`/api/admin/ai-usage` already there).
+
+## Decisions so far (Sep 2026)
+
+- **Prices (MXN, IVA included, same everywhere):** $129 / month · $779 / 6 months · $1,549 / year.
+  The prepaid tiers are list prices; conversion comes from offers, not from a permanent
+  strikethrough (PROFECO: a reference price must actually have been charged).
+- **Offers:** intro offer on monthly (first month $79), launch price on annual ($1,290 =
+  "2 months free", shown as "$107/mo vs $129"), referral and win-back coupons. All as Stripe
+  coupons / store introductory & promotional offers — never hard-coded in the client.
+- **Free trial: 7 days on every channel.** Store: introductory free trial via IAP. Web: Stripe
+  trial, card required (AI tokens cost real money during the trial). One trial per account,
+  AI cap during trial $1 USD.
+- **Stores:** the app is free to download; the subscription is an in-app purchase (Apple's
+  rules outside the US/EU don't allow steering to web payment; the multiplatform exception
+  requires IAP to be offered too). Enrol in Apple's Small Business Program and Google's
+  equivalent (15 %) before launch. One account = one subscription across web and stores.
+- **Web:** Stripe, same prices, ~3.6 % + 3 MXN per charge — the channel with the best margin.
+- **Net per typical user per month** (18.5 MXN/USD, Sonnet AI ≈ $1.45): web ≈ $5.60 → margin
+  $4.15; store at 15 % ≈ $5.10 → $3.65; store at 30 % ≈ $4.20 → $2.75. Prepaid plans net the
+  same ± a few cents (fewer transaction fees). Heavy users stay positive on every channel; keep
+  `AI_MONTHLY_USD_CAP=2` as insurance anyway.
+- **Server model:** `tier`, `tierUntil`, `trialEnds`, `provider` (stripe | apple | google) on the
+  user record; `can()` is true while `now < trialEnds || now < tierUntil`.
