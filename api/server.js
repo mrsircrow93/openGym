@@ -281,6 +281,58 @@ async function callAnthropic({ system, messages, tools, tool_choice, max_tokens 
   return r.json();
 }
 
+
+// Shared by the server route and mirrored in frontend/src/lib/ai.js for the BYO-key path.
+function mealAnalysisRequest({ image, mediaType, text, lang }) {
+  const content = [];
+  if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } });
+  content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
+    (image ? 'Estimate the calories and macros of everything edible in this photo.' : 'Estimate the calories and macros of this meal from the description alone.') });
+  return {
+    max_tokens: 1500,
+    system: 'You are a registered dietitian estimating the nutrition of a single meal for a fitness app. ' +
+      'List every distinct food or drink as its own item. For each, estimate the portion actually present ' +
+      '(use visual cues: a dinner plate is ~26 cm, a fork ~18 cm, a hand ~18 cm; typical serving sizes when ' +
+      'unclear), convert it to grams, and give calories, protein, carbohydrates and fat FOR THAT PORTION ' +
+      '(not per 100 g), using standard food-composition data. Account for likely cooking oil, dressings ' +
+      'and sauces you can see. If the person typed details (quantities, brand, how it was cooked), trust ' +
+      'them over what the photo suggests. Give a single best estimate for each number — never ranges. ' +
+      'Set confidence "none" only if nothing edible is visible or described. Write item names and the ' +
+      'meal name in the language with ISO code "' + lang + '"; keep the portion text short (e.g. "1 cup", "2 slices", "~150 g").',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'log_meal',
+      description: 'The itemised nutrition estimate for the meal',
+      input_schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'short name for the whole meal, e.g. "Chicken rice bowl"' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'food name' },
+                portion: { type: 'string', description: 'portion as a person would say it' },
+                grams: { type: 'number', description: 'estimated weight of the portion in grams (ml for drinks)' },
+                kcal: { type: 'number', description: 'calories for the portion' },
+                protein: { type: 'number', description: 'grams of protein for the portion' },
+                carbs: { type: 'number', description: 'grams of carbohydrate for the portion' },
+                fat: { type: 'number', description: 'grams of fat for the portion' }
+              },
+              required: ['name', 'portion', 'grams', 'kcal', 'protein', 'carbs', 'fat']
+            }
+          },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low', 'none'] },
+          note: { type: 'string', description: 'one short clause on the main assumption (e.g. "assumed 1 tbsp oil") or why confidence is low/none' }
+        },
+        required: ['name', 'items', 'confidence']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'log_meal' }
+  };
+}
+
 /* ---------- routes ---------- */
 const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true, users: db.users.length }),
@@ -702,6 +754,31 @@ const routes = {
   // so the model can only ever pick things already in the library — the frontend then swaps
   // straight to a known id rather than fuzzy-matching a free-text name. `reason` is optional
   // ("machine taken", "hurts my shoulder", "no barbell") and steers the picks.
+
+  // Meal photo (and/or a typed description) -> itemised calorie + macro estimate. The model
+  // reads portion size from visual cues (plate, cutlery, hand) and returns one row per food,
+  // each with an estimated weight so the client can rescale a portion without another call.
+  // Photos are never stored server-side — the estimate is what gets logged, not the image.
+  'POST /api/ai/analyze-meal': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
+    const body = await readBody(req);
+    const image = String(body.image || '');
+    const text = String(body.text || '').trim().slice(0, 500);
+    const lang = String(body.lang || 'en').slice(0, 5);
+    const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
+    if (image.length > 4_000_000) return json(res, 400, { error: 'image too large (send it resized client-side)' });
+    if (!image && !text) return json(res, 400, { error: 'photo or description required' });
+    if (aiRateLimited(user.id, 15, 60 * 60_000)) return json(res, 429, { error: 'too many meals analysed — try again in a bit' });
+    try {
+      const r = await callAnthropic(mealAnalysisRequest({ image, mediaType, text, lang }));
+      const call = (r.content || []).find(b => b.type === 'tool_use');
+      if (!call) return json(res, 502, { error: 'no structured reply from model' });
+      json(res, 200, { ok: true, ...call.input });
+    } catch (e) { console.error('ai/analyze-meal', e); json(res, 502, { error: 'AI request failed' }); }
+  },
+
   'POST /api/ai/alternatives': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });

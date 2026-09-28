@@ -14,6 +14,9 @@ export const DEF = {
   // Water log: one row per day { d: iso, ml } upserted as you drink, plus a daily goal in ml.
   // Overlaid on DEF like everything else, so profiles created before this feature just start empty.
   water: [], waterGoal: 2000,
+  // Meal log: one row per meal { id, d, t, type, name, items, ai } — totals are derived from
+  // items (lib/nutrition.js). macroGoal is a partial override of DEFAULT_MACRO_GOAL.
+  meals: [], macroGoal: null,
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and

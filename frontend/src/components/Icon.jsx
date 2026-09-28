@@ -113,6 +113,8 @@ const P = {
   shuffle: <><path d="M3.6 7.2h2.9c1.6 0 2.8.9 3.8 2.4l3 4.8c1 1.5 2.2 2.4 3.8 2.4h2.9M3.6 16.8h2.9c1.6 0 2.8-.9 3.8-2.4l.7-1.1M15.6 9.9l.7-1.1c1-1.5 2.2-2.4 3.8-2.4h1.9" /><path d="m17.9 4.3 2.8 2.1-2.8 2.1M17.9 14.7l2.8 2.1-2.8 2.1" /></>,
   info: <><circle cx="12" cy="12" r="8.2" /><path d="M12 11v5.4" /><circle cx="12" cy="7.9" r=".9" fill="currentColor" stroke="none" /></>,
   // A teardrop for water logging — snapped so the point lands on a pixel edge.
+  camera: <><path d="M4.4 8.6a2 2 0 0 1 2-2h2.1l1.3-2h4.4l1.3 2h2.1a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H6.4a2 2 0 0 1-2-2Z" /><circle cx="12" cy="12.6" r="3.3" /></>,
+  utensils: <path d="M6.2 3.6v6.2M4 3.6v3.8a2.2 2.2 0 0 0 4.4 0V3.6M6.2 9.8v10.6M17.6 3.6c-2 .9-3.2 3.2-3.2 6.2 0 1.3.4 2.1 1.6 2.4v8.2M17.6 3.6v16.8" />,
   droplet: <path d="M12 3.6c3 4 5.4 6.7 5.4 9.6a5.4 5.4 0 0 1-10.8 0C6.6 10.3 9 7.6 12 3.6Z" />,
   // The Bluetooth rune: vertical spine with the two crossed chevrons, drawn as one stroke.
   bluetooth: <path d="M8 8.4 16 15.6 12 19V5l4 3.4L8 15.6" />,

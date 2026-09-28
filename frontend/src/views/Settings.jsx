@@ -265,7 +265,7 @@ function AICard({ toast }) {
   return <Section title={t('AI features')}
     footer={has
       ? t('AI runs on your own Anthropic key, straight from this device — the server never sees it, and it works even with no backend.')
-      : t('Add your own Anthropic API key to power set parsing, the coach, exercise swaps and photo ID. Stored only on this device.')}>
+      : t('Add your own Anthropic API key to power set parsing, the coach, exercise swaps, photo ID and meal photos. Stored only on this device.')}>
     <div className="lrow" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, paddingTop: 13, paddingBottom: 14 }}>
       <span className="lrow-t row" style={{ gap: 7 }}><Icon name="key" style={{ color: 'var(--violet)' }} />{t('Anthropic API key')}</span>
       <input className="input" type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-…"

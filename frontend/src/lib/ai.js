@@ -4,7 +4,7 @@
 // swaps, photo identification) run through the server's own Anthropic key — see api/server.js.
 // That means every user spends the instance owner's credits, and it needs a backend at all.
 //
-// This module lets a user paste THEIR OWN Anthropic key instead. When one is set, the four AI
+// This module lets a user paste THEIR OWN Anthropic key instead. When one is set, the AI
 // helpers in api.js call the Anthropic API directly from the browser with that key, and the
 // server is never involved. Two consequences worth knowing:
 //   · The key is stored in localStorage on this device only. It is never synced to the server,
@@ -25,7 +25,7 @@ export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 // Offered in Settings. Any string works if typed manually, but these cover the common tiers.
 export const AI_MODELS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — fast & cheap' },
-  { value: 'claude-sonnet-5', label: 'Sonnet 5 — balanced' },
+  { value: 'claude-sonnet-5', label: 'Sonnet 5 — balanced', subtitle: 'best for meal photos' },
   { value: 'claude-opus-5', label: 'Opus 5 — most capable' },
 ]
 
@@ -81,7 +81,7 @@ const toolInput = (r, name) => {
   return call.input
 }
 
-/* ---- the four helpers, mirroring api/server.js ---- */
+/* ---- the helpers, mirroring api/server.js ---- */
 
 export async function directParseSet(text, exercise, unit) {
   const r = await callDirect({
@@ -209,4 +209,58 @@ export async function directAlternatives(exercise, candidates, reason) {
   const valid = new Set(cands.map(c => c.id))
   const alternatives = (toolInput(r, 'suggest_alternatives').alternatives || []).filter(a => valid.has(a.id)).slice(0, 6)
   return { ok: true, alternatives }
+}
+
+// Meal photo / description -> itemised calories + macros. Same request as the server's
+// mealAnalysisRequest in api/server.js — keep the two in step.
+export async function directAnalyzeMeal({ image, mediaType, text, lang }) {
+  const mt = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg'
+  const content = []
+  if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: image } })
+  content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
+    (image ? 'Estimate the calories and macros of everything edible in this photo.' : 'Estimate the calories and macros of this meal from the description alone.') })
+  const r = await callDirect({
+    max_tokens: 1500,
+    system: 'You are a registered dietitian estimating the nutrition of a single meal for a fitness app. ' +
+      'List every distinct food or drink as its own item. For each, estimate the portion actually present ' +
+      '(use visual cues: a dinner plate is ~26 cm, a fork ~18 cm, a hand ~18 cm; typical serving sizes when ' +
+      'unclear), convert it to grams, and give calories, protein, carbohydrates and fat FOR THAT PORTION ' +
+      '(not per 100 g), using standard food-composition data. Account for likely cooking oil, dressings ' +
+      'and sauces you can see. If the person typed details (quantities, brand, how it was cooked), trust ' +
+      'them over what the photo suggests. Give a single best estimate for each number — never ranges. ' +
+      'Set confidence "none" only if nothing edible is visible or described. Write item names and the ' +
+      'meal name in the language with ISO code "' + (lang || 'en') + '"; keep the portion text short (e.g. "1 cup", "2 slices", "~150 g").',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'log_meal',
+      description: 'The itemised nutrition estimate for the meal',
+      input_schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'short name for the whole meal, e.g. "Chicken rice bowl"' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'food name' },
+                portion: { type: 'string', description: 'portion as a person would say it' },
+                grams: { type: 'number', description: 'estimated weight of the portion in grams (ml for drinks)' },
+                kcal: { type: 'number', description: 'calories for the portion' },
+                protein: { type: 'number', description: 'grams of protein for the portion' },
+                carbs: { type: 'number', description: 'grams of carbohydrate for the portion' },
+                fat: { type: 'number', description: 'grams of fat for the portion' }
+              },
+              required: ['name', 'portion', 'grams', 'kcal', 'protein', 'carbs', 'fat']
+            }
+          },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low', 'none'] },
+          note: { type: 'string', description: 'one short clause on the main assumption (e.g. "assumed 1 tbsp oil") or why confidence is low/none' }
+        },
+        required: ['name', 'items', 'confidence']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'log_meal' }
+  })
+  return { ok: true, ...toolInput(r, 'log_meal') }
 }

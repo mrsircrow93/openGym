@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
@@ -9,6 +9,8 @@ import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
+import { macroGoalOf, dayTotals, mealsOn } from '../lib/nutrition.js'
+import { analyzeMealSheet, DaySummary } from '../sheets-nutrition.jsx'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -16,6 +18,7 @@ export default function Home() {
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
+  const mealPhoto = useRef(null)
 
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
@@ -44,6 +47,9 @@ export default function Home() {
   const water = waterToday(S)
   const waterGoal = S.waterGoal || 2000
   const waterPct = Math.min(100, Math.round((water / waterGoal) * 100))
+  const macroGoal = macroGoalOf(S)
+  const foodToday = dayTotals(S, todayISO())
+  const mealsToday = mealsOn(S, todayISO()).length
 
   // today's session shown right under the week strip
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
@@ -128,6 +134,20 @@ export default function Home() {
       <div className="row" style={{ gap: 8 }}>
         <Button size="sm" icon="plus" style={{ flex: 1 }} onClick={() => addWater(250)}>{t('Glass')} <span className="dim">250</span></Button>
         <Button size="sm" icon="plus" style={{ flex: 1 }} onClick={() => addWater(500)}>{t('Bottle')} <span className="dim">500</span></Button>
+      </div>
+    </div>
+
+    <input ref={mealPhoto} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) analyzeMealSheet(f, todayISO()) }} />
+    <div className="card">
+      <div className="row between" style={{ marginBottom: 8 }}>
+        <h2 className="row" style={{ margin: 0, gap: 7 }}><Icon name="utensils" style={{ color: 'var(--orange)' }} />{t('Nutrition')}</h2>
+        <Button size="sm" icon="list" onClick={() => nav('/nutrition')}>{mealsToday ? t(mealsToday === 1 ? '{0} meal' : '{0} meals', mealsToday) : t('Open')}</Button>
+      </div>
+      <DaySummary tot={foodToday} goal={macroGoal} compact />
+      <div className="row" style={{ gap: 8, marginTop: 12 }}>
+        <Button size="sm" variant="tinted" icon="camera" style={{ flex: 1 }} onClick={() => mealPhoto.current?.click()}>{t('Snap a meal')}</Button>
+        <Button size="sm" icon="calendar" style={{ flex: 1 }} onClick={() => nav('/nutrition')}>{t('Log')}</Button>
       </div>
     </div>
 

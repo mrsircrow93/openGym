@@ -1,5 +1,5 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
-import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives } from './ai.js'
+import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
 export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
@@ -77,6 +77,13 @@ export async function aiAlternatives(exercise, candidates, reason) {
 export async function aiIdentifyExercise(image, mediaType) {
   if (hasUserKey()) return directIdentify(image, mediaType)
   return api('/api/ai/identify-exercise', { method: 'POST', body: JSON.stringify({ image, mediaType }) })
+}
+// Meal photo and/or typed description -> { name, items: [{ name, portion, grams, kcal, protein,
+// carbs, fat }], confidence, note }. Either input alone is enough; both together is best (the
+// caption fixes quantities the photo can't show). The photo is analysed, never stored.
+export async function aiAnalyzeMeal({ image, mediaType, text, lang }) {
+  if (hasUserKey()) return directAnalyzeMeal({ image, mediaType, text, lang })
+  return api('/api/ai/analyze-meal', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, text: text || '', lang }) })
 }
 // Downscales client-side before it ever leaves the device — a full-res phone photo is
 // 3-8 MB and costs real API tokens for no accuracy gain past ~1024px on the long edge.
