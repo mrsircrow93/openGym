@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL } from '../lib/nutrition.js'
-import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, DaySummary, MacroLine } from '../sheets-nutrition.jsx'
+import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
@@ -102,6 +102,7 @@ export default function Nutrition() {
         <span className="small dim" style={{ marginLeft: 'auto' }}>{avg.kcal > goal.kcal ? t('{0} over target', fmtNum(avg.kcal - goal.kcal)) : t('{0} under target', fmtNum(goal.kcal - avg.kcal))}</span>
       </div>
       <div style={{ marginTop: 4 }}><MacroLine tot={avg} /></div>
+      <MicroLine tot={avg} goal={goal} />
     </div>}
   </div>
 }

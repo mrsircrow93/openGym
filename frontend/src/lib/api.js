@@ -1,5 +1,5 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
-import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal } from './ai.js'
+import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
 export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
@@ -86,6 +86,12 @@ export async function aiIdentifyExercise(image, mediaType) {
 export async function aiAnalyzeMeal({ image, mediaType, text, lang, previous, correction }) {
   if (hasUserKey()) return directAnalyzeMeal({ image, mediaType, text, lang, previous, correction })
   return api('/api/ai/analyze-meal', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, text: text || '', lang, previous: previous || null, correction: correction || '' }) })
+}
+// Questionnaire + exercise shortlist -> { summary, split, progression, routines, cardio, nutrition }.
+// Every exercise id must come from the candidates sent; lib/trainer.js re-checks before saving.
+export async function aiTrainerPlan(body) {
+  if (hasUserKey()) return directTrainerPlan(body)
+  return api('/api/ai/trainer-plan', { method: 'POST', body: JSON.stringify(body) })
 }
 // Downscales client-side before it ever leaves the device — a full-res phone photo is
 // 3-8 MB and costs real API tokens for no accuracy gain past ~1024px on the long edge.

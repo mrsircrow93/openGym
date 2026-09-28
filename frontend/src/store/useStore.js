@@ -17,6 +17,9 @@ export const DEF = {
   // Meal log: one row per meal { id, d, t, type, name, items, ai } — totals are derived from
   // items (lib/nutrition.js). macroGoal is a partial override of DEFAULT_MACRO_GOAL.
   meals: [], macroGoal: null,
+  // AI trainer: last questionnaire answers + a note of the plan it produced, so re-running
+  // starts from what you said last time.
+  trainer: null,
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and

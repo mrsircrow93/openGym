@@ -9,7 +9,7 @@ import { t, getLang } from './lib/i18n.js'
 import { aiAnalyzeMeal, fileToResizedBase64 } from './lib/api.js'
 import {
   MEAL_TYPES, MEAL_TYPE_LABEL, MEAL_TYPE_ICON, macroGoalOf, cleanItem, scaleItem, totalsOf,
-  guessMealType, nowHHMM, kcalByDay, pctOf
+  guessMealType, nowHHMM, kcalByDay, pctOf, MICROS, MICRO_UNIT, MICRO_IS_CEILING
 } from './lib/nutrition.js'
 import Icon from './components/Icon.jsx'
 import { Button, Segmented, TextField, TextArea, Stepper } from './components/ui.jsx'
@@ -63,6 +63,11 @@ function ItemRow({ item, onChange, onRemove }) {
         <Stepper label={t('Protein (g)')} value={item.protein} step={1} onChange={v => onChange({ ...item, protein: v })} />
         <Stepper label={t('Carbs (g)')} value={item.carbs} step={1} onChange={v => onChange({ ...item, carbs: v })} />
         <Stepper label={t('Fat (g)')} value={item.fat} step={1} onChange={v => onChange({ ...item, fat: v })} />
+      </div>
+      <div className="row cfgrow">
+        <Stepper label={t('Sugar (g)')} value={item.sugar || 0} step={1} onChange={v => onChange({ ...item, sugar: v })} />
+        <Stepper label={t('Fibre (g)')} value={item.fiber || 0} step={1} onChange={v => onChange({ ...item, fiber: v })} />
+        <Stepper label={t('Sodium (mg)')} value={item.sodium || 0} step={50} decimal={false} onChange={v => onChange({ ...item, sodium: v })} />
       </div>
       <div className="small dim">{t('Changing the portion rescales calories and macros proportionally.')}</div>
       <Button size="sm" variant="danger" icon="trash" onClick={onRemove}>{t('Remove item')}</Button>
@@ -228,6 +233,12 @@ function MacroGoal({ close }) {
       <Stepper label={t('Carbs (g)')} value={g.carbs} step={5} decimal={false} onChange={v => set({ carbs: Math.max(0, v) })} />
       <Stepper label={t('Fat (g)')} value={g.fat} step={5} decimal={false} onChange={v => set({ fat: Math.max(0, v) })} />
     </div>
+    <h4 className="sec" style={{ marginTop: 6 }}>{t('Also keep an eye on')}</h4>
+    <div className="row cfgrow" style={{ marginBottom: 8 }}>
+      <Stepper label={t('Sugar (g) · max')} value={g.sugar} step={5} decimal={false} onChange={v => set({ sugar: Math.max(0, v) })} />
+      <Stepper label={t('Fibre (g) · min')} value={g.fiber} step={5} decimal={false} onChange={v => set({ fiber: Math.max(0, v) })} />
+      <Stepper label={t('Sodium (mg) · max')} value={g.sodium} step={100} decimal={false} onChange={v => set({ sodium: Math.max(0, v) })} />
+    </div>
     <div className="small dim" style={{ marginBottom: 6 }}>{t('Your macros add up to {0} kcal.', fmtNum(fromMacros))}{Math.abs(fromMacros - g.kcal) > 150 ? ' ' + t('That’s a fair way from your calorie target — one of them is probably off.') : ''}</div>
     <div className="small dim" style={{ marginBottom: 14 }}>{t('A common starting point: 1.6–2.2 g protein per kg of body weight, 20–35% of calories from fat, the rest carbs.')}</div>
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
@@ -279,6 +290,25 @@ export const nutritionCalendarSheet = (start, onPick) => ui().openSheet(close =>
 
 /* ============================ day summary widget ============================ */
 
+// Sugar / fibre / sodium as three small tiles. Tinted only when they cross the line: sugar
+// and sodium turn orange when over, fibre turns green when reached — the rest stays neutral
+// so the macro bars above keep the attention.
+export function MicroLine({ tot, goal }) {
+  const label = { sugar: t('Sugar'), fiber: t('Fibre'), sodium: t('Sodium') }
+  return <div className="micros">
+    {MICROS.map(k => {
+      const v = +tot[k] || 0, g = +goal[k] || 0, ceil = MICRO_IS_CEILING[k]
+      const over = ceil && g && v > g, hit = !ceil && g && v >= g
+      const col = over ? 'var(--orange)' : hit ? 'var(--acc)' : ''
+      return <div key={k} className="micro" style={col ? { color: col } : null}>
+        <span className="ml">{label[k]}</span>
+        <span className="mv">{fmtNum(v)}<span className="dim"> / {fmtNum(g)} {MICRO_UNIT[k]}</span></span>
+        <span className="mb"><i style={{ width: pctOf(v, g) + '%', background: col || 'var(--label-3)' }} /></span>
+      </div>
+    })}
+  </div>
+}
+
 // Shared by Home and the Nutrition view: calories vs goal + the three macro bars.
 export function DaySummary({ tot, goal, compact }) {
   const rows = [
@@ -301,5 +331,6 @@ export function DaySummary({ tot, goal, compact }) {
         <span className="mb"><i style={{ width: pctOf(tot[r.k], goal[r.k]) + '%', background: r.c }} /></span>
       </div>)}
     </div>
+    {!compact && <MicroLine tot={tot} goal={goal} />}
   </>
 }

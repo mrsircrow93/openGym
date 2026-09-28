@@ -2,8 +2,8 @@
 // compute lives here so it can be unit-tested and so the numbers agree everywhere.
 //
 // A meal is { id, d: 'YYYY-MM-DD', t: 'HH:MM', type, name, items: [item], ai: bool, note }
-// and an item is { name, portion, grams, kcal, protein, carbs, fat } — macros in grams for the
-// portion as logged (not per 100 g). The meal's totals are always derived from its items, never
+// and an item is { name, portion, grams, kcal, protein, carbs, fat, sugar, fiber, sodium } —
+// grams for the portion as logged (not per 100 g), sodium in mg. The meal's totals are always derived from its items, never
 // stored, so editing a portion can't leave a stale sum behind.
 
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -12,7 +12,12 @@ export const MEAL_TYPE_ICON = { breakfast: 'sun', lunch: 'flame', dinner: 'moon'
 
 // Default daily targets. Deliberately moderate — a first-time user sees a sensible bar rather
 // than a bodybuilder's 3 500 kcal. Adjustable in the goal sheet.
-export const DEFAULT_MACRO_GOAL = { kcal: 2000, protein: 140, carbs: 220, fat: 65 }
+// sugar and sodium are ceilings (WHO: <50 g free sugars, <2 000 mg sodium), fibre a floor (~30 g).
+export const DEFAULT_MACRO_GOAL = { kcal: 2000, protein: 140, carbs: 220, fat: 65, sugar: 50, fiber: 30, sodium: 2300 }
+export const MICROS = ['sugar', 'fiber', 'sodium']
+export const MICRO_UNIT = { sugar: 'g', fiber: 'g', sodium: 'mg' }
+// Which way "good" points: fibre you want to reach, sugar and sodium you want to stay under.
+export const MICRO_IS_CEILING = { sugar: true, fiber: false, sodium: true }
 export const macroGoalOf = S => ({ ...DEFAULT_MACRO_GOAL, ...(S.macroGoal || {}) })
 
 const r1 = n => Math.round((+n || 0) * 10) / 10
@@ -27,7 +32,10 @@ export function cleanItem(raw) {
     kcal: Math.max(0, r0(raw.kcal)),
     protein: Math.max(0, r1(raw.protein)),
     carbs: Math.max(0, r1(raw.carbs)),
-    fat: Math.max(0, r1(raw.fat))
+    fat: Math.max(0, r1(raw.fat)),
+    sugar: Math.max(0, r1(raw.sugar)),
+    fiber: Math.max(0, r1(raw.fiber)),
+    sodium: Math.max(0, r0(raw.sodium))
   }
 }
 
@@ -38,13 +46,14 @@ export function scaleItem(item, grams) {
   const g = Math.max(0, r0(grams))
   if (!item.grams) return { ...item, grams: g }
   const k = g / item.grams
-  return { ...item, grams: g, kcal: r0(item.kcal * k), protein: r1(item.protein * k), carbs: r1(item.carbs * k), fat: r1(item.fat * k) }
+  return { ...item, grams: g, kcal: r0(item.kcal * k), protein: r1(item.protein * k), carbs: r1(item.carbs * k), fat: r1(item.fat * k),
+    sugar: r1((+item.sugar || 0) * k), fiber: r1((+item.fiber || 0) * k), sodium: r0((+item.sodium || 0) * k) }
 }
 
 export function totalsOf(items) {
-  const t = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
-  for (const i of items || []) { t.kcal += +i.kcal || 0; t.protein += +i.protein || 0; t.carbs += +i.carbs || 0; t.fat += +i.fat || 0 }
-  return { kcal: r0(t.kcal), protein: r1(t.protein), carbs: r1(t.carbs), fat: r1(t.fat) }
+  const t = { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, sodium: 0 }
+  for (const i of items || []) for (const k in t) t[k] += +i[k] || 0
+  return { kcal: r0(t.kcal), protein: r1(t.protein), carbs: r1(t.carbs), fat: r1(t.fat), sugar: r1(t.sugar), fiber: r1(t.fiber), sodium: r0(t.sodium) }
 }
 
 export const mealsOn = (S, iso) => (S.meals || []).filter(m => m.d === iso).sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
@@ -89,5 +98,6 @@ export function avgLogged(S, days = 7) {
   const keys = Object.keys(by).sort().slice(-days)
   if (!keys.length) return null
   const sum = totalsOf(keys.flatMap(k => by[k]))
-  return { days: keys.length, kcal: r0(sum.kcal / keys.length), protein: r1(sum.protein / keys.length), carbs: r1(sum.carbs / keys.length), fat: r1(sum.fat / keys.length) }
+  const d = keys.length
+  return { days: d, kcal: r0(sum.kcal / d), protein: r1(sum.protein / d), carbs: r1(sum.carbs / d), fat: r1(sum.fat / d), sugar: r1(sum.sugar / d), fiber: r1(sum.fiber / d), sodium: r0(sum.sodium / d) }
 }

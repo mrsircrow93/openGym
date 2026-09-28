@@ -230,7 +230,7 @@ export async function directAnalyzeMeal({ image, mediaType, text, lang, previous
     system: 'You are a registered dietitian estimating the nutrition of a single meal for a fitness app. ' +
       'List every distinct food or drink as its own item. For each, estimate the portion actually present ' +
       '(use visual cues: a dinner plate is ~26 cm, a fork ~18 cm, a hand ~18 cm; typical serving sizes when ' +
-      'unclear), convert it to grams, and give calories, protein, carbohydrates and fat FOR THAT PORTION ' +
+      'unclear), convert it to grams, and give calories, protein, carbohydrates, fat, sugars, fibre and sodium FOR THAT PORTION ' +
       '(not per 100 g), using standard food-composition data. Account for likely cooking oil, dressings ' +
       'and sauces you can see. If the person typed details (quantities, brand, how it was cooked), trust ' +
       'them over what the photo suggests. Give a single best estimate for each number — never ranges. ' +
@@ -255,9 +255,12 @@ export async function directAnalyzeMeal({ image, mediaType, text, lang, previous
                 kcal: { type: 'number', description: 'calories for the portion' },
                 protein: { type: 'number', description: 'grams of protein for the portion' },
                 carbs: { type: 'number', description: 'grams of carbohydrate for the portion' },
-                fat: { type: 'number', description: 'grams of fat for the portion' }
+                fat: { type: 'number', description: 'grams of fat for the portion' },
+                sugar: { type: 'number', description: 'grams of total sugars for the portion' },
+                fiber: { type: 'number', description: 'grams of dietary fibre for the portion' },
+                sodium: { type: 'number', description: 'milligrams of sodium for the portion (salt × 400)' }
               },
-              required: ['name', 'portion', 'grams', 'kcal', 'protein', 'carbs', 'fat']
+              required: ['name', 'portion', 'grams', 'kcal', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium']
             }
           },
           confidence: { type: 'string', enum: ['high', 'medium', 'low', 'none'] },
@@ -269,4 +272,84 @@ export async function directAnalyzeMeal({ image, mediaType, text, lang, previous
     tool_choice: { type: 'tool', name: 'log_meal' }
   })
   return { ok: true, ...toolInput(r, 'log_meal') }
+}
+
+// AI trainer — same request as trainerPlanRequest in api/server.js; keep them in step.
+function trainerPlanRequest({ profile, candidates }) {
+  const p = profile
+  const lines = candidates.map(c => c.id + '|' + c.n + '|' + c.tg + '|' + c.eq).join('\n')
+  return {
+    max_tokens: 4000,
+    system: 'You are an evidence-based strength & conditioning coach designing a weekly training plan ' +
+      'for one person. You will get their profile and a list of available exercises, one per line as ' +
+      'id|name|target muscle|equipment. Use ONLY ids from that list — never invent one.\n' +
+      'Apply current sports-science consensus:\n' +
+      '- Split by availability: 2-3 days → full body; 4 days → upper/lower; 5-6 days → push/pull/legs or upper/lower/full. Each muscle trained ~2× per week.\n' +
+      '- Weekly volume per major muscle: beginners ~8-12 hard sets, intermediates 12-18, advanced 15-22.\n' +
+      '- Strength goal: main compound lifts 3-6 reps, 3-5 sets, 2-4 min rest; accessories 6-12. Muscle goal: 6-12 reps on compounds, 10-20 on isolation, 1.5-3 min rest, sets 1-3 reps from failure. Fat loss: keep resistance training (it preserves muscle in a deficit), moderate reps, plus 2-4 cardio sessions. Endurance: zone-2 cardio, intervals once a week, full-body strength 2× to keep tissue robust. General health: 2-3 full-body sessions + cardio, all major patterns (squat, hinge, push, pull, carry).\n' +
+      '- Compound movements first, isolation after. Beginners: fewer exercises (4-6), simple, machine or dumbbell friendly. Advanced: more variety and volume.\n' +
+      '- Session must fit the minutes given: budget ~3 min per set for strength, ~2 min for hypertrophy/isolation, plus the cardio minutes.\n' +
+      '- Respect limitations/injuries strictly: avoid movements that load the affected area; prefer alternatives.\n' +
+      '- Respect focus areas with 1-2 extra sets, not by neglecting the rest.\n' +
+      '- Progression: "linear" for beginners on compounds, "double" (rep range then load) for intermediate/advanced hypertrophy, "greyskull" for strength-focused beginners/intermediates.\n' +
+      '- Cardio exercises: give minutes, not sets/reps.\n' +
+      'Also give daily nutrition targets: Mifflin-St Jeor BMR from sex/age/weight (assume 30 y and 170 cm if unknown), activity factor 1.5-1.7 by days trained; fat loss = -15 to -20%, muscle = +5 to +10%, otherwise maintenance; protein 1.6-2.2 g/kg (upper end when cutting), fat 25-30% of calories, carbs fill the rest.\n' +
+      'Write the summary, routine names, notes and the nutrition rationale in the language with ISO code "' + p.lang + '". The summary is 80-140 words: the split and why, how to progress, what to expect in 8-12 weeks. Plain prose, no markdown.',
+    messages: [{ role: 'user', content: 'PROFILE\n' + JSON.stringify(p) + '\n\nEXERCISES\n' + lines }],
+    tools: [{
+      name: 'training_plan',
+      description: 'The weekly plan',
+      input_schema: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string' },
+          split: { type: 'string', description: 'short split name, e.g. "Upper / Lower"' },
+          progression: { type: 'string', enum: ['linear', 'double', 'greyskull'] },
+          routines: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'short routine name, e.g. "Upper A"' },
+                glyph: { type: 'string', enum: ['figureStrength', 'arm', 'abs', 'legs', 'pullup', 'dumbbell', 'barbell', 'kettlebell', 'plate', 'machine', 'figureRun', 'bike', 'swim', 'boxing', 'timer'] },
+                days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: 'weekdays for this routine, 0 = Sunday … 6 = Saturday; spread sessions out, never two heavy days for the same muscles back to back' },
+                exercises: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', description: 'MUST be an id from the list' },
+                      sets: { type: 'integer' },
+                      reps: { type: 'integer', description: 'target reps per set (top of the range)' },
+                      rest: { type: 'integer', description: 'seconds of rest between sets' },
+                      minutes: { type: 'integer', description: 'for cardio only: duration' },
+                      note: { type: 'string', description: 'optional, ≤ 12 words: tempo, cue, or why it is here' }
+                    },
+                    required: ['id']
+                  }
+                }
+              },
+              required: ['name', 'glyph', 'days', 'exercises']
+            }
+          },
+          cardio: { type: 'string', description: 'one or two sentences on cardio outside the listed sessions, if relevant' },
+          nutrition: {
+            type: 'object',
+            properties: {
+              kcal: { type: 'integer' }, protein: { type: 'integer' }, carbs: { type: 'integer' }, fat: { type: 'integer' },
+              why: { type: 'string', description: 'one or two sentences' }
+            },
+            required: ['kcal', 'protein', 'carbs', 'fat', 'why']
+          }
+        },
+        required: ['summary', 'split', 'progression', 'routines', 'nutrition']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'training_plan' }
+  }
+}
+
+export async function directTrainerPlan({ profile, candidates }) {
+  const r = await callDirect(trainerPlanRequest({ profile, candidates: (candidates || []).slice(0, 500) }))
+  return { ok: true, ...toolInput(r, 'training_plan') }
 }

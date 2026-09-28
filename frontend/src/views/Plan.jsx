@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore.js'
 import { DAYN, uid, exCount } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { dayAssignSheet, loadStarterPlan, planToolsSheet } from '../sheets.jsx'
+import { trainerSheet } from '../sheets-trainer.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
@@ -21,8 +22,16 @@ export default function Plan() {
   return <>
     <div className="hdr">
       <div><h1>{t('Plan')}</h1><div className="sub">{t('Your weekly routine')}</div></div>
-      <button className="iconbtn" onClick={planToolsSheet} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="iconbtn" onClick={trainerSheet} aria-label={t('AI trainer')} title={t('AI trainer')} style={{ color: 'var(--violet)' }}><Icon name="sparkles" /></button>
+        <button className="iconbtn" onClick={planToolsSheet} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
+      </div>
     </div>
+    {S.trainer && <div className="card tappable" style={{ cursor: 'pointer', padding: 12 }} onClick={trainerSheet}>
+      <div className="row between"><div className="row" style={{ gap: 9 }}><span className="lrow-i" style={{ '--tint': 'var(--violet)' }}><Icon name="sparkles" /></span>
+        <div><div className="lbl2" style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--label-3)', fontWeight: 500 }}>{t('AI trainer')}</div><div className="ttl" style={{ fontWeight: 500 }}>{S.trainer.split || t('Your plan')} · {t('rebuild or tweak')}</div></div></div>
+        <Icon name="chevronRight" className="chev" /></div>
+    </div>}
     <div className="cols"><div>
       <h4 className="sec">{t('Week schedule')}</h4>
       <div className="list" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -44,7 +53,8 @@ export default function Plan() {
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         <Icon name="chevronRight" className="chev" /></div>)}</div> : <>
         <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Create one or load the starter plan.')}</div>
-        <Button icon="sparkles" onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
+        <Button variant="primary" icon="sparkles" onClick={trainerSheet}>{t('Build my plan with the AI trainer')}</Button>
+        <div style={{ height: 8 }} /><Button onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
       </>}
     </div></div>
   </>

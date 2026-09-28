@@ -946,3 +946,9 @@ h4.sec{
 @keyframes spin{to{transform:rotate(360deg)}}
 .ncorr{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding:12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--purple) 8%,var(--surface))}
 .ncorr .field{flex:1;min-width:0}
+.micros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;padding-top:12px;border-top:var(--hair) solid var(--sep)}
+.micro{display:flex;flex-direction:column;gap:3px;min-width:0}
+.micro .ml{font-size:11px;color:var(--label-3);text-transform:uppercase;letter-spacing:.03em;font-weight:500}
+.micro .mv{font-size:13px;letter-spacing:-.006em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.micro .mb{height:3px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.micro .mb i{display:block;height:100%;border-radius:99px;transition:width var(--med) var(--ease)}
