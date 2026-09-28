@@ -1,4 +1,5 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
+import { t } from './i18n.js'
 import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
@@ -77,6 +78,13 @@ export async function aiAlternatives(exercise, candidates, reason) {
 export async function aiIdentifyExercise(image, mediaType) {
   if (hasUserKey()) return directIdentify(image, mediaType)
   return api('/api/ai/identify-exercise', { method: 'POST', body: JSON.stringify({ image, mediaType }) })
+}
+// What to show when an AI call fails. A bare "HTTP 502" means the app has no backend to
+// proxy through (static deploy) and no key of its own — say that, and where to fix it.
+export function aiErrorMessage(e) {
+  if (!hasUserKey() && e && (e.status === 501 || e.status === 502 || e.status === 404)) return t('AI isn’t set up here — add your Anthropic API key in Settings → AI features.')
+  if (!hasUserKey() && e && e.status === 401) return t('Sign in to use the AI features, or add your own API key in Settings.')
+  return (e && e.message) || t('AI request failed')
 }
 // Meal photo and/or typed description -> { name, items: [{ name, portion, grams, kcal, protein,
 // carbs, fat }], confidence, note }. Either input alone is enough; both together is best (the

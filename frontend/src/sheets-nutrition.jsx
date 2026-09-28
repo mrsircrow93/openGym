@@ -1,12 +1,12 @@
 // Meal-log sheets: analyse a photo / description with AI, review + edit the itemised estimate,
 // edit a saved meal, set macro goals, and the month calendar. Kept apart from sheets.jsx so the
 // nutrition feature is one module to read (lib/nutrition.js has the pure maths).
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtDate, fmtNum, todayISO, uid, MONTHS_LONG } from './lib/format.js'
 import { t, getLang } from './lib/i18n.js'
-import { aiAnalyzeMeal, fileToResizedBase64 } from './lib/api.js'
+import { aiAnalyzeMeal, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
 import {
   MEAL_TYPES, MEAL_TYPE_LABEL, MEAL_TYPE_ICON, macroGoalOf, cleanItem, scaleItem, totalsOf,
   guessMealType, nowHHMM, kcalByDay, pctOf, MICROS, MICRO_UNIT, MICRO_IS_CEILING
@@ -40,7 +40,7 @@ export function MacroLine({ tot, dim }) {
 }
 
 function ItemRow({ item, onChange, onRemove }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(!!item._new)   // a hand-added row opens straight into its fields
   return <div className="nitem">
     <div className="row" style={{ gap: 10 }}>
       <div className="grow" style={{ minWidth: 0 }} onClick={() => setOpen(o => !o)}>
@@ -96,7 +96,7 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
       setFixNote(r.note || '')
       setCorr('')
       toast(t('Estimate updated'))
-    } catch (e) { toast(e.message || t('AI request failed')) }
+    } catch (e) { toast(aiErrorMessage(e)) }
     setFixing(false)
   }
   const setItem = (i, it) => setM(x => ({ ...x, items: x.items.map((o, j) => (j === i ? it : o)) }))
@@ -126,7 +126,7 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
       {m.items.map((it, i) => <ItemRow key={i} item={it} onChange={x => setItem(i, x)} onRemove={() => rmItem(i)} />)}
     </div>
     <Button size="sm" icon="plus" onClick={addItem}>{t('Add food manually')}</Button>
-    {refine && <div className="ncorr">
+    {refine && m.items.length > 0 && <div className="ncorr">
       <div className="small muted row" style={{ gap: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)', fontSize: 14 }} />{t('Something off? Tell the AI and it will redo the numbers.')}</div>
       <div className="row" style={{ gap: 8 }}>
         <TextField value={corr} onChange={e => setCorr(e.target.value)} placeholder={t('e.g. “it’s unsweetened Greek yoghurt, about 200 g”')}
@@ -155,15 +155,18 @@ function AnalyzeMeal({ file, text, iso, close }) {
   const [res, setRes] = useState(null)
   const [photoUrl] = useState(() => (file ? URL.createObjectURL(file) : ''))
   const [enc, setEnc] = useState({ image: '', mediaType: '' })
+  const started = useRef(false)
   useEffect(() => {
-    (async () => {
+    if (started.current) return   // StrictMode double-mounts in dev; one paid request is enough
+    started.current = true
+    ;(async () => {
       try {
         let image = '', mediaType = ''
         if (file) ({ base64: image, mediaType } = await fileToResizedBase64(file))
         setEnc({ image, mediaType })
         const r = await aiAnalyzeMeal({ image, mediaType, text, lang: getLang() })
         setRes(r)
-      } catch (e) { setErr(e.message || t('AI request failed')) }
+      } catch (e) { setErr(aiErrorMessage(e)) }
       setBusy(false)
     })()
     return () => { if (photoUrl) URL.revokeObjectURL(photoUrl) }

@@ -8,7 +8,7 @@ import { t } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
 import { exOr } from './lib/exercises.js'
 import { lastBW, exLine } from './lib/history.js'
-import { aiTrainerPlan } from './lib/api.js'
+import { aiTrainerPlan, aiErrorMessage } from './lib/api.js'
 import {
   GOALS, GOAL_LABEL, GOAL_ICON, LEVELS, LEVEL_LABEL, LEVEL_DESC, EQUIP, EQUIP_LABEL, EQUIP_ICON,
   SESSION_LENGTHS, FOCUS, DEFAULT_ANSWERS, trainerCandidates, materializePlan, trainerRequestBody
@@ -55,7 +55,7 @@ function Trainer({ close }) {
       const m = materializePlan(plan, candidates)
       if (!m.routines.length) throw new Error(t('The plan came back empty — try again'))
       setRes({ plan, ...m })
-    } catch (e) { setErr(e.message || t('AI request failed')) }
+    } catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
   }
 
@@ -91,7 +91,7 @@ function Trainer({ close }) {
           <span className="dim" style={{ flex: 'none' }}>{exLine(e, S.unit)}</span>
         </div> })}
       </div>)}
-      {plan.cardio && <div className="small muted" style={{ margin: '4px 0 12px' }}><Icon name="figureRun" style={{ fontSize: 13, marginRight: 5 }} />{plan.cardio}</div>}
+      {plan.cardio && <div className="row small muted" style={{ gap: 6, alignItems: 'flex-start', margin: '4px 0 12px' }}><Icon name="figureRun" style={{ fontSize: 14, flex: 'none', marginTop: 2 }} /><span>{plan.cardio}</span></div>}
       {dropped > 0 && <div className="small dim" style={{ marginBottom: 10 }}>{t('{0} suggested exercise(s) weren’t in your library and were left out.', dropped)}</div>}
       {n && <div className="sect-b" style={{ marginBottom: 14 }}>
         <button className="lrow tap" onClick={() => setApplyNutrition(v => !v)}>

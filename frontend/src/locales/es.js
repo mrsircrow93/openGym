@@ -665,4 +665,7 @@ export default {
   'Add alongside my routines': 'Añadir junto a mis rutinas',
   'Generate another': 'Generar otro', 'Change my answers': 'Cambiar mis respuestas',
   'Plan ready — see your week': 'Plan listo — mira tu semana',
+  'Only one day logged so far': 'Solo un día registrado por ahora',
+  'AI isn’t set up here — add your Anthropic API key in Settings → AI features.': 'La IA no está configurada aquí — añade tu clave de API de Anthropic en Ajustes → Funciones de IA.',
+  'Sign in to use the AI features, or add your own API key in Settings.': 'Inicia sesión para usar la IA, o añade tu propia clave de API en Ajustes.',
 }

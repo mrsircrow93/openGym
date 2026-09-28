@@ -80,7 +80,7 @@ export default function Nutrition() {
     </div>
 
     <h4 className="sec">{meals.length ? t(meals.length === 1 ? '{0} meal' : '{0} meals', meals.length) : t('Meals')}</h4>
-    {meals.length ? <div className="list" style={{ marginBottom: 16 }}>
+    {meals.length ? <div className="list" style={{ display: 'flex', flexDirection: 'column', marginBottom: 16 }}>
       {meals.map(m => { const mt = totalsOf(m.items); return <div key={m.id} className="item" onClick={() => mealFormSheet(m)}>
         <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 18, background: 'var(--orange)' }}><Icon name={MEAL_TYPE_ICON[m.type] || 'flame'} /></span>
         <div className="grow">
@@ -96,7 +96,7 @@ export default function Nutrition() {
     </div> : <div className="empty" style={{ padding: '24px 20px' }}><div className="ico"><Icon name="utensils" /></div>{isToday ? t('Nothing logged yet today — snap your next meal.') : t('Nothing logged on {0}.', fmtDate(iso, true))}</div>}
 
     {avg && <div className="card">
-      <h2>{t('Last {0} logged days · daily average', avg.days)}</h2>
+      <h2>{avg.days === 1 ? t('Only one day logged so far') : t('Last {0} logged days · daily average', avg.days)}</h2>
       <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
         <div className="big">{fmtNum(avg.kcal)} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
         <span className="small dim" style={{ marginLeft: 'auto' }}>{avg.kcal > goal.kcal ? t('{0} over target', fmtNum(avg.kcal - goal.kcal)) : t('{0} under target', fmtNum(goal.kcal - avg.kcal))}</span>
