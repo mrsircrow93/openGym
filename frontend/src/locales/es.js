@@ -622,4 +622,9 @@ export default {
   'Within ±10% of your calorie target counts as on target · tap a day to open it': 'Dentro de ±10% de tu meta cuenta como en meta · toca un día para abrirlo',
   'Calendar': 'Calendario',
   'Add your own Anthropic API key to power set parsing, the coach, exercise swaps, photo ID and meal photos. Stored only on this device.': 'Añade tu propia clave de API de Anthropic para activar el registro por voz, el coach, los cambios de ejercicio, la identificación por foto y las fotos de comida. Se guarda solo en este dispositivo.',
+  'Something off? Tell the AI and it will redo the numbers.': '¿Algo mal? Díselo a la IA y recalcula los números.',
+  'e.g. “it’s unsweetened Greek yoghurt, about 200 g”': 'p. ej. “es yogurt griego sin azúcar, unos 200 g”',
+  'Fix': 'Corregir',
+  'Estimate updated': 'Estimación actualizada',
+  'The AI couldn’t apply that — try rephrasing': 'La IA no pudo aplicar eso — intenta decirlo de otra forma',
 }

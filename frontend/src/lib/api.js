@@ -81,9 +81,11 @@ export async function aiIdentifyExercise(image, mediaType) {
 // Meal photo and/or typed description -> { name, items: [{ name, portion, grams, kcal, protein,
 // carbs, fat }], confidence, note }. Either input alone is enough; both together is best (the
 // caption fixes quantities the photo can't show). The photo is analysed, never stored.
-export async function aiAnalyzeMeal({ image, mediaType, text, lang }) {
-  if (hasUserKey()) return directAnalyzeMeal({ image, mediaType, text, lang })
-  return api('/api/ai/analyze-meal', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, text: text || '', lang }) })
+// Pass `previous` (the items shown) + `correction` ("it's unsweetened Greek yoghurt") to get a
+// revised list instead of a fresh guess — untouched items come back unchanged.
+export async function aiAnalyzeMeal({ image, mediaType, text, lang, previous, correction }) {
+  if (hasUserKey()) return directAnalyzeMeal({ image, mediaType, text, lang, previous, correction })
+  return api('/api/ai/analyze-meal', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, text: text || '', lang, previous: previous || null, correction: correction || '' }) })
 }
 // Downscales client-side before it ever leaves the device — a full-res phone photo is
 // 3-8 MB and costs real API tokens for no accuracy gain past ~1024px on the long edge.

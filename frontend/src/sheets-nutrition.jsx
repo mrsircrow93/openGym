@@ -72,9 +72,28 @@ function ItemRow({ item, onChange, onRemove }) {
 
 // The editable meal: name, slot, time, items with per-item edit, totals. Used for a fresh AI
 // result and for an existing meal alike — `meal` is the draft, `onSave` receives the final one.
-function MealForm({ draft, onSave, onDelete, close, saveLabel }) {
+// `refine` (optional) is how the person talks back to the estimate: it gets their correction
+// and the current items, and resolves to a revised { name, items, note } from the model.
+function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
   const [m, setM] = useState(draft)
+  const [corr, setCorr] = useState('')
+  const [fixing, setFixing] = useState(false)
+  const [fixNote, setFixNote] = useState('')
   const tot = totalsOf(m.items)
+  const doRefine = async () => {
+    const c = corr.trim()
+    if (!c || !refine) return
+    setFixing(true); setFixNote('')
+    try {
+      const r = await refine(c, m.items.map(cleanItem))
+      if (!(r.items || []).length) { toast(t('The AI couldn’t apply that — try rephrasing')); setFixing(false); return }
+      setM(x => ({ ...x, name: r.name || x.name, items: r.items.map(cleanItem), ai: true }))
+      setFixNote(r.note || '')
+      setCorr('')
+      toast(t('Estimate updated'))
+    } catch (e) { toast(e.message || t('AI request failed')) }
+    setFixing(false)
+  }
   const setItem = (i, it) => setM(x => ({ ...x, items: x.items.map((o, j) => (j === i ? it : o)) }))
   const rmItem = i => setM(x => ({ ...x, items: x.items.filter((_, j) => j !== i) }))
   const addItem = () => setM(x => ({ ...x, items: [...x.items, { name: '', portion: '', grams: 100, kcal: 0, protein: 0, carbs: 0, fat: 0, _new: true }] }))
@@ -102,6 +121,15 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel }) {
       {m.items.map((it, i) => <ItemRow key={i} item={it} onChange={x => setItem(i, x)} onRemove={() => rmItem(i)} />)}
     </div>
     <Button size="sm" icon="plus" onClick={addItem}>{t('Add food manually')}</Button>
+    {refine && <div className="ncorr">
+      <div className="small muted row" style={{ gap: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)', fontSize: 14 }} />{t('Something off? Tell the AI and it will redo the numbers.')}</div>
+      <div className="row" style={{ gap: 8 }}>
+        <TextField value={corr} onChange={e => setCorr(e.target.value)} placeholder={t('e.g. “it’s unsweetened Greek yoghurt, about 200 g”')}
+          onKeyDown={e => { if (e.key === 'Enter') doRefine() }} disabled={fixing} />
+        <Button size="sm" variant="tinted" icon={fixing ? undefined : 'sparkles'} disabled={!corr.trim() || fixing} onClick={doRefine} style={{ flex: 'none' }}>{fixing ? <span className="spin" /> : t('Fix')}</Button>
+      </div>
+      {fixNote && <div className="small dim">{fixNote}</div>}
+    </div>}
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{saveLabel || t('Save meal')}</Button>
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" icon="trash" onClick={() => { onDelete(); close() }}>{t('Delete meal')}</Button></>}
@@ -121,11 +149,13 @@ function AnalyzeMeal({ file, text, iso, close }) {
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
   const [photoUrl] = useState(() => (file ? URL.createObjectURL(file) : ''))
+  const [enc, setEnc] = useState({ image: '', mediaType: '' })
   useEffect(() => {
     (async () => {
       try {
         let image = '', mediaType = ''
         if (file) ({ base64: image, mediaType } = await fileToResizedBase64(file))
+        setEnc({ image, mediaType })
         const r = await aiAnalyzeMeal({ image, mediaType, text, lang: getLang() })
         setRes(r)
       } catch (e) { setErr(e.message || t('AI request failed')) }
@@ -147,6 +177,7 @@ function AnalyzeMeal({ file, text, iso, close }) {
       {res.note && <div className="small dim" style={{ marginBottom: 6 }}>{res.note}</div>}
       {res.confidence === 'low' && <div className="small" style={{ color: 'var(--orange)', marginBottom: 8 }}>{t('Low confidence — check the portions before saving.')}</div>}
       <MealForm close={close} saveLabel={t('Save meal')} onSave={saveMeal}
+        refine={(correction, previous) => aiAnalyzeMeal({ ...enc, text, lang: getLang(), previous, correction })}
         draft={newDraft(iso, { name: res.name || '', items: (res.items || []).map(cleanItem), ai: true })} />
     </>}
   </>
@@ -173,7 +204,8 @@ function MealFormSheet({ meal, close }) {
   const existing = (useStore.getState().S.meals || []).some(m => m.id === meal.id)
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name={MEAL_TYPE_ICON[meal.type] || 'flame'} style={{ color: 'var(--orange)' }} />{existing ? t('Edit meal') : t('Log a meal')}</h3>
-    <MealForm draft={meal} close={close} onSave={saveMeal} onDelete={existing ? () => { deleteMeal(meal.id); toast(t('Meal deleted')) } : null} />
+    <MealForm draft={meal} close={close} onSave={saveMeal} onDelete={existing ? () => { deleteMeal(meal.id); toast(t('Meal deleted')) } : null}
+      refine={(correction, previous) => aiAnalyzeMeal({ text: meal.name, lang: getLang(), previous, correction })} />
   </>
 }
 export const mealFormSheet = meal => ui().openSheet(close => <MealFormSheet meal={meal} close={close} />)

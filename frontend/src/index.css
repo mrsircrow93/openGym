@@ -944,3 +944,5 @@ h4.sec{
 .cal-d.ncal.over small{color:var(--orange)}
 .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--label-4);border-top-color:var(--acc);animation:spin .8s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
+.ncorr{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding:12px;border-radius:var(--r-card);background:color-mix(in srgb,var(--purple) 8%,var(--surface))}
+.ncorr .field{flex:1;min-width:0}

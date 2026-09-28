@@ -213,11 +213,17 @@ export async function directAlternatives(exercise, candidates, reason) {
 
 // Meal photo / description -> itemised calories + macros. Same request as the server's
 // mealAnalysisRequest in api/server.js — keep the two in step.
-export async function directAnalyzeMeal({ image, mediaType, text, lang }) {
+export async function directAnalyzeMeal({ image, mediaType, text, lang, previous, correction }) {
   const mt = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg'
   const content = []
   if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: image } })
-  content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
+  if (previous && previous.length) content.push({ type: 'text', text:
+    'Your previous estimate for this meal (JSON): ' + JSON.stringify(previous) + '\n' +
+    'The person corrected it: "' + correction + '"\n' +
+    'Revise the estimate. Apply the correction faithfully (it may change what a food is, its brand, ' +
+    'how it was cooked, or a quantity), re-derive the nutrition for the affected items, and keep every ' +
+    'item the correction does not touch unchanged. Return the full corrected list.' });
+  else content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
     (image ? 'Estimate the calories and macros of everything edible in this photo.' : 'Estimate the calories and macros of this meal from the description alone.') })
   const r = await callDirect({
     max_tokens: 1500,

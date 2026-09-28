@@ -283,10 +283,16 @@ async function callAnthropic({ system, messages, tools, tool_choice, max_tokens 
 
 
 // Shared by the server route and mirrored in frontend/src/lib/ai.js for the BYO-key path.
-function mealAnalysisRequest({ image, mediaType, text, lang }) {
+function mealAnalysisRequest({ image, mediaType, text, lang, previous, correction }) {
   const content = [];
   if (image) content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } });
-  content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
+  if (previous && previous.length) content.push({ type: 'text', text:
+    'Your previous estimate for this meal (JSON): ' + JSON.stringify(previous) + '\n' +
+    'The person corrected it: "' + correction + '"\n' +
+    'Revise the estimate. Apply the correction faithfully (it may change what a food is, its brand, ' +
+    'how it was cooked, or a quantity), re-derive the nutrition for the affected items, and keep every ' +
+    'item the correction does not touch unchanged. Return the full corrected list.' });
+  else content.push({ type: 'text', text: (text ? 'What I ate / extra details: ' + text + '\n' : '') +
     (image ? 'Estimate the calories and macros of everything edible in this photo.' : 'Estimate the calories and macros of this meal from the description alone.') });
   return {
     max_tokens: 1500,
@@ -767,12 +773,18 @@ const routes = {
     const image = String(body.image || '');
     const text = String(body.text || '').trim().slice(0, 500);
     const lang = String(body.lang || 'en').slice(0, 5);
+    // Correction round: the person disagrees with an item ("it's unsweetened Greek yoghurt") —
+    // resend the same photo/text plus the previous itemised estimate and their note.
+    const correction = String(body.correction || '').trim().slice(0, 300);
+    const previous = correction && Array.isArray(body.previous) ? body.previous.slice(0, 30).map(i => ({
+      name: String(i.name || '').slice(0, 80), portion: String(i.portion || '').slice(0, 80), grams: +i.grams || 0,
+      kcal: +i.kcal || 0, protein: +i.protein || 0, carbs: +i.carbs || 0, fat: +i.fat || 0 })) : null;
     const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
     if (image.length > 4_000_000) return json(res, 400, { error: 'image too large (send it resized client-side)' });
-    if (!image && !text) return json(res, 400, { error: 'photo or description required' });
+    if (!image && !text && !previous) return json(res, 400, { error: 'photo or description required' });
     if (aiRateLimited(user.id, 15, 60 * 60_000)) return json(res, 429, { error: 'too many meals analysed — try again in a bit' });
     try {
-      const r = await callAnthropic(mealAnalysisRequest({ image, mediaType, text, lang }));
+      const r = await callAnthropic(mealAnalysisRequest({ image, mediaType, text, lang, previous, correction }));
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
