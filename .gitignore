@@ -4,3 +4,4 @@ dist/
 data/
 media/img/
 media/gif/
+.DS_Store

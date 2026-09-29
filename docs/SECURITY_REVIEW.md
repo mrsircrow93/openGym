@@ -34,7 +34,7 @@ Method: manual code review of every route and every place untrusted data enters,
 | 7 | Low | API container runs as root, image built with `npm install`. | `npm ci --omit=dev`. Still root: on Docker Desktop for macOS a bind-mounted `data/secret` (mode 600) is unreadable by an unprivileged container user (errno -35). On a Linux host set `services.api.user: "1000:1000"` in compose and `chown -R 1000:1000 data`. |
 | 8 | Info | WebAuthn errors echoed library messages; `/api/health` exposed the user count. | Generic messages; count removed. |
 | 9 | Info | Passkeys accept `userVerification: preferred` (no biometric/PIN required). Deliberate usability trade-off. | Kept; revisit if accounts hold payment data. |
-| 10 | Info | The Anthropic key in `.env` was rejected by the API as invalid. | Rotate it in the Anthropic console regardless. |
+| 10 | Info | The Anthropic key in `.env` was rejected by the API as invalid. | Rotated 2026-09-29; the new key is accepted by the API. |
 
 ## Dependency audit
 
