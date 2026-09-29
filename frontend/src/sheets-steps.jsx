@@ -71,7 +71,9 @@ function StepsSheet({ close }) {
     <WeekBars S={S} />
     <h4 className="sec">{t('Daily goal')}</h4>
     <div className="row cfgrow" style={{ marginBottom: 8 }}>
-      <Stepper label={t('Steps')} value={goal} step={500} decimal={false} onChange={v => update(s => { s.stepGoal = Math.max(500, Math.round(v)) })} />
+      {/* Raw value while editing: clamping to 500 on every keystroke rewrote "1" → 500 before the
+          user could finish typing 10000. stepGoalOf() applies the floor wherever the goal is read. */}
+      <Stepper label={t('Steps')} value={S.stepGoal ?? goal} step={500} decimal={false} onChange={v => update(s => { s.stepGoal = Math.round(v) })} />
     </div>
     <div className="small dim" style={{ marginBottom: 12 }}>{t('7,000–10,000 a day is where the health benefits level off for most people. Pick one you’ll actually hit.')}</div>
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
