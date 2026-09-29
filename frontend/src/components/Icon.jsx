@@ -115,6 +115,7 @@ const P = {
   // A teardrop for water logging — snapped so the point lands on a pixel edge.
   camera: <><path d="M4.4 8.6a2 2 0 0 1 2-2h2.1l1.3-2h4.4l1.3 2h2.1a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H6.4a2 2 0 0 1-2-2Z" /><circle cx="12" cy="12.6" r="3.3" /></>,
   utensils: <path d="M6.2 3.6v6.2M4 3.6v3.8a2.2 2.2 0 0 0 4.4 0V3.6M6.2 9.8v10.6M17.6 3.6c-2 .9-3.2 3.2-3.2 6.2 0 1.3.4 2.1 1.6 2.4v8.2M17.6 3.6v16.8" />,
+  footsteps: <><path d="M7.2 3.8c1.9-.3 3.2 1.6 3 4.2-.2 2-1 3.2-2.4 3.4-1.7.2-2.9-1.5-2.8-3.8.1-2 .9-3.6 2.2-3.8ZM6.4 12.9l3.1-.5.4 2.4c.2 1.2-.5 2.2-1.6 2.4-1.1.2-2.1-.5-2.3-1.7Z" /><path d="M16.8 8.2c-1.9-.3-3.2 1.6-3 4.2.2 2 1 3.2 2.4 3.4 1.7.2 2.9-1.5 2.8-3.8-.1-2-.9-3.6-2.2-3.8ZM17.6 17.3l-3.1-.5-.4 2.4c-.2 1.2.5 2.2 1.6 2.4 1.1.2 2.1-.5 2.3-1.7Z" /></>,
   droplet: <path d="M12 3.6c3 4 5.4 6.7 5.4 9.6a5.4 5.4 0 0 1-10.8 0C6.6 10.3 9 7.6 12 3.6Z" />,
   // The Bluetooth rune: vertical spine with the two crossed chevrons, drawn as one stroke.
   bluetooth: <path d="M8 8.4 16 15.6 12 19V5l4 3.4L8 15.6" />,

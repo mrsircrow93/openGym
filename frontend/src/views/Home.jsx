@@ -12,6 +12,7 @@ import { glyphOf } from '../lib/glyphs.js'
 import { macroGoalOf, dayTotals, mealsOn } from '../lib/nutrition.js'
 import { analyzeMealSheet, DaySummary } from '../sheets-nutrition.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
+import { StepsCard } from '../sheets-steps.jsx'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -140,6 +141,8 @@ export default function Home() {
         <Button size="sm" icon="plus" style={{ flex: 1 }} onClick={() => addWater(500)}>{t('Bottle')} <span className="dim">500</span></Button>
       </div>
     </div>
+
+    <StepsCard />
 
     <input ref={mealPhoto} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) analyzeMealSheet(f, todayISO()) }} />

@@ -23,6 +23,8 @@ export const DEF = {
   trainer: null,
   // Progress photos: metadata only (lib/progress-photos.js) — the images live in object storage.
   progressPhotos: [],
+  // Step counter: one row per day { d, n, src: 'manual' | 'health' } + a daily goal (lib/steps.js).
+  steps: [], stepGoal: 8000,
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
@@ -30,11 +32,15 @@ export const DEF = {
   reminder: { on: false, time: '08:00', tz: null }, effort: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
+// Drops the keys Object.assign treats specially, so a hand-edited backup or a tampered sync
+// payload can't re-parent the state object. Used wherever outside JSON is merged into S.
+export const noProto = (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v
+export const safeParse = str => JSON.parse(str, noProto)
 
 function loadState() {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return Object.assign(clone(DEF), JSON.parse(raw))
+    if (raw) return Object.assign(clone(DEF), safeParse(raw))
   } catch (e) { /* ignore */ }
   return clone(DEF)
 }

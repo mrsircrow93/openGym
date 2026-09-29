@@ -9,7 +9,9 @@ export const webauthnOK = () => !!(window.PublicKeyCredential && navigator.crede
 
 export async function api(path, opts) {
   const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts))
-  const data = await r.json().catch(() => ({}))
+  // parsed with a reviver that drops __proto__/constructor keys: replies are merged into state
+  // with Object.assign, which would otherwise honour them
+  const data = await r.text().then(s => (s ? JSON.parse(s, (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v) : {})).catch(() => ({}))
   if (!r.ok) { const e = new Error(data.error || ('HTTP ' + r.status)); e.status = r.status; throw e }
   return data
 }

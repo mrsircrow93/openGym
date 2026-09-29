@@ -25,6 +25,12 @@ const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
 // baked into each cookie when it's issued, so lowering this never cuts an existing session short.
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
 const MAX_BODY = 5 * 1024 * 1024;
+// Browsers send Origin on every cross-site request and on same-site POSTs. Any state-changing
+// call whose Origin is present and isn't ours is refused outright — the session cookie is
+// SameSite=Lax already, this is the second lock. Non-browser clients (curl, payment webhooks)
+// send no Origin and pass. Add the mobile app's origin (capacitor://localhost, https://localhost)
+// via ALLOWED_ORIGINS (comma-separated) once the store build signs in.
+const ALLOWED_ORIGINS = new Set([ORIGIN, ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)]);
 // Secure cookies require HTTPS; over plain http://localhost the flag would drop the cookie
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 // AI features (natural-language set logging, coach insights) are entirely optional — unset
@@ -225,6 +231,9 @@ function json(res, code, obj, extraHeaders) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(extraHeaders || {}) });
   res.end(body);
 }
+// JSON.parse reviver that drops the keys Object.assign / spread treat specially — a body with
+// {"__proto__": {...}} must never end up re-parenting a state object here or on a client.
+const noProto = (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v;
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
@@ -234,7 +243,7 @@ function readBody(req) {
       chunks.push(d);
     });
     req.on('end', () => {
-      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); }
+      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8'), noProto) : {}); }
       catch { reject(new Error('bad json')); }
     });
     req.on('error', reject);
@@ -278,6 +287,9 @@ const PRICING = [
 ];
 const priceOf = model => (PRICING.find(([p]) => model.startsWith(p)) || [null, { in: 5, out: 25 }])[1];
 const AI_MONTHLY_USD_CAP = +process.env.AI_MONTHLY_USD_CAP || 0;   // 0 = unlimited (personal instance)
+// Whole-instance ceiling. With open registration anyone can create accounts, and each account
+// gets its own rate limit — this is the number that bounds what a bad month can cost you.
+const AI_GLOBAL_MONTHLY_USD_CAP = +process.env.AI_GLOBAL_MONTHLY_USD_CAP || 0;
 const monthKey = () => new Date().toISOString().slice(0, 7);
 db.aiUsage = db.aiUsage || {};                                       // uid -> { 'YYYY-MM': { calls, in, out, usd, features: { name: calls } } }
 function aiUsageOf(uid, month = monthKey()) {
@@ -296,7 +308,9 @@ function recordAiUsage(uid, feature, usage) {
   saveDb();
 }
 // Per-user monthly spend ceiling. Off by default; a paid plan sets it per tier (docs/BILLING.md).
-const aiOverBudget = uid => AI_MONTHLY_USD_CAP > 0 && aiUsageOf(uid).usd >= AI_MONTHLY_USD_CAP;
+const aiGlobalUsd = (month = monthKey()) => Object.values(db.aiUsage).reduce((a, u) => a + ((u[month] || {}).usd || 0), 0);
+const aiOverBudget = uid => (AI_MONTHLY_USD_CAP > 0 && aiUsageOf(uid).usd >= AI_MONTHLY_USD_CAP) ||
+  (AI_GLOBAL_MONTHLY_USD_CAP > 0 && aiGlobalUsd() >= AI_GLOBAL_MONTHLY_USD_CAP);
 
 async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }, meta) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -453,7 +467,7 @@ function trainerPlanRequest({ profile, candidates }) {
 
 /* ---------- routes ---------- */
 const routes = {
-  'GET /api/health': async (req, res) => json(res, 200, { ok: true, users: db.users.length }),
+  'GET /api/health': async (req, res) => json(res, 200, { ok: true }),
 
   // Public config the login screen needs before anyone is signed in.
   'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY }),
@@ -496,7 +510,7 @@ const routes = {
         expectedRPID: RP_ID,
         requireUserVerification: false
       });
-    } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }); }
+    } catch (e) { console.error('webauthn verify', e.message); return json(res, 400, { error: 'verification failed' }); }
     if (!verification.verified) return json(res, 400, { error: 'not verified' });
     const { credential } = verification.registrationInfo;
     if (db.creds.find(x => x.id === credential.id)) return json(res, 409, { error: 'credential already registered' });
@@ -548,7 +562,7 @@ const routes = {
           transports: cred.transports
         }
       });
-    } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }); }
+    } catch (e) { console.error('webauthn verify', e.message); return json(res, 400, { error: 'verification failed' }); }
     if (!verification.verified) return json(res, 400, { error: 'not verified' });
     cred.counter = verification.authenticationInfo.newCounter;
     saveDb();
@@ -1034,6 +1048,10 @@ http.createServer(async (req, res) => {
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
   if (!handler) return json(res, 404, { error: 'not found' });
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin && !ALLOWED_ORIGINS.has(req.headers.origin)) {
+    return json(res, 403, { error: 'cross-origin request refused' });
+  }
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   try { await handler(req, res); }
   catch (e) {
     console.error(key, e);

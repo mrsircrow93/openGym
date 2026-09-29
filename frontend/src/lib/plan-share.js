@@ -72,7 +72,7 @@ export function buildPlanBundle(S, name) {
  * is trained.
  */
 export function parsePlan(raw) {
-  const data = typeof raw === 'string' ? JSON.parse(raw) : raw
+  const data = typeof raw === 'string' ? JSON.parse(raw, (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v) : raw
   if (!data || !data.opengym_plan || !Array.isArray(data.routines)) {
     throw new Error(t('this isn’t an openGym plan file'))
   }

@@ -45,3 +45,14 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# ---- security headers (same policy as web/nginx.conf; keep the two in step) ----
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.jsdelivr.net; media-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com; font-src 'self'; worker-src 'self'; manifest-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=(), payment=(self), usb=(), bluetooth=(self)"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"

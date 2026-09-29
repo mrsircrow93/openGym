@@ -694,4 +694,17 @@ export default {
   'Looking at your photo…': 'Analizando tu foto…',
   'Swap exercise': 'Reemplazar ejercicio',
   'Couldn’t spot an exercise in that photo — try getting closer to the machine.': 'No se reconoció un ejercicio en esa foto — acércate más a la máquina.',
+  /* ---- steps ---- */
+  'Daily goal': 'Meta diaria',
+  'Steps': 'Pasos',
+  'Steps today': 'Pasos de hoy',
+  'Set': 'Fijar',
+  'Set today’s total': 'Fijar el total de hoy',
+  'from your phone': 'desde tu teléfono',
+  'Synced from your phone': 'Sincronizado desde tu teléfono',
+  'Today’s steps come from your phone — edit them there.': 'Los pasos de hoy vienen de tu teléfono — edítalos ahí.',
+  'Copy the number from your phone’s health app — it counts all day, the browser can’t.': 'Copia el número de la app de salud de tu teléfono — esa cuenta todo el día, el navegador no puede.',
+  'Last 7 days': 'Últimos 7 días',
+  '{0}-day streak': 'racha de {0} días',
+  '7,000–10,000 a day is where the health benefits level off for most people. Pick one you’ll actually hit.': 'Entre 7,000 y 10,000 al día es donde los beneficios se estabilizan para la mayoría. Elige una meta que sí vayas a cumplir.',
 }
