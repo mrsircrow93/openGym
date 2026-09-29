@@ -261,6 +261,10 @@ function AICard({ toast }) {
   const [key, setKey] = useState(getAIKey())
   const [model, setModel] = useState(getAIModel())
   const [busy, setBusy] = useState(false)
+  // Does this server pay for AI itself? Then the key field is an advanced option, not a requirement.
+  const [serverAi, setServerAi] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  useEffect(() => { if (!STATIC && !MOBILE) api('/api/config').then(c => setServerAi(!!c.ai)).catch(() => {}) }, [])
   const saved = getAIKey()
   const has = hasUserKey()
   const dirty = key.trim() !== saved
@@ -273,11 +277,16 @@ function AICard({ toast }) {
     catch (e) { toast(e.message || t('Test failed')) }
     setBusy(false)
   }
+  const keyField = !serverAi || has || showKey
   return <Section title={t('AI features')}
     footer={has
       ? t('AI runs on your own Anthropic key, straight from this device — the server never sees it, and it works even with no backend.')
-      : t('Add your own Anthropic API key to power set parsing, the coach, exercise swaps, photo ID and meal photos. Stored only on this device.')}>
-    <div className="lrow" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, paddingTop: 13, paddingBottom: 14 }}>
+      : serverAi
+        ? t('AI is included here: set parsing, the coach, exercise swaps, photo ID, meal photos and diet-plan import all work out of the box. Adding your own key is optional — it moves the cost to your Anthropic account.')
+        : t('Add your own Anthropic API key to power set parsing, the coach, exercise swaps, photo ID and meal photos. Stored only on this device.')}>
+    {serverAi && !has && <Row icon="sparkles" iconTint="var(--violet)" title={t('AI features')} subtitle={t('Included on this server')} value={t('On')} />}
+    {serverAi && !has && !showKey && <Row icon="key" iconTint="var(--violet)" title={t('Use my own Anthropic key')} subtitle={t('Optional — bills your own account instead')} accessory="chevron" onClick={() => setShowKey(true)} />}
+    {keyField && <div className="lrow" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, paddingTop: 13, paddingBottom: 14 }}>
       <span className="lrow-t row" style={{ gap: 7 }}><Icon name="key" style={{ color: 'var(--violet)' }} />{t('Anthropic API key')}</span>
       <input className="input" type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-…"
         value={key} onChange={e => setKey(e.target.value)} />
@@ -287,7 +296,7 @@ function AICard({ toast }) {
         <Button size="sm" variant="danger" disabled={!has} onClick={clear}>{t('Clear')}</Button>
       </div>
       <a className="small" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>{t('Get a key from the Anthropic Console →')}</a>
-    </div>
+    </div>}
     {has && <SelectRow icon="sparkles" iconTint="var(--violet)" title={t('AI model')}
       value={model} onChange={changeModel} options={AI_MODELS} />}
     {!has && !STATIC && !MOBILE && <AIUsageRow />}

@@ -719,4 +719,8 @@ export default {
   'Fibre': 'Fibra',
   'Sodium': 'Sodio',
   'PDF too large — keep it under 3 MB': 'PDF demasiado grande — que pese menos de 3 MB',
+  'AI is included here: set parsing, the coach, exercise swaps, photo ID, meal photos and diet-plan import all work out of the box. Adding your own key is optional — it moves the cost to your Anthropic account.': 'La IA ya viene incluida aquí: registro por voz, coach, cambios de ejercicio, identificación por foto, fotos de comida e importar planes funcionan sin configurar nada. Poner tu propia clave es opcional — solo mueve el costo a tu cuenta de Anthropic.',
+  'Included on this server': 'Incluida en este servidor',
+  'Use my own Anthropic key': 'Usar mi propia clave de Anthropic',
+  'Optional — bills your own account instead': 'Opcional — se cobra a tu cuenta en lugar de a este servidor',
 }
