@@ -36,6 +36,7 @@ Typical token use per feature, measured shape of the prompts in `api/server.js`
 | Meal photo (`analyze-meal`) | 1 900     | 700        | $0.0054   | $0.0108  |
 | Meal correction             | 2 300     | 700        | $0.0058   | $0.0116  |
 | Trainer plan (`trainer-plan`) | 6 500   | 2 500      | $0.0190   | $0.0380  |
+| Diet plan import (`import-plan`, photo / 1-page PDF) | 1 900–3 300 | 280 | $0.0033–0.0047 | $0.0066–0.0094 |
 
 ## Monthly cost per active user (three usage profiles)
 

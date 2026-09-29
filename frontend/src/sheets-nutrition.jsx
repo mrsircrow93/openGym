@@ -6,7 +6,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtDate, fmtNum, todayISO, uid, MONTHS_LONG } from './lib/format.js'
 import { t, getLang } from './lib/i18n.js'
-import { aiAnalyzeMeal, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
+import { aiAnalyzeMeal, aiImportPlan, fileToResizedBase64, fileToBase64, aiErrorMessage } from './lib/api.js'
 import {
   MEAL_TYPES, MEAL_TYPE_LABEL, MEAL_TYPE_ICON, macroGoalOf, cleanItem, scaleItem, totalsOf,
   guessMealType, nowHHMM, kcalByDay, pctOf, MICROS, MICRO_UNIT, MICRO_IS_CEILING
@@ -221,13 +221,64 @@ export const manualMealSheet = iso => mealFormSheet(newDraft(iso))
 
 /* ============================ goals ============================ */
 
+const PLAN_FIELDS = ['kcal', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium']
+const PLAN_UNIT = { kcal: 'kcal', protein: 'g', carbs: 'g', fat: 'g', sugar: 'g', fiber: 'g', sodium: 'mg' }
+const PLAN_LABEL = { kcal: 'Calories', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', sugar: 'Sugar', fiber: 'Fibre', sodium: 'Sodium' }
+
+// Photo or PDF of a diet plan -> the AI reads the daily numbers -> the person reviews them here
+// before they replace the targets. Only fields the plan actually states are offered.
+function ImportPlan({ file, onApply }) {
+  const [busy, setBusy] = useState(true)
+  const [err, setErr] = useState('')
+  const [res, setRes] = useState(null)
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    ;(async () => {
+      try {
+        let r
+        if (file.type === 'application/pdf') r = await aiImportPlan({ pdf: await fileToBase64(file), lang: getLang() })
+        else { const { base64, mediaType } = await fileToResizedBase64(file, 1568); r = await aiImportPlan({ image: base64, mediaType, lang: getLang() }) }
+        setRes(r)
+      } catch (e) { setErr(aiErrorMessage(e)) }
+      setBusy(false)
+    })()
+  }, [])
+  const found = res && res.found && PLAN_FIELDS.some(k => +res[k] > 0)
+  const picked = found ? Object.fromEntries(PLAN_FIELDS.filter(k => +res[k] > 0).map(k => [k, Math.round(+res[k])])) : {}
+  return <div className="card" style={{ marginBottom: 12 }}>
+    <div className="row" style={{ gap: 8, marginBottom: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} /><b>{t('From your plan')}</b><span className="dim small" style={{ marginLeft: 'auto' }}>{file.name}</span></div>
+    {busy && <div className="row small dim" style={{ gap: 8 }}><span className="spin" />{t('Reading the plan — a few seconds…')}</div>}
+    {err && <div className="small" style={{ color: 'var(--red)' }}>{err}</div>}
+    {res && !found && <div className="small muted">{t('Couldn’t find daily targets in that file.')} {res.summary}</div>}
+    {found && <>
+      <div className="small muted" style={{ marginBottom: 6 }}>{res.summary}{res.note ? ' · ' + res.note : ''}</div>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        {Object.keys(picked).map(k => <span key={k} className="chip">{t(PLAN_LABEL[k])} <b>{fmtNum(picked[k])}</b> {PLAN_UNIT[k]}</span>)}
+      </div>
+      {res.confidence === 'low' && <div className="small dim" style={{ marginBottom: 8 }}>{t('Low confidence — check the numbers before applying.')}</div>}
+      <Button variant="primary" size="sm" icon="check" onClick={() => onApply(picked)}>{t('Use these targets')}</Button>
+    </>}
+  </div>
+}
+
 function MacroGoal({ close }) {
   const S = useStore(s => s.S)
   const g = macroGoalOf(S)
   const set = patch => update(s => { s.macroGoal = { ...macroGoalOf(s), ...patch } })
   const fromMacros = Math.round(g.protein * 4 + g.carbs * 4 + g.fat * 9)
+  const planInput = useRef(null)
+  const [planFile, setPlanFile] = useState(null)
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="target" style={{ color: 'var(--yellow)' }} />{t('Daily targets')}</h3>
+    <input ref={planInput} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPlanFile(f) }} />
+    {!planFile && <div style={{ marginBottom: 12 }}>
+      <Button size="sm" icon="upload" style={{ color: 'var(--violet)' }} onClick={() => planInput.current?.click()}>{t('Import from a diet plan (photo or PDF)')}</Button>
+      <div className="small dim" style={{ marginTop: 4 }}>{t('Got a plan from a nutritionist? Snap it or upload the PDF and the targets fill themselves in.')}</div>
+    </div>}
+    {planFile && <ImportPlan key={planFile.name + planFile.size} file={planFile} onApply={p => { set(p); setPlanFile(null); toast(t('Targets updated from your plan')) }} />}
     <div className="row cfgrow" style={{ marginBottom: 8 }}>
       <Stepper label={t('Calories (kcal)')} value={g.kcal} step={50} decimal={false} onChange={v => set({ kcal: Math.max(0, v) })} />
     </div>

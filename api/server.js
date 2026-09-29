@@ -390,6 +390,51 @@ function mealAnalysisRequest({ image, mediaType, text, lang, previous, correctio
 }
 
 
+// Diet plan (photo or PDF) -> daily targets. Mirrored in frontend/src/lib/ai.js for the BYO-key path.
+// A plan is usually a per-meal table with totals per day; when the days differ, the model reports
+// the typical (average) day. The client shows the numbers for review before anything is saved.
+function planTargetsRequest({ image, mediaType, pdf, lang }) {
+  const content = [];
+  if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } });
+  else content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } });
+  content.push({ type: 'text', text: 'Read this meal / diet plan and extract the DAILY nutrition targets it prescribes.' });
+  return {
+    max_tokens: 1000,
+    system: 'You are a registered dietitian reading a meal plan written for one person (a photo of a printed ' +
+      'or handwritten plan, or a PDF) for a fitness app that tracks daily calories and macros. Extract the ' +
+      'daily targets: calories, protein, carbohydrates, fat, and when stated, sugars, fibre and sodium. ' +
+      'Rules: if the plan states daily totals, use them. If it only lists meals with their nutrition, add ' +
+      'them up for one day. If different days differ, report the typical (average) day. If a macro is given ' +
+      'as a percentage of calories, convert it to grams (4 kcal/g protein and carbs, 9 kcal/g fat). Never ' +
+      'invent a number: leave optional fields out when the plan does not state or imply them, and set ' +
+      'found=false when the document is not a meal plan or has no usable nutrition numbers. Give single ' +
+      'best values, never ranges. Write the summary and note in the language with ISO code "' + lang + '".',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'set_targets',
+      description: 'The daily targets extracted from the plan',
+      input_schema: {
+        type: 'object',
+        properties: {
+          found: { type: 'boolean', description: 'true when the document is a meal plan with usable daily numbers' },
+          kcal: { type: 'number', description: 'daily calories' },
+          protein: { type: 'number', description: 'daily grams of protein' },
+          carbs: { type: 'number', description: 'daily grams of carbohydrate' },
+          fat: { type: 'number', description: 'daily grams of fat' },
+          sugar: { type: 'number', description: 'daily grams of sugars, only if the plan states a limit' },
+          fiber: { type: 'number', description: 'daily grams of fibre, only if the plan states it' },
+          sodium: { type: 'number', description: 'daily milligrams of sodium, only if the plan states a limit' },
+          summary: { type: 'string', description: 'one short line describing the plan (e.g. "Cut, 5 meals, high protein"), or why nothing was found' },
+          note: { type: 'string', description: 'one short clause on the main assumption (e.g. "averaged 3 training and 4 rest days")' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+        },
+        required: ['found', 'summary', 'confidence']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'set_targets' }
+  };
+}
+
 // AI trainer: questionnaire + exercise shortlist -> weekly plan. Mirrored in frontend/src/lib/ai.js.
 function trainerPlanRequest({ profile, candidates }) {
   const p = profile;
@@ -953,6 +998,28 @@ const routes = {
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
     } catch (e) { console.error('ai/analyze-meal', e); json(res, 502, { error: 'AI request failed' }); }
+  },
+
+  // Meal plan photo or PDF -> daily targets for the goal sheet. Nothing is stored server-side.
+  'POST /api/ai/import-plan': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
+    const body = await readBody(req);
+    const image = String(body.image || '');
+    const pdf = String(body.pdf || '');
+    const lang = String(body.lang || 'en').slice(0, 5);
+    const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
+    if (!image && !pdf) return json(res, 400, { error: 'photo or PDF required' });
+    if (image.length > 4_000_000 || pdf.length > 4_500_000) return json(res, 400, { error: 'file too large (max ~3 MB PDF)' });
+    if (aiRateLimited(user.id, 10, 60 * 60_000)) return json(res, 429, { error: 'too many plans imported — try again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
+    try {
+      const r = await callAnthropic(planTargetsRequest({ image, mediaType, pdf, lang }), { uid: user.id, feature: 'import-plan' });
+      const call = (r.content || []).find(b => b.type === 'tool_use');
+      if (!call) return json(res, 502, { error: 'no structured reply from model' });
+      json(res, 200, { ok: true, ...call.input });
+    } catch (e) { console.error('ai/import-plan', e); json(res, 502, { error: 'AI request failed' }); }
   },
 
   // Questionnaire -> weekly plan. The client sends the exercise shortlist (lib/trainer.js) so the

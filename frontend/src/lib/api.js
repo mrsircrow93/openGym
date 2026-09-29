@@ -1,6 +1,6 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
 import { t } from './i18n.js'
-import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan } from './ai.js'
+import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
 export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
@@ -96,6 +96,22 @@ export function aiErrorMessage(e) {
 export async function aiAnalyzeMeal({ image, mediaType, text, lang, previous, correction }) {
   if (hasUserKey()) return directAnalyzeMeal({ image, mediaType, text, lang, previous, correction })
   return api('/api/ai/analyze-meal', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, text: text || '', lang, previous: previous || null, correction: correction || '' }) })
+}
+// Meal-plan photo or PDF -> { found, kcal, protein, carbs, fat, sugar?, fiber?, sodium?, summary,
+// note, confidence }. Reviewed in the goal sheet before it touches S.macroGoal; the file is never stored.
+export async function aiImportPlan({ image, mediaType, pdf, lang }) {
+  if (hasUserKey()) return directImportPlan({ image, mediaType, pdf, lang })
+  return api('/api/ai/import-plan', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, pdf: pdf || '', lang }) })
+}
+// PDF as base64, no resizing possible — capped so the body stays under nginx's 6 MB.
+export function fileToBase64(file, maxBytes = 3_300_000) {
+  return new Promise((resolve, reject) => {
+    if (file.size > maxBytes) return reject(new Error('PDF too large — keep it under 3 MB'))
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = () => reject(new Error('could not read file'))
+    reader.readAsDataURL(file)
+  })
 }
 // Questionnaire + exercise shortlist -> { summary, split, progression, routines, cardio, nutrition }.
 // Every exercise id must come from the candidates sent; lib/trainer.js re-checks before saving.
