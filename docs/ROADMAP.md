@@ -12,6 +12,12 @@ Status legend: ✅ built · 🧩 designed + stubbed · 📝 needs a design note 
 - 🧩 Entitlements (`lib/entitlements.js`, `can()`), billing stubs, progress-photo stubs.
 - 📄 Design notes: `AI_COSTS.md`, `BILLING.md`, `PROGRESS_PHOTOS.md`.
 
+## Phase 0 — Production host (1 afternoon)
+
+Move the live instance from the Mac to AWS Lightsail behind the same Cloudflare Tunnel, with
+daily snapshots. Decided 2026-09-29; steps and script in `docs/AWS.md`. Everything below
+assumes an always-on server (Stripe webhooks, email, S3 for photos).
+
 ## Phase 1 — Accounts that can be billed (1–2 weeks)
 
 Goal: every paying user has an email, can recover the account, and the mobile app talks to

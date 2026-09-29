@@ -1,0 +1,7 @@
+# Linux-host override: drop root in the API container (Docker Desktop on macOS can't, see
+# api/Dockerfile). Use together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d
+# and once: sudo chown -R 1000:1000 ./data
+services:
+  api:
+    user: "1000:1000"
