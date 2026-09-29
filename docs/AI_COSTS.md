@@ -63,8 +63,9 @@ who logs every snack.
 
 ## Levers that cut cost without touching the price
 
-1. Route by feature: `ANTHROPIC_MODEL` today is one model for everything. Split it into
-   `ANTHROPIC_MODEL_VISION` (Sonnet) and `ANTHROPIC_MODEL_TEXT` (Haiku). ~40 % saving.
+1. ✅ 2026-09-29 — Route by feature: `ANTHROPIC_MODEL_VISION` (meal photo, identify machine,
+   diet-plan import) and `ANTHROPIC_MODEL_TEXT` (set parsing, coach, swaps, trainer plan). Both
+   fall back to `ANTHROPIC_MODEL`. The live `.env` runs Sonnet 5 / Haiku 4.5. ~40 % saving.
 2. Prompt caching on the trainer system prompt + exercise list (the same ~5 k tokens on every
    plan; cache reads are 10 % of price).
 3. Resize meal photos to 800 px instead of 1024 (≈ 35 % fewer image tokens, negligible

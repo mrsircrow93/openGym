@@ -107,6 +107,24 @@ is gated by your passkey and enforced server-side, so it needs no separate login
 Prefer to keep the whole thing off the open internet? A VPN or an auth proxy (Authelia, Cloudflare
 Access…) in front still works, and composes with the above.
 
+## 4b. AI features (optional)
+
+Without a key the AI features answer 501 and the app hides them; users can still paste their own
+Anthropic key in Settings → AI features and everything runs from their browser. To pay for AI
+centrally, set in `.env`:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL_VISION=claude-sonnet-5            # meal photos, machine ID, diet-plan import
+ANTHROPIC_MODEL_TEXT=claude-haiku-4-5-20251001    # set parsing, coach, swaps, trainer plan
+AI_MONTHLY_USD_CAP=3          # per user per month, 0 = unlimited
+AI_GLOBAL_MONTHLY_USD_CAP=20  # whole instance, the number that bounds a bad month
+```
+
+`ANTHROPIC_MODEL` alone still works as a single model for everything; the two split variables
+override it per feature. Costs per call are in `docs/AI_COSTS.md`; the admin dashboard shows
+the month's spend per user.
+
 ## 5. Backups
 
 Everything is in `./data`:

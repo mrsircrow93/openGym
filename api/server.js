@@ -37,6 +37,13 @@ const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 // this and both endpoints answer 501 instead of the frontend silently failing on a fetch.
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+// Route by feature (docs/AI_COSTS.md lever 1): photos need Sonnet-level vision, the text
+// features are fine on Haiku. Either override falls back to ANTHROPIC_MODEL when unset.
+const ANTHROPIC_MODEL_VISION = process.env.ANTHROPIC_MODEL_VISION || ANTHROPIC_MODEL;
+const ANTHROPIC_MODEL_TEXT = process.env.ANTHROPIC_MODEL_TEXT || ANTHROPIC_MODEL;
+const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan']);
+const modelFor = feature => (VISION_FEATURES.has(feature) ? ANTHROPIC_MODEL_VISION : ANTHROPIC_MODEL_TEXT);
+const MODELS_IN_USE = { vision: ANTHROPIC_MODEL_VISION, text: ANTHROPIC_MODEL_TEXT };
 
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -296,9 +303,9 @@ function aiUsageOf(uid, month = monthKey()) {
   const u = db.aiUsage[uid] = db.aiUsage[uid] || {};
   return u[month] = u[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} };
 }
-function recordAiUsage(uid, feature, usage) {
+function recordAiUsage(uid, feature, usage, model) {
   if (!uid || !usage) return;
-  const p = priceOf(ANTHROPIC_MODEL);
+  const p = priceOf(model || ANTHROPIC_MODEL);
   const inTok = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
   const outTok = usage.output_tokens || 0;
   const row = aiUsageOf(uid);
@@ -313,6 +320,7 @@ const aiOverBudget = uid => (AI_MONTHLY_USD_CAP > 0 && aiUsageOf(uid).usd >= AI_
   (AI_GLOBAL_MONTHLY_USD_CAP > 0 && aiGlobalUsd() >= AI_GLOBAL_MONTHLY_USD_CAP);
 
 async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }, meta) {
+  const model = modelFor(meta && meta.feature);
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -320,11 +328,11 @@ async function callAnthropic({ system, messages, tools, tool_choice, max_tokens 
       'x-api-key': ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: max_tokens || 1024, system, messages, tools, tool_choice })
+    body: JSON.stringify({ model, max_tokens: max_tokens || 1024, system, messages, tools, tool_choice })
   });
   if (!r.ok) throw new Error('anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
   const j = await r.json();
-  if (meta) recordAiUsage(meta.uid, meta.feature, j.usage);
+  if (meta) recordAiUsage(meta.uid, meta.feature, j.usage, model);
   return j;
 }
 
@@ -805,14 +813,14 @@ const routes = {
   'GET /api/ai/usage': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: AI_MONTHLY_USD_CAP || null, model: ANTHROPIC_MODEL });
+    json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: AI_MONTHLY_USD_CAP || null, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE });
   },
   'GET /api/admin/ai-usage': async (req, res) => {
     const user = readSession(req);
     if (!isAdmin(user)) return json(res, 403, { error: 'admin only' });
     const month = monthKey();
     const rows = db.users.map(u => ({ id: u.id, name: u.name, ...(db.aiUsage[u.id]?.[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} }) }));
-    json(res, 200, { month, model: ANTHROPIC_MODEL, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
+    json(res, 200, { month, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
   },
 
   /* ---------- billing (scaffold — see docs/BILLING.md) ---------- */

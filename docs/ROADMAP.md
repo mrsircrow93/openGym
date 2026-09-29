@@ -68,7 +68,7 @@ Per `docs/PROGRESS_PHOTOS.md`. Pro feature.
 
 ## Phase 5 — AI cost tuning (days, ongoing)
 
-1. ⬜ Split `ANTHROPIC_MODEL` into `_VISION` (Sonnet 5) and `_TEXT` (Haiku 4.5).
+1. ✅ Split `ANTHROPIC_MODEL` into `_VISION` (Sonnet 5) and `_TEXT` (Haiku 4.5). (2026-09-29)
 2. ⬜ Prompt caching on the trainer's system prompt + exercise list.
 3. ⬜ Admin page for `/api/admin/ai-usage`: spend vs MRR, top users, cap hits.
 4. ⬜ Review real ledger data after the first month; adjust caps/prices in `AI_COSTS.md`.
