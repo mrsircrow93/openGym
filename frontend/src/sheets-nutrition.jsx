@@ -91,7 +91,7 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
     setFixing(true); setFixNote('')
     try {
       const r = await refine(c, m.items.map(cleanItem))
-      if (!(r.items || []).length) { toast(t('The AI couldn’t apply that — try rephrasing')); setFixing(false); return }
+      if (!(r.items || []).length) { toast(t('Couldn’t apply that — try saying it another way')); setFixing(false); return }
       setM(x => ({ ...x, name: r.name || x.name, items: r.items.map(cleanItem), ai: true }))
       setFixNote(r.note || '')
       setCorr('')
@@ -127,7 +127,7 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
     </div>
     <Button size="sm" icon="plus" onClick={addItem}>{t('Add food manually')}</Button>
     {refine && m.items.length > 0 && <div className="ncorr">
-      <div className="small muted row" style={{ gap: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)', fontSize: 14 }} />{t('Something off? Tell the AI and it will redo the numbers.')}</div>
+      <div className="small muted row" style={{ gap: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)', fontSize: 14 }} />{t('Something off? Say so and the numbers get redone.')}</div>
       <div className="row" style={{ gap: 8 }}>
         <TextField value={corr} onChange={e => setCorr(e.target.value)} placeholder={t('e.g. “it’s unsweetened Greek yoghurt, about 200 g”')}
           onKeyDown={e => { if (e.key === 'Enter') doRefine() }} disabled={fixing} />
@@ -201,7 +201,7 @@ function DescribeMeal({ iso, close }) {
     <div className="small muted" style={{ marginBottom: 10 }}>{t('Quantities help: “2 scrambled eggs, 1 slice of toast with butter, a black coffee”.')}</div>
     <TextArea value={txt} onChange={e => setTxt(e.target.value)} placeholder={t('What did you eat?')} autoFocus />
     <div style={{ height: 12 }} />
-    <Button variant="primary" icon="sparkles" disabled={!txt.trim()} onClick={go}>{t('Estimate with AI')}</Button>
+    <Button variant="primary" icon="sparkles" disabled={!txt.trim()} onClick={go}>{t('Estimate it')}</Button>
   </>
 }
 export const describeMealSheet = iso => ui().openSheet(close => <DescribeMeal iso={iso} close={close} />)

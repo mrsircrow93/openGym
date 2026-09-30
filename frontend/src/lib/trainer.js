@@ -1,4 +1,4 @@
-// AI trainer: turns a short questionnaire into a weekly plan built only from exercises that
+// Personal trainer: turns a short questionnaire into a weekly plan built only from exercises that
 // exist in the library. Pure helpers here (candidate shortlist, validation, materialising the
 // model's answer into routine objects); the sheet in sheets-trainer.jsx owns the UI.
 import { allExercises, isCardio } from './exercises.js'

@@ -37,10 +37,10 @@ export default function Plan() {
 
     <div className="card hero">
       <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <span className="pill acc"><Icon name="sparkles" />{S.trainer ? t('AI trainer') : t('New')}</span>
+        <span className="pill acc"><Icon name="sparkles" />{S.trainer ? t('Personal trainer') : t('New')}</span>
         <span className="small" style={{ color: 'var(--acc)', fontWeight: 600 }}>{S.trainer ? (S.trainer.split || t('Your plan')) : t('Personalised routines')}</span>
       </div>
-      <div className="big" style={{ fontSize: 24 }}>{S.trainer ? t('Adjust my plan') : t('Build my routine with AI')}</div>
+      <div className="big" style={{ fontSize: 24 }}>{S.trainer ? t('Adjust my plan') : t('Build my routine for me')}</div>
       <div className="muted small" style={{ margin: '4px 0 14px', lineHeight: 1.45 }}>{S.trainer ? t('Change your days, equipment or goal and the trainer rebuilds the week.') : t('Answer four quick questions and we build a plan around your equipment and goal.')}</div>
       <Button variant="primary" size="sm" trailingIcon="chevronRight" onClick={trainerSheet}>{S.trainer ? t('Rebuild or tweak') : t('Start questionnaire')}</Button>
     </div>

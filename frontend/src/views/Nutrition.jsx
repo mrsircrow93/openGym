@@ -77,7 +77,7 @@ export default function Nutrition() {
         <Button style={{ flex: 1 }} icon="pencil" onClick={() => describeMealSheet(iso)}>{t('Describe it')}</Button>
         <Button style={{ flex: 1 }} icon="plus" onClick={() => manualMealSheet(iso)}>{t('Manual')}</Button>
       </div>
-      <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{t('AI reads the foods and portions off the photo — you review the numbers before anything is saved.')}</div>
+      <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{t('We read the foods and portions off the photo — you check the numbers before anything is saved.')}</div>
     </div>
 
 
@@ -106,7 +106,7 @@ export default function Nutrition() {
         <span className="lrow-i" style={{ width: 40, height: 40, borderRadius: 12, fontSize: 20, background: 'var(--teal)', color: '#0d211c' }}><Icon name="clipboard" /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>{t('Got a plan from a nutritionist?')}</div>
-          <div className="dim small">{t('Upload it: targets, menu and rules load in, and the AI suggests recipes that fit it.')}</div>
+          <div className="dim small">{t('Upload it: targets, menu and rules load in, and you get recipes that fit it.')}</div>
         </div>
         <Button size="sm" variant="tinted" icon="upload" onClick={macroGoalSheet}>{t('Upload')}</Button>
       </div>

@@ -59,7 +59,7 @@ async function callDirect({ system, messages, tools, tool_choice, max_tokens }) 
     })
   } catch { throw new Error('Could not reach the AI service — check your connection') }
   if (!r.ok) {
-    let msg = 'AI request failed (' + r.status + ')'
+    let msg = 'Something went wrong — try again (' + r.status + ')'
     try { const e = await r.json(); if (e?.error?.message) msg = e.error.message } catch { /* non-JSON error */ }
     if (r.status === 401) msg = 'That API key was rejected — check it and try again'
     if (r.status === 429) msg = 'Your Anthropic account is rate-limited — try again shortly'
@@ -321,7 +321,7 @@ export async function directAnalyzeMeal({ image, mediaType, text, lang, previous
   return { ok: true, ...toolInput(r, 'log_meal') }
 }
 
-// AI trainer — same request as trainerPlanRequest in api/server.js; keep them in step.
+// Personal trainer — same request as trainerPlanRequest in api/server.js; keep them in step.
 function trainerPlanRequest({ profile, candidates }) {
   const p = profile
   const lines = candidates.map(c => c.id + '|' + c.n + '|' + c.tg + '|' + c.eq).join('\n')

@@ -1,4 +1,4 @@
-// AI trainer: a five-step questionnaire, then a plan preview you can apply as-is, add to what
+// Personal trainer: a five-step questionnaire, then a plan preview you can apply as-is, add to what
 // you have, or regenerate. Plan maths + validation live in lib/trainer.js.
 import { useState } from 'react'
 import { useStore } from './store/useStore.js'
@@ -109,7 +109,7 @@ function Trainer({ close }) {
 
   /* ---------- building ---------- */
   if (busy) return <>
-    <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('AI trainer')}</h3>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('Personal trainer')}</h3>
     <div className="row small dim" style={{ gap: 8, padding: '20px 0' }}><span className="spin" />{t('Designing your week — this takes 15–30 seconds…')}</div>
   </>
 
@@ -118,7 +118,7 @@ function Trainer({ close }) {
   const canNext = step !== 0 || !!a.goal
   return <>
     <div className="row between" style={{ marginBottom: 4 }}>
-      <h3 className="row" style={{ gap: 8, margin: 0 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('AI trainer')}</h3>
+      <h3 className="row" style={{ gap: 8, margin: 0 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('Personal trainer')}</h3>
       <span className="small dim">{step + 1} / {STEPS}</span>
     </div>
     <div className="wprog" style={{ margin: '8px 0 14px' }}><i style={{ width: ((step + 1) / STEPS) * 100 + '%', background: 'var(--violet)' }} /></div>

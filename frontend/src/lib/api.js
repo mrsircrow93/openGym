@@ -85,9 +85,10 @@ export async function aiIdentifyExercise(image, mediaType) {
 // What to show when an AI call fails. A bare "HTTP 502" means the app has no backend to
 // proxy through (static deploy) and no key of its own — say that, and where to fix it.
 export function aiErrorMessage(e) {
-  if (!hasUserKey() && e && (e.status === 501 || e.status === 502 || e.status === 404)) return t('AI isn’t set up here — add your Anthropic API key in Settings → AI features.')
-  if (!hasUserKey() && e && e.status === 401) return t('Sign in to use the AI features, or add your own API key in Settings.')
-  return (e && e.message) || t('AI request failed')
+  const admin = (() => { try { return !!(JSON.parse(localStorage.getItem('gym_user')) || {}).admin } catch { return false } })()
+  if (!hasUserKey() && e && (e.status === 501 || e.status === 502 || e.status === 404)) return t('This isn’t available right now — try again in a bit.') + (admin ? ' (admin: ' + (e.status === 501 ? 'ANTHROPIC_API_KEY not set on the server' : 'AI route failed, status ' + e.status) + ')' : '')
+  if (!hasUserKey() && e && e.status === 401) return t('Sign in to use the coach and the photo features.')
+  return (e && e.message) || t('Something went wrong — try again')
 }
 // Meal photo and/or typed description -> { name, items: [{ name, portion, grams, kcal, protein,
 // carbs, fat }], confidence, note }. Either input alone is enough; both together is best (the

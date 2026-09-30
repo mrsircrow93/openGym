@@ -113,7 +113,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     <div className="row between" style={{ marginBottom: 6 }}>
       <div style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'capitalize', lineHeight: 1.2 }}>{ex.n}</div>
       <div className="row" style={{ gap: 4 }}>
-        {mode === 'reps' && <button className="iconbtn" aria-label={t('Quick log with AI')} onClick={() => aiQuickLogSheet(ex, S.unit, r => {
+        {mode === 'reps' && <button className="iconbtn" aria-label={t('Quick log')} onClick={() => aiQuickLogSheet(ex, S.unit, r => {
           const i = entry.sets.findIndex(s => !s.done)
           const idx = i === -1 ? entry.sets.length - 1 : i
           if (r.reps != null) onField(idx, 'r', r.reps)

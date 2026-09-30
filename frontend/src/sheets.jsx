@@ -1031,7 +1031,7 @@ function AiQuickLog({ ex, unit, close, onApply }) {
     setBusy(false)
   }
   return <>
-    <h3>{t('Quick log with AI')}</h3>
+    <h3>{t('Quick log')}</h3>
     <div className="small dim" style={{ margin: '0 0 12px' }}>{t('Describe the set in your own words, e.g. “did 3 sets of 10 at 60kg”.')}</div>
     {!result ? <>
       <textarea className="input" rows={3} autoFocus value={text} onChange={e => setText(e.target.value)}
@@ -1265,7 +1265,7 @@ function SwapExercise({ entryIdx, close }) {
 
   return <>
     <h3 className="capitalize">{t('Swap “{0}”', ex.n)}</h3>
-    <div className="muted small" style={{ marginBottom: 10 }}>{t('Pick a different exercise for this slot — your sets carry over. AI suggests swaps that train the same muscle.')}</div>
+    <div className="muted small" style={{ marginBottom: 10 }}>{t('Pick a different exercise for this slot — your sets carry over. The suggestions train the same muscle.')}</div>
     <div className="chips" style={{ marginBottom: 12 }}>
       {SWAP_REASONS.map(r => <button key={r.label} className={'chip' + (reason === r.k ? ' on' : '')}
         onClick={() => { setReason(r.k); run(r.k) }}>{t(r.label)}</button>)}
