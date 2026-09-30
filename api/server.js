@@ -275,6 +275,60 @@ setInterval(() => { for (const [k, v] of presence) if (Date.now() - v.updatedAt 
 // Every call costs real money, so a simple in-memory sliding window guards against a runaway
 // frontend loop — not abuse (this is a personal instance), just a bug that fires 100 requests.
 const aiHits = new Map(); // uid -> [timestamps]
+// What the coach gets to look at. Kept small and cheap: the last 15 sessions with target vs
+// done, a week of nutrition against the targets, today's steps and the recent weight curve —
+// no settings, no push subscriptions, no ids that mean nothing off-device. Mirrored in
+// frontend/src/lib/ai.js for people using their own API key.
+function coachContext(S) {
+  const today = new Date().toISOString().slice(0, 10);
+  const recent = (S.workouts || []).slice(-15).map(w => ({
+    date: w.d,
+    entries: (w.entries || []).map(e => ({
+      id: e.id, target: e.target,
+      sets: (e.sets || []).map(s => ({ done: !!s.done, r: s.r, w: s.w, sec: s.sec, min: s.min }))
+    }))
+  }));
+  const routines = (S.routines || []).map(r => ({ name: r.name, prog: r.prog || 'linear', exCount: (r.ex || []).length }));
+  const byDay = {};
+  for (const m of S.meals || []) (byDay[m.d] = byDay[m.d] || []).push(...(m.items || []));
+  const days = Object.keys(byDay).sort().slice(-7);
+  const sum = items => items.reduce((a, i) => { for (const k of ['kcal', 'protein', 'carbs', 'fat', 'fiber']) a[k] += +i[k] || 0; return a; }, { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const round = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)]));
+  const nutrition = {
+    targets: { kcal: 2000, protein: 140, carbs: 220, fat: 65, ...(S.macroGoal || {}) },
+    today: round(sum(byDay[today] || [])),
+    mealsToday: (S.meals || []).filter(m => m.d === today).length,
+    avgPerLoggedDay: days.length ? round(Object.fromEntries(Object.entries(sum(days.flatMap(d => byDay[d]))).map(([k, v]) => [k, v / days.length]))) : null,
+    loggedDaysLast7: days.length
+  };
+  const bw = (S.bodyweight || []).slice(-8).map(b => ({ d: b.d, w: b.w }));
+  const stepRow = (S.steps || []).find(r => r.d === today);
+  return {
+    today, unit: S.unit || 'kg',
+    profile: (S.trainer && S.trainer.answers) || null,
+    bodyweight: { unit: S.unit || 'kg', recent: bw, target: S.targetW || null },
+    steps: { today: stepRow ? stepRow.n : 0, goal: Math.max(500, +S.stepGoal || 8000) },
+    water: { goalMl: S.waterGoal || 2000 },
+    nutrition, routines, recentWorkouts: recent
+  };
+}
+function coachSystemPrompt(S, asking) {
+  return `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
+    `about strength training and everyday nutrition. You have their data as JSON: routines, up to 15 recent ` +
+    `sessions (each exercise's target vs what was actually done — "done" sets counted as hit), a week of logged ` +
+    `meals against their targets, today's steps and recent body weight. Weight unit is ${S.unit || 'kg'}. ` +
+    `Exercise ids come from a public database and are not human-readable — refer to exercises by their role ` +
+    `("your pressing work", "the leg curl"), never by id. Ground every answer in their numbers when the data ` +
+    `is there; if it isn't (e.g. no meals logged), say so in one short sentence and give a sensible general ` +
+    `answer instead of guessing. ` +
+    (asking
+      ? `Answer the question in 60-160 words of plain prose (no markdown headers, no bullet lists unless listing ` +
+        `foods or exercises), ending with one concrete next step. `
+      : `Write a 150-250 word read-out in plain prose: what's trending well, where reps/weight have stalled, and ` +
+        `1-3 concrete, specific suggestions (a deload, a technique check, adding a set). No markdown headers. `) +
+    `You are not a doctor: for medication, injury or medical-condition questions, suggest a professional in ` +
+    `one sentence and keep the rest practical. Respond in ${S.lang === 'es' ? 'Spanish' : 'English'}.`;
+}
 function aiRateLimited(uid, limit, windowMs) {
   const now = Date.now();
   const hits = (aiHits.get(uid) || []).filter(t => now - t < windowMs);
@@ -887,33 +941,29 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
-    if (aiRateLimited(user.id, 5, 60 * 60_000)) return json(res, 429, { error: 'you can ask for a new read-out again in a bit' });
+    if (aiRateLimited(user.id, 20, 60 * 60_000)) return json(res, 429, { error: 'you have asked the coach a lot — try again in a bit' });
     if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
+    const body = await readBody(req);
+    const question = String(body.question || '').slice(0, 600).trim();
+    // Prior turns of this sheet's conversation, so follow-ups ("and on rest days?") make sense.
+    // Capped so a long chat can't grow the prompt without bound.
+    const history = Array.isArray(body.history) ? body.history.slice(-8)
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+      .map(m => ({ role: m.role, content: m.content.slice(0, 2000) })) : [];
     const S = readState(user.id);
-    if (!S || !(S.workouts || []).length) return json(res, 400, { error: 'log a few workouts first' });
-    // Keep the prompt small and cheap: last 15 sessions, only what a coach would actually look
-    // at — no settings, no push subscriptions, no ids that mean nothing off-device.
-    const recent = S.workouts.slice(-15).map(w => ({
-      date: w.d,
-      entries: (w.entries || []).map(e => ({
-        id: e.id,
-        target: e.target,
-        sets: (e.sets || []).map(s => ({ done: !!s.done, r: s.r, w: s.w, sec: s.sec, min: s.min }))
-      }))
-    }));
-    const routines = (S.routines || []).map(r => ({ name: r.name, prog: r.prog || 'linear', exCount: (r.ex || []).length }));
+    if (!S || !((S.workouts || []).length || (S.meals || []).length || (S.bodyweight || []).length)) {
+      return json(res, 400, { error: 'log a workout, a meal or your weight first so the coach has something to look at' });
+    }
     try {
       const r = await callAnthropic({
-        max_tokens: 700,
-        system: `You are a concise, encouraging strength-training coach reviewing a client's recent logged ` +
-          `workouts (raw JSON: routines they follow, then up to 15 sessions with each exercise's target vs what ` +
-          `was actually done — "done" sets counted as hit). Weight unit is ${S.unit || 'kg'}. Exercise ids are ` +
-          `from a public exercise database and not human-readable — refer to exercises by their role (e.g. ` +
-          `"your pressing work", "the leg curl") rather than by id. Write 150-250 words in plain language: ` +
-          `what's trending well, where reps/weight have stalled across sessions, and 1-3 concrete, specific ` +
-          `suggestions (e.g. a deload, a technique check, adding a set). No markdown headers, just prose. ` +
-          `Respond in ${S.lang === 'es' ? 'Spanish' : 'English'}.`,
-        messages: [{ role: 'user', content: JSON.stringify({ routines, recent }) }]
+        max_tokens: question ? 500 : 700,
+        system: coachSystemPrompt(S, !!question),
+        messages: [
+          { role: 'user', content: 'My data (JSON): ' + JSON.stringify(coachContext(S)) },
+          { role: 'assistant', content: 'Got it — I have your recent training, nutrition, steps and weight in front of me.' },
+          ...history,
+          { role: 'user', content: question || 'Give me a read-out on my recent training.' }
+        ]
       }, { uid: user.id, feature: 'coach' });
       const text = (r.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
       if (!text) return json(res, 502, { error: 'no reply from model' });

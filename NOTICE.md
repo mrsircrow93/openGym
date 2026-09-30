@@ -1,7 +1,14 @@
 # Third-party notices
 
 openGym — Copyright (C) 2026 Duarte Santos.
-openGym's own code is licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)).
+Modifications and additions in this fork — Copyright (C) 2026 mrsircrow93 (AI coach and trainer,
+nutrition and step tracking, diet-plan import, the current visual design).
+
+This repository (<https://github.com/mrsircrow93/openGym>) is a fork of the original project at
+<https://github.com/arvids-unavailable/openGym>. Both the original code and this fork's changes are
+licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)). The fork is offered as a paid, hosted
+service; in line with AGPL section 13, the complete corresponding source of the version being served
+is kept in this repository.
 
 ## App store exception
 

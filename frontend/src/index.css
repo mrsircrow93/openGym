@@ -994,3 +994,39 @@ h4.sec{
 .stepbar .b i{display:block;width:100%;border-radius:6px;transition:height var(--med) var(--ease)}
 .stepbar .l{font-size:11px;color:var(--label-3);text-transform:uppercase;letter-spacing:.03em}
 .stepbar.today .l{color:var(--acc);font-weight:600}
+
+/* ---------------------------------------------------------------- coach -- */
+.coach-avatar{
+  position:relative;width:44px;height:44px;border-radius:50%;flex:none;font-size:20px;
+  display:flex;align-items:center;justify-content:center;background:var(--acc);color:var(--on-acc);
+}
+.coach-avatar::after{
+  content:"";position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-radius:50%;
+  background:var(--teal);border:2px solid var(--surface);
+}
+.coach-card .row.tappable{background:none;border:0;padding:0;font:inherit;color:inherit}
+.coach-qs{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:14px}
+.coach-q{
+  display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:9px 12px 9px 14px;border-radius:20px;
+  background:var(--surface-2);color:var(--label);font-size:14px;letter-spacing:-.01em;text-align:left;line-height:1.3;
+  transition:background var(--fast);
+}
+.coach-q span{min-width:0}
+.coach-q .icn{font-size:13px;color:var(--label-3);flex:none}
+.coach-q:active{background:var(--surface-3)}
+.coach-chat{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow-y:auto;padding:2px 0 6px}
+.coach-msg{
+  max-width:88%;padding:10px 13px;border-radius:16px;font-size:15px;line-height:1.45;
+  white-space:pre-wrap;letter-spacing:-.006em;
+}
+.coach-msg.user{align-self:flex-end;background:var(--acc);color:var(--on-acc);border-bottom-right-radius:5px}
+.coach-msg.assistant{align-self:flex-start;background:var(--surface-2);color:var(--label);border-bottom-left-radius:5px}
+.coach-sugg{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+.coach-sugg .chip{background:var(--surface-2)}
+.coach-ask{display:grid;grid-template-columns:1fr 46px;gap:8px;margin-top:10px;align-items:center}
+.coach-ask .field{font-size:16px;padding:12px 15px}
+.coach-send{
+  width:46px;height:46px;border-radius:50%;background:var(--acc);color:var(--on-acc);font-size:18px;
+  display:flex;align-items:center;justify-content:center;transition:opacity var(--fast)
+}
+.coach-send:disabled{opacity:.35}

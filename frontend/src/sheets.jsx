@@ -11,7 +11,7 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, TextField } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
@@ -1052,26 +1052,65 @@ function AiQuickLog({ ex, unit, close, onApply }) {
 export const aiQuickLogSheet = (ex, unit, onApply) => ui().openSheet(close => <AiQuickLog ex={ex} unit={unit} close={close} onApply={onApply} />)
 
 /* ============================ AI: coach read-out ============================ */
-function AiCoach({ close }) {
-  const [busy, setBusy] = useState(true)
+// Starter questions shown on the Home card and inside the sheet. The first one is the classic
+// training read-out; the rest are answered from the same data (meals, steps, weight included).
+export const COACH_QUESTIONS = [
+  'How is my training going?',
+  'Am I getting enough protein?',
+  'How many calories do I need?',
+  'What should I train today?'
+]
+
+function AiCoach({ close, initial }) {
+  const [msgs, setMsgs] = useState([])          // [{ role: 'user'|'assistant', content }]
+  const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [text, setTextR] = useState('')
-  const run = async () => {
-    setBusy(true); setErr(''); setTextR('')
-    try { const r = await aiCoach(); setTextR(r.text) }
-    catch (e) { setErr(aiErrorMessage(e)) }
+  const [draft, setDraft] = useState('')
+  const endRef = useRef(null)
+  const started = useRef(false)
+  const ask = async (q, history = msgs) => {
+    const question = (q || '').trim()
+    if (!question || busy) return
+    setErr(''); setDraft('')
+    setMsgs(m => [...m, { role: 'user', content: question }])
+    setBusy(true)
+    try {
+      // The first starter question is the full read-out, which has its own richer prompt.
+      const readout = question === t(COACH_QUESTIONS[0])
+      const r = await aiCoach(readout ? '' : question, history)
+      setMsgs(m => [...m, { role: 'assistant', content: r.text }])
+    } catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
   }
-  useEffect(() => { run() }, [])
+  // StrictMode runs effects twice in dev — the ref keeps the opening question from being sent twice.
+  useEffect(() => { if (initial && !started.current) { started.current = true; ask(t(initial), []) } }, [])
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [msgs.length, busy])
+  const asked = new Set(msgs.filter(m => m.role === 'user').map(m => m.content))
+  const suggestions = COACH_QUESTIONS.filter(q => !asked.has(t(q)))
   return <>
-    <h3>{t('Coach read-out')}</h3>
-    {busy && <div className="small dim">{t('Reading your recent workouts…')}</div>}
-    {err && <div className="small" style={{ color: 'var(--red)', margin: '4px 0 12px' }}>{err}</div>}
-    {text && <div className="small" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, margin: '4px 0 16px' }}>{text}</div>}
-    {!busy && <Button onClick={run}>{t('Ask again')}</Button>}
+    <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 14 }}>
+      <span className="coach-avatar"><Icon name="sparkles" /></span>
+      <div style={{ minWidth: 0 }}>
+        <h3 style={{ marginBottom: 0 }}>{t('Your coach')}</h3>
+        <div className="dim small">{t('Ask anything about your training, food, steps or weight.')}</div>
+      </div>
+    </div>
+    <div className="coach-chat">
+      {msgs.map((m, i) => <div key={i} className={'coach-msg ' + m.role}>{m.content}</div>)}
+      {busy && <div className="coach-msg assistant dim">{t('Thinking…')}</div>}
+      {err && <div className="small" style={{ color: 'var(--red)' }}>{err}</div>}
+      <div ref={endRef} />
+    </div>
+    {suggestions.length > 0 && <div className="coach-sugg">
+      {suggestions.map(q => <button key={q} className="chip nocap" disabled={busy} onClick={() => ask(t(q))}>{t(q)}</button>)}
+    </div>}
+    <form className="coach-ask" onSubmit={e => { e.preventDefault(); ask(draft) }}>
+      <TextField value={draft} onChange={e => setDraft(e.target.value)} placeholder={t('Ask something else…')} disabled={busy} />
+      <button type="submit" className="coach-send" disabled={busy || !draft.trim()} aria-label={t('Send')}><Icon name="arrowUp" /></button>
+    </form>
   </>
 }
-export const coachSheet = () => ui().openSheet(close => <AiCoach close={close} />)
+export const coachSheet = (question) => ui().openSheet(close => <AiCoach close={close} initial={question || ''} />)
 
 /* ============================ AI: identify exercise from photo ============================ */
 // Rough text-overlap score against the AI's guess — good enough to surface a couple of

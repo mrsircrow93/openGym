@@ -11,7 +11,7 @@
 // lands in a self-hosted bundle.
 export const DEMO = import.meta.env.VITE_DEMO === '1'
 export const DEMO_SEEDED = 'gym_demo_seeded_v1'
-export const REPO = 'https://github.com/DuarteSantos8/openGym'
+export const REPO = 'https://github.com/mrsircrow93/openGym'
 
 // Static build (VITE_STATIC=1) — a real, empty install with NO backend, meant for a free
 // static host (e.g. Netlify without the API). Like the demo it stays in guest mode with data in

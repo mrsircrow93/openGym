@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtWater, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, coachSheet, waterSheet, addWater, waterToday } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, coachSheet, COACH_QUESTIONS, waterSheet, addWater, waterToday } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -73,6 +73,7 @@ export default function Home() {
   const steps = stepsOn(S, todayISO())
   const stepGoal = stepGoalOf(S)
   const streak = streakWeeks(S)
+  const hasAnyData = S.workouts.length > 0 || (S.meals || []).length > 0 || S.bodyweight.length > 0
   const exNames = routine ? routine.ex.slice(0, 3).map(e => exOr(e.id).n).join(', ') + (routine.ex.length > 3 ? '…' : '') : ''
 
   const onToday = () => { if (S.active) nav('/workout'); else if (routine) startFlow(routine.id); else dayOverrideSheet(todayISO()) }
@@ -125,16 +126,25 @@ export default function Home() {
       </div>
     )}
 
-    {S.workouts.length > 0 && (
-      <button className="card tappable" style={{ width: '100%', textAlign: 'left', display: 'block' }} onClick={coachSheet}>
-        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-          <span className="lrow-i" style={{ '--tint': 'var(--teal)', color: '#0d211c', width: 36, height: 36, borderRadius: 12 }}><Icon name="sparkles" /></span>
+    {hasAnyData && (
+      <div className="card coach-card">
+        <button className="row tappable" style={{ gap: 12, alignItems: 'center', width: '100%', textAlign: 'left' }} onClick={() => coachSheet()}>
+          <span className="coach-avatar"><Icon name="sparkles" /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="row between"><span className="eyebrow" style={{ color: 'var(--teal)' }}>{t('AI coach')}</span><span className="dim small">{t('{0} this week', wThisWeek + (plannedPerWeek ? '/' + plannedPerWeek : ''))}</span></div>
-            <div className="small" style={{ marginTop: 4, lineHeight: 1.4 }}>{t('Get a read-out on your recent training')}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('Your coach is here to help')}</div>
+            <div className="dim small">{t('{0} this week', wThisWeek + (plannedPerWeek ? '/' + plannedPerWeek : ''))} · {t('ask anything')}</div>
           </div>
+          <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />
+        </button>
+        <div className="coach-qs">
+          {COACH_QUESTIONS.map(q => <button key={q} className="coach-q tappable" onClick={() => coachSheet(q)}>
+            <span>{t(q)}</span><Icon name="chevronRight" />
+          </button>)}
+          <button className="coach-q tappable" onClick={() => coachSheet()}>
+            <span>{t('Ask something else')}</span><Icon name="chevronRight" />
+          </button>
         </div>
-      </button>
+      </div>
     )}
 
     <div className="tiles">

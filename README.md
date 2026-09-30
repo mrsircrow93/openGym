@@ -19,9 +19,9 @@ No account on someone else's server, no subscription, no ads. Just `docker compo
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![No tracking](https://img.shields.io/badge/telemetry-none-f472b6?style=flat-square)
 <br>
-![GitHub last commit](https://img.shields.io/github/last-commit/DuarteSantos8/openGym?style=flat-square)
-[![GitHub stars](https://img.shields.io/github/stars/DuarteSantos8/openGym?style=flat-square)](https://github.com/DuarteSantos8/openGym/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/DuarteSantos8/openGym?style=flat-square)](https://github.com/DuarteSantos8/openGym/issues)
+![GitHub last commit](https://img.shields.io/github/last-commit/mrsircrow93/openGym?style=flat-square)
+[![GitHub stars](https://img.shields.io/github/stars/mrsircrow93/openGym?style=flat-square)](https://github.com/mrsircrow93/openGym/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/mrsircrow93/openGym?style=flat-square)](https://github.com/mrsircrow93/openGym/issues)
 
 </div>
 
@@ -46,6 +46,13 @@ No signup, nothing to install — it runs entirely in your browser on example da
 admin dashboard only exist in a self-hosted instance.</sub>
 
 </div>
+
+## About this fork
+
+This is a maintained fork of [openGym by Duarte Santos](https://github.com/arvids-unavailable/openGym),
+offered as a hosted service, with an AI coach and trainer, nutrition and step tracking and a new design on
+top of the original. It stays under the AGPL v3: you can self-host it, read every line, and the source of
+the hosted version is always this repository. See [NOTICE.md](NOTICE.md) for attribution.
 
 ## Why
 
@@ -88,7 +95,7 @@ as a home-screen app, passkey sign-in, offline support, sync across your phone a
 You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym
+git clone https://github.com/mrsircrow93/openGym
 cd openGym
 cp .env.example .env
 docker compose pull   # grab prebuilt images (amd64 + arm64) — skip to build from source instead
@@ -186,14 +193,14 @@ React, the router and Zustand.
 
 ## Community
 
-- **[Q&A](https://github.com/DuarteSantos8/openGym/discussions/categories/q-a)** — self-hosting
+- **[Q&A](https://github.com/mrsircrow93/openGym/discussions/categories/q-a)** — self-hosting
   help, passkey/login trouble, "how do I…". Most login problems turn out to be an `RP_ID`/`ORIGIN`
   mismatch.
-- **[Ideas](https://github.com/DuarteSantos8/openGym/discussions/categories/ideas)** — features
+- **[Ideas](https://github.com/mrsircrow93/openGym/discussions/categories/ideas)** — features
   worth talking through before anyone writes code.
-- **[Show and tell](https://github.com/DuarteSantos8/openGym/discussions/categories/show-and-tell)**
+- **[Show and tell](https://github.com/mrsircrow93/openGym/discussions/categories/show-and-tell)**
   — your setup, your plan templates, whatever you built on top.
-- **[Issues](https://github.com/DuarteSantos8/openGym/issues)** — bugs, and work that's already
+- **[Issues](https://github.com/mrsircrow93/openGym/issues)** — bugs, and work that's already
   been agreed on.
 
 ## Contributing

@@ -48,7 +48,7 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
 sudo apt-get update && sudo apt-get -y install cloudflared
 # unattended security updates
 sudo apt-get -y install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades
-git clone https://github.com/dano93/openGym.git ~/openGym
+git clone https://github.com/mrsircrow93/openGym.git ~/openGym
 exit
 ```
 
