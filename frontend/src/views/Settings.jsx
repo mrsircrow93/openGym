@@ -146,7 +146,7 @@ export default function Settings() {
 
     {(user || MOBILE) && <NotificationsCard S={S} update={update} toast={toast} />}
 
-    <AICard toast={toast} />
+    <AICard toast={toast} user={user} />
 
 
     {/* ---------- appearance ---------- */}
@@ -257,14 +257,16 @@ function AIUsageRow() {
     value={usd} />
 }
 
-function AICard({ toast }) {
+function AICard({ toast, user }) {
   const [key, setKey] = useState(getAIKey())
   const [model, setModel] = useState(getAIModel())
   const [busy, setBusy] = useState(false)
-  // Does this server pay for AI itself? Then the key field is an advanced option, not a requirement.
-  const [serverAi, setServerAi] = useState(false)
+  // Does this server pay for AI itself? Then the whole section is operator business: customers
+  // just get the features, with nothing to configure or read. null = not known yet, so the
+  // section doesn't flash in and out while /api/config loads.
+  const [serverAi, setServerAi] = useState(STATIC || MOBILE ? false : null)
   const [showKey, setShowKey] = useState(false)
-  useEffect(() => { if (!STATIC && !MOBILE) api('/api/config').then(c => setServerAi(!!c.ai)).catch(() => {}) }, [])
+  useEffect(() => { if (!STATIC && !MOBILE) api('/api/config').then(c => setServerAi(!!c.ai)).catch(() => setServerAi(false)) }, [])
   const saved = getAIKey()
   const has = hasUserKey()
   const dirty = key.trim() !== saved
@@ -278,6 +280,8 @@ function AICard({ toast }) {
     setBusy(false)
   }
   const keyField = !serverAi || has || showKey
+  if (serverAi === null) return null
+  if (serverAi && !user?.admin) return null
   return <Section title={t('AI features')}
     footer={has
       ? t('AI runs on your own Anthropic key, straight from this device — the server never sees it, and it works even with no backend.')

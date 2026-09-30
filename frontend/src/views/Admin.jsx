@@ -23,6 +23,32 @@ const rel = ts => {
 }
 const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60) + 'm' }
 
+// Server-paid AI: what the instance has spent this month and who spent it. Read-only; the
+// per-user cap lives in AI_MONTHLY_USD_CAP on the server.
+function AISpendCard() {
+  const [d, setD] = useState(null)
+  useEffect(() => { api('/api/admin/ai-usage').then(setD).catch(() => setD(false)) }, [])
+  if (d === null) return null
+  if (d === false) return <div className="card"><h2 style={{ margin: '0 0 4px' }}>AI spend</h2><div className="dim small">AI isn't configured on this server.</div></div>
+  const usd = v => (v > 0 && v < 0.01 ? '< $0.01' : '$' + (+v || 0).toFixed(2))
+  const rows = d.users.filter(u => u.calls).sort((a, b) => b.usd - a.usd)
+  const calls = rows.reduce((a, u) => a + u.calls, 0)
+  return <div className="card">
+    <div className="row between" style={{ marginBottom: 8 }}>
+      <h2 style={{ margin: 0 }}>AI spend · {d.month}</h2>
+      <span className="tag acc">{usd(d.total)}</span>
+    </div>
+    <div className="dim small" style={{ marginBottom: rows.length ? 8 : 0 }}>
+      {calls} calls · {rows.length} of {d.users.length} users · model {d.models?.text || d.model}{d.cap ? ' · cap $' + d.cap + ' per user' : ''}
+    </div>
+    {rows.map(u => <div key={u.id} className="row between" style={{ padding: '7px 2px', borderTop: '1px solid var(--sep)' }}>
+      <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
+        <div className="dim" style={{ fontSize: '.72rem' }}>{u.calls} calls · {fmtNum((u.in + u.out) / 1000)}k tokens{u.features && Object.keys(u.features).length ? ' · ' + Object.entries(u.features).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + v).join(', ') : ''}</div></div>
+      <span className="small" style={{ fontWeight: 600, color: d.cap && u.usd >= d.cap ? 'var(--red)' : undefined }}>{usd(u.usd)}</span>
+    </div>)}
+  </div>
+}
+
 function UserDetail({ id, onChanged, close }) {
   const [d, setD] = useState(null)
   const toast = useUI(s => s.toast)
@@ -131,6 +157,8 @@ export default function Admin() {
         <span className="tag acc">{dur(Date.now() - u.live.startedAt)}</span>
       </div>)}
     </div>}
+
+    <AISpendCard />
 
     <InvitesCard invites={invites} reload={loadInvites} />
 
