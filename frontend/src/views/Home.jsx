@@ -13,6 +13,8 @@ import { exOr } from '../lib/exercises.js'
 import { macroGoalOf, dayTotals, mealsOn, pctOf } from '../lib/nutrition.js'
 import { analyzeMealSheet } from '../sheets-nutrition.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
+import { COACHES, coachOf } from '../lib/coach.js'
+import CoachAvatar from '../components/CoachAvatar.jsx'
 import { stepsSheet } from '../sheets-steps.jsx'
 import { stepsOn, stepGoalOf, stepPct } from '../lib/steps.js'
 
@@ -36,6 +38,7 @@ export function Ring({ pct, size = 64, stroke = 7, color = 'var(--acc)', childre
 export default function Home() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
+  const update = useStore(s => s.update)
   const user = useStore(s => s.user)
   const [weekOffset, setWeekOffset] = useState(0)
   const mealPhoto = useRef(null)
@@ -73,6 +76,7 @@ export default function Home() {
   const steps = stepsOn(S, todayISO())
   const stepGoal = stepGoalOf(S)
   const streak = streakWeeks(S)
+  const coach = coachOf(S)
   const hasAnyData = S.workouts.length > 0 || (S.meals || []).length > 0 || S.bodyweight.length > 0
   const exNames = routine ? routine.ex.slice(0, 3).map(e => exOr(e.id).n).join(', ') + (routine.ex.length > 3 ? '…' : '') : ''
 
@@ -126,12 +130,25 @@ export default function Home() {
       </div>
     )}
 
-    {hasAnyData && (
+    {hasAnyData && !coach && (
+      <div className="card coach-card">
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('Choose your coach')}</div>
+        <div className="dim small" style={{ marginTop: 2 }}>{t('They will read your training and food and answer your questions. You can change later in Settings.')}</div>
+        <div className="coach-pick">
+          {COACHES.map(c => <button key={c.id} className="coach-opt tappable" onClick={() => update(s => { s.coach = c.id })}>
+            <CoachAvatar gender={c.gender} size={72} />
+            <span>{c.name}</span>
+          </button>)}
+        </div>
+      </div>
+    )}
+
+    {hasAnyData && coach && (
       <div className="card coach-card">
         <button className="row tappable" style={{ gap: 12, alignItems: 'center', width: '100%', textAlign: 'left' }} onClick={() => coachSheet()}>
-          <span className="coach-avatar"><Icon name="sparkles" /></span>
+          <span className="coach-avatar"><CoachAvatar gender={coach.gender} size={44} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('Your coach is here to help')}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('{0} is here to help', coach.name)}</div>
             <div className="dim small">{t('{0} this week', wThisWeek + (plannedPerWeek ? '/' + plannedPerWeek : ''))} · {t('ask anything')}</div>
           </div>
           <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />

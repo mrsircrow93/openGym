@@ -144,8 +144,9 @@ export function coachContext(S) {
     nutrition, routines, recentWorkouts: recent
   }
 }
-function coachSystemPrompt(S, asking) {
-  return `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
+function coachSystemPrompt(S, asking, coach) {
+  return (coach ? `Your name is ${coach.name}; you are a ${coach.gender === 'f' ? 'woman' : 'man'} and you speak in the first person as ${coach.name}. ` : '') +
+    `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
     `about strength training and everyday nutrition. You have their data as JSON: routines, up to 15 recent ` +
     `sessions (each exercise's target vs what was actually done — "done" sets counted as hit), a week of logged ` +
     `meals against their targets, today's steps and recent body weight. Weight unit is ${S.unit || 'kg'}. ` +
@@ -164,11 +165,11 @@ function coachSystemPrompt(S, asking) {
 
 // Ask the coach something (or, with no question, get the classic training read-out).
 // `history` is the sheet's earlier turns [{ role, content }] so follow-ups keep their thread.
-export async function directCoach(question = '', history = []) {
+export async function directCoach(question = '', history = [], coach = null) {
   const S = useStore.getState().S
   const r = await callDirect({
     max_tokens: question ? 500 : 700,
-    system: coachSystemPrompt(S, !!question),
+    system: coachSystemPrompt(S, !!question, coach),
     messages: [
       { role: 'user', content: 'My data (JSON): ' + JSON.stringify(coachContext(S)) },
       { role: 'assistant', content: 'Got it — I have your recent training, nutrition, steps and weight in front of me.' },

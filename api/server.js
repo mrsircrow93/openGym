@@ -312,8 +312,9 @@ function coachContext(S) {
     nutrition, routines, recentWorkouts: recent
   };
 }
-function coachSystemPrompt(S, asking) {
-  return `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
+function coachSystemPrompt(S, asking, coach) {
+  return (coach ? `Your name is ${coach.name}; you are a ${coach.gender === 'f' ? 'woman' : 'man'} and you speak in the first person as ${coach.name}. ` : '') +
+    `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
     `about strength training and everyday nutrition. You have their data as JSON: routines, up to 15 recent ` +
     `sessions (each exercise's target vs what was actually done — "done" sets counted as hit), a week of logged ` +
     `meals against their targets, today's steps and recent body weight. Weight unit is ${S.unit || 'kg'}. ` +
@@ -950,6 +951,10 @@ const routes = {
     const history = Array.isArray(body.history) ? body.history.slice(-8)
       .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
       .map(m => ({ role: m.role, content: m.content.slice(0, 2000) })) : [];
+    // The persona the person picked; only a short whitelisted name reaches the prompt.
+    const coach = body.coach && typeof body.coach.name === 'string'
+      ? { name: body.coach.name.replace(/[^\p{L} ]/gu, '').slice(0, 24) || 'Coach', gender: body.coach.gender === 'f' ? 'f' : 'm' }
+      : null;
     const S = readState(user.id);
     if (!S || !((S.workouts || []).length || (S.meals || []).length || (S.bodyweight || []).length)) {
       return json(res, 400, { error: 'log a workout, a meal or your weight first so the coach has something to look at' });
@@ -957,7 +962,7 @@ const routes = {
     try {
       const r = await callAnthropic({
         max_tokens: question ? 500 : 700,
-        system: coachSystemPrompt(S, !!question),
+        system: coachSystemPrompt(S, !!question, coach),
         messages: [
           { role: 'user', content: 'My data (JSON): ' + JSON.stringify(coachContext(S)) },
           { role: 'assistant', content: 'Got it — I have your recent training, nutrition, steps and weight in front of me.' },

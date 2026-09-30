@@ -9,6 +9,7 @@ import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/pus
 import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
+import { COACHES } from '../lib/coach.js'
 import { getAIKey, setAIKey, getAIModel, setAIModel, hasUserKey, AI_MODELS, testAIKey } from '../lib/ai.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
@@ -109,6 +110,9 @@ export default function Settings() {
           subtitle: INSTR_LANGS.includes(k) ? null : t("Exercise instructions aren't available in this language yet — they stay in English."),
         }))}
       />
+      <SelectRow icon="sparkles" iconTint="var(--acc)" title={t('Coach')} sheetTitle={t('Choose your coach')}
+        value={S.coach || ''} onChange={v => update(s => { s.coach = v })}
+        options={[{ value: '', label: t('Not chosen') }, ...COACHES.map(c => ({ value: c.id, label: c.name }))]} />
       <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}

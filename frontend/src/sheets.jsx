@@ -22,6 +22,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { aiParseSet, aiCoach, aiIdentifyExercise, aiAlternatives, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
 import { hrSupported, hrConnect, hrDisconnect } from './lib/heartrate.js'
+import { COACHES, coachOf } from './lib/coach.js'
+import CoachAvatar from './components/CoachAvatar.jsx'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -1077,7 +1079,7 @@ function AiCoach({ close, initial }) {
     try {
       // The first starter question is the full read-out, which has its own richer prompt.
       const readout = question === t(COACH_QUESTIONS[0])
-      const r = await aiCoach(readout ? '' : question, history)
+      const r = await aiCoach(readout ? '' : question, history, coachOf(useStore.getState().S) || COACHES[0])
       setMsgs(m => [...m, { role: 'assistant', content: r.text }])
     } catch (e) { setErr(aiErrorMessage(e)) }
     setBusy(false)
@@ -1087,13 +1089,17 @@ function AiCoach({ close, initial }) {
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [msgs.length, busy])
   const asked = new Set(msgs.filter(m => m.role === 'user').map(m => m.content))
   const suggestions = COACH_QUESTIONS.filter(q => !asked.has(t(q)))
+  const S = useStore(s => s.S)
+  const coach = coachOf(S) || COACHES[0]
+  const other = COACHES.find(c => c.id !== coach.id)
   return <>
     <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 14 }}>
-      <span className="coach-avatar"><Icon name="sparkles" /></span>
-      <div style={{ minWidth: 0 }}>
-        <h3 style={{ marginBottom: 0 }}>{t('Your coach')}</h3>
+      <span className="coach-avatar"><CoachAvatar gender={coach.gender} size={44} /></span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <h3 style={{ marginBottom: 0 }}>{coach.name}</h3>
         <div className="dim small">{t('Ask anything about your training, food, steps or weight.')}</div>
       </div>
+      <button className="chip nocap small" style={{ fontSize: 12 }} onClick={() => update(s => { s.coach = other.id })}>{t('Switch to {0}', other.name)}</button>
     </div>
     <div className="coach-chat">
       {msgs.map((m, i) => <div key={i} className={'coach-msg ' + m.role}>{m.content}</div>)}

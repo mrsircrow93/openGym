@@ -65,9 +65,9 @@ export async function aiParseSet(text, exercise, unit) {
 // the signed-in user's own data — or, with no question, the classic training read-out.
 // `history` is the earlier turns of the same chat so follow-ups make sense. Rate-limited
 // server-side, so failures here are expected once in a while — the caller shows the error.
-export async function aiCoach(question = '', history = []) {
-  if (hasUserKey()) return directCoach(question, history)
-  return api('/api/ai/coach', { method: 'POST', body: JSON.stringify({ question: question || '', history }) })
+export async function aiCoach(question = '', history = [], coach = null) {
+  if (hasUserKey()) return directCoach(question, history, coach)
+  return api('/api/ai/coach', { method: 'POST', body: JSON.stringify({ question: question || '', history, coach: coach ? { name: coach.name, gender: coach.gender } : null }) })
 }
 // Mid-workout swap: given the exercise you're on + a shortlist of real catalog candidates
 // (id, name, equipment, target), returns { alternatives: [{ id, why }] } — ids are always
