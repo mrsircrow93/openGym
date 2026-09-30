@@ -38,8 +38,10 @@ export default function RestTimer() {
   // with about 30px and stops saying anything. So the rest variant stacks: clock and bar
   // read at a glance, controls get their own row. −15 and +15 sit together in number-line
   // order; Skip is pushed to the far edge, away from the button you tap to buy more time.
+  // lime while there is plenty left, amber for the last stretch — the glance-only cue
+  const tbar = pct > 35 ? 'var(--acc)' : 'var(--orange)'
   return (
-    <div id="timer" className="rest">
+    <div id="timer" className="rest" style={{ '--tbar': tbar }}>
       <div className="head">
         <div className="t">{clock(timer.left)}</div>
         <div className="bar"><i style={{ width: pct + '%' }} /></div>

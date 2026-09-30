@@ -16,40 +16,46 @@
       140–220ms on an ease-out curve. Nothing bounces or slides for decoration.
    ========================================================================== */
 
+/* Self-hosted (the CSP only allows font-src 'self'). Variable weight 200–800. */
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:200 800;font-display:swap;src:url(/fonts/PlusJakartaSans-normal.woff2) format('woff2')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:italic;font-weight:200 800;font-display:swap;src:url(/fonts/PlusJakartaSans-italic.woff2) format('woff2')}
+
 /* ---------------------------------------------------------------- tokens -- */
+/* 2026-09 redesign (design/sleek): charcoal with a faint green cast instead of pure black,
+   cards a few points lighter, one lime accent. Depth comes from tonal layering, not lines. */
 :root {
   /* surfaces — dark is the default */
-  --bg:        #000000;
-  --bg-el:     #0e0e10;   /* elevated backdrop (sheets, bars) */
-  --surface:   #1c1c1e;   /* card / grouped-list fill */
-  --surface-2: #2c2c2e;   /* pressed + nested fill */
-  --surface-3: #3a3a3c;   /* controls (segmented track, switch off) */
+  --bg:        #101312;
+  --bg-el:     #151a18;   /* elevated backdrop (sheets, bars) */
+  --surface:   #181e1c;   /* card / grouped-list fill */
+  --surface-2: #202824;   /* pressed + nested fill */
+  --surface-3: #29332f;   /* controls (segmented track, switch off) */
 
   /* text */
-  --label:     #ffffff;
-  --label-2:   rgba(235,235,245,.60);
-  --label-3:   rgba(235,235,245,.32);
-  --label-4:   rgba(235,235,245,.18);
+  --label:     #f4f7f2;
+  --label-2:   #94a49a;
+  --label-3:   rgba(148,164,154,.62);
+  --label-4:   rgba(148,164,154,.34);
 
   /* lines */
-  --sep:       rgba(84,84,88,.60);
-  --sep-op:    rgba(84,84,88,.34);   /* for edges sitting over blur */
+  --sep:       rgba(41,51,47,.9);
+  --sep-op:    rgba(41,51,47,.6);   /* for edges sitting over blur */
   --hair:      .5px;
 
   /* system palette (iOS dark values) */
-  --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
-  --yellow:#ffd60a; --teal:#40c8e0; --indigo:#5e5ce6; --pink:#ff375f;
+  --blue:#5aa9ff; --green:#b8f34a; --red:#e87968; --orange:#ffb454;
+  --yellow:#ffd866; --teal:#7bc8b6; --indigo:#5e5ce6; --pink:#ff375f;
   --purple:#bf5af2; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
 
   /* accent (per-account, synced) */
   --acc:  var(--green);
-  --acc-2:#248a3d;
-  --on-acc:#000000;
+  --acc-2:#9fd93a;
+  --on-acc:#162006;
   --acc-soft: color-mix(in srgb, var(--acc) 16%, transparent);
   --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
 
   /* geometry */
-  --r-sm:8px; --r:12px; --r-lg:16px; --r-xl:22px; --r-card:14px;
+  --r-sm:10px; --r:14px; --r-lg:18px; --r-xl:26px; --r-card:20px;
   --pad:16px;
   --icon-stroke:1.7;
 
@@ -62,29 +68,29 @@
 }
 
 :root[data-theme="light"] {
-  --bg:        #f2f2f7;
-  --bg-el:     #f7f7fa;
+  --bg:        #f3f5f1;
+  --bg-el:     #f8faf6;
   --surface:   #ffffff;
-  --surface-2: #ececef;
-  --surface-3: #e3e3e8;
+  --surface-2: #eceeea;
+  --surface-3: #e1e5df;
 
-  --label:     #000000;
-  --label-2:   rgba(60,60,67,.60);
-  --label-3:   rgba(60,60,67,.30);
-  --label-4:   rgba(60,60,67,.16);
+  --label:     #101312;
+  --label-2:   #5e6b63;
+  --label-3:   rgba(94,107,99,.62);
+  --label-4:   rgba(94,107,99,.34);
 
-  --sep:       rgba(60,60,67,.29);
-  --sep-op:    rgba(60,60,67,.20);
+  --sep:       rgba(41,51,47,.14);
+  --sep-op:    rgba(41,51,47,.10);
 
-  --blue:#007aff; --green:#34c759; --red:#ff3b30; --orange:#ff9500;
-  --yellow:#ffcc00; --teal:#30b0c7; --indigo:#5856d6; --pink:#ff2d55;
+  --blue:#2f7fe0; --green:#8ccf1f; --red:#d9614f; --orange:#e69a2e;
+  --yellow:#d8b300; --teal:#3f9c86; --indigo:#5856d6; --pink:#ff2d55;
   --purple:#af52de; --mint:#00c7be; --brown:#a2845e; --grey:#8e8e93;
-  --acc-2:#248a3d;
-  --on-acc:#ffffff;
+  --acc-2:#7bbd12;
+  --on-acc:#162006;
 }
 
 /* accents — Apple's system colours, so a recolour never looks off-system */
-:root[data-accent="lime"]  { --acc:var(--green);  --acc-2:#248a3d; --on-acc:#000 }
+:root[data-accent="lime"]  { --acc:var(--green);  --acc-2:#9fd93a; --on-acc:#162006 }
 :root[data-accent="sky"]   { --acc:var(--blue);   --acc-2:#0060df; --on-acc:#fff }
 :root[data-accent="orange"]{ --acc:var(--orange); --acc-2:#c76b00; --on-acc:#000 }
 :root[data-accent="violet"]{ --acc:var(--purple); --acc-2:#8944ab; --on-acc:#fff }
@@ -99,7 +105,7 @@
    9.46 / 8.16 there. Blue, purple, pink and red keep white (3.5–4.1:1), which both
    passes and matches the platform convention. */
 :root[data-theme="light"][data-accent="lime"],
-:root[data-theme="light"][data-accent="teal"]  { --on-acc:#000 }
+:root[data-theme="light"][data-accent="teal"]  { --on-acc:#101312 }
 :root[data-theme="light"][data-accent="sky"],
 :root[data-theme="light"][data-accent="violet"],
 :root[data-theme="light"][data-accent="pink"],
@@ -113,8 +119,8 @@ html{
 }
 body{
   background:var(--bg);color:var(--label);
-  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Segoe UI',Roboto,system-ui,sans-serif;
-  font-size:17px;line-height:1.29;letter-spacing:-.01em;
+  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,system-ui,sans-serif;
+  font-size:16px;line-height:1.35;letter-spacing:-.01em;
   min-height:100vh;overscroll-behavior-y:none;overflow-x:clip;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   touch-action:manipulation;
@@ -173,7 +179,7 @@ body.resting #app{padding-bottom:calc(250px + var(--sab))}
 
 /* large title, the way a nav bar does it */
 .hdr{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 18px}
-.hdr h1{font-size:34px;line-height:1.06;font-weight:700;letter-spacing:-.028em}
+.hdr h1{font-size:30px;line-height:1.08;font-weight:700;letter-spacing:-.03em}
 .hdr .sub{color:var(--label-2);font-size:15px;letter-spacing:-.006em;margin-top:4px}
 
 .iconbtn{
@@ -201,9 +207,21 @@ h4.sec{
 /* ----------------------------------------------------------------- card -- */
 .card{
   background:var(--surface);border-radius:var(--r-card);
-  padding:16px;margin-bottom:12px;
+  padding:18px;margin-bottom:12px;
 }
-.card .big{font-size:30px;font-weight:600;letter-spacing:-.026em;line-height:1.1}
+/* a card that carries the one primary action on its screen */
+.card.hero{background:linear-gradient(160deg,color-mix(in srgb,var(--acc) 9%,var(--surface)),var(--surface) 62%);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 22%,transparent)}
+/* section eyebrow: tiny uppercase label, the way the mockups label every block */
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--label-3)}
+.eyebrow.acc{color:var(--acc)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:99px;font-size:12px;font-weight:600;
+  background:var(--surface-2);color:var(--label)}
+.pill.acc{background:var(--acc-soft);color:var(--acc)}
+.pill .icn{font-size:13px}
+.avatar-l{width:44px;height:44px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--acc-soft);color:var(--acc);font-weight:700;font-size:18px}
+.card .big{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 
 /* ------------------------------------------------------ inset group list -- */
 .sect{margin-bottom:22px}
@@ -254,21 +272,21 @@ h4.sec{
 /* -------------------------------------------------------------- buttons -- */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;
-  padding:14px 18px;border-radius:var(--r);font-size:17px;font-weight:600;
+  padding:15px 20px;border-radius:99px;font-size:16px;font-weight:700;
   letter-spacing:-.012em;background:var(--surface-2);color:var(--label);
   transition:transform var(--fast) var(--ease),background var(--fast),opacity var(--fast);
 }
 .btn .icn{font-size:19px}
 .btn:active{transform:scale(.975)}
-.btn.primary{background:var(--acc);color:var(--on-acc)}
+.btn.primary{background:var(--acc);color:var(--on-acc);box-shadow:0 8px 24px -8px color-mix(in srgb,var(--acc) 55%,transparent)}
 .btn.primary:active{background:var(--acc-2)}
 .btn.tinted{background:var(--acc-soft);color:var(--acc)}
 .btn.danger{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
 .btn.ghost,.btn.plain{background:none;color:var(--acc);font-weight:400}
 .btn.ghost:active,.btn.plain:active{background:var(--surface-2)}
-.btn.sm{padding:8px 14px;width:auto;font-size:15px;border-radius:var(--r-sm);gap:5px}
+.btn.sm{padding:9px 14px;width:auto;font-size:14px;border-radius:99px;gap:5px;font-weight:600}
 .btn.sm .icn{font-size:16px}
-.btn.xs{padding:5px 10px;width:auto;font-size:13px;border-radius:7px;gap:4px}
+.btn.xs{padding:5px 11px;width:auto;font-size:13px;border-radius:99px;gap:4px;font-weight:600}
 .btn:disabled{opacity:.32;pointer-events:none}
 
 /* ----------------------------------------------------------- tab bar ----- */
@@ -292,13 +310,13 @@ h4.sec{
    fade on the <svg> instead of in the stroke colour flattens the icon first and
    fades it as one shape — and it does that for every icon, not just this one. */
 #tabbar button .icn{font-size:25px;--icon-stroke:1.65;color:var(--label)}
-#tabbar button.on{color:var(--acc)}
+#tabbar button.on{color:var(--acc);font-weight:700}
 #tabbar button.on .icn{--icon-stroke:2;color:inherit;opacity:1}
-#tabbar button.start{margin-top:-24px}
+#tabbar button.start{margin-top:-26px}
 #tabbar button.start .cir{
-  width:52px;height:52px;border-radius:50%;background:var(--acc);color:var(--on-acc);
+  width:56px;height:56px;border-radius:50%;background:var(--acc);color:var(--on-acc);
   display:flex;align-items:center;justify-content:center;position:relative;
-  box-shadow:0 6px 18px -4px color-mix(in srgb,var(--acc) 55%,transparent);
+  box-shadow:0 6px 20px color-mix(in srgb,var(--acc) 38%,transparent),0 0 0 4px var(--bg);
   transition:transform var(--fast) var(--ease);
 }
 #tabbar button.start:active .cir{transform:scale(.93)}
@@ -340,7 +358,7 @@ h4.sec{
 .list{display:flex;flex-direction:column;gap:8px}
 .item{
   display:flex;align-items:center;gap:12px;background:var(--surface);
-  border-radius:var(--r-card);padding:10px 12px;min-height:60px;
+  border-radius:var(--r-card);padding:12px 14px;min-height:64px;
   transition:background var(--fast);text-align:left;width:100%;
 }
 .item:active{background:var(--surface-2)}
@@ -372,7 +390,7 @@ h4.sec{
   letter-spacing:-.006em;transition:background var(--fast),color var(--fast);
 }
 .chip:active{background:var(--surface-2)}
-.chip.on{background:var(--acc);color:var(--on-acc);font-weight:500}
+.chip.on{background:var(--acc);color:var(--on-acc);font-weight:600}
 
 /* =========================== CONTROLS ==================================== */
 
@@ -476,7 +494,7 @@ h4.sec{
 .stp-l{font-size:13px;color:var(--label-2);text-align:center}
 .stp{
   display:flex;align-items:center;background:var(--surface-2);
-  border-radius:10px;overflow:hidden;min-width:0;
+  border-radius:14px;overflow:hidden;min-width:0;
 }
 .stp button{
   width:40px;height:44px;flex:none;color:var(--label);font-size:16px;
@@ -490,7 +508,7 @@ h4.sec{
 .stp .val i{font-style:normal;font-size:12px;color:var(--label-2);flex:none}
 .stp .num{
   width:100%;min-width:0;text-align:center;background:none;border:none;outline:none;
-  font-size:17px;font-weight:500;letter-spacing:-.012em;padding:0;
+  font-size:19px;font-weight:700;letter-spacing:-.02em;padding:0;
   -moz-appearance:textfield;appearance:textfield;
 }
 .stp .num::-webkit-inner-spin-button{display:none}
@@ -620,7 +638,8 @@ h4.sec{
 @keyframes slideup{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
 #timer .t{font-size:26px;font-weight:600;letter-spacing:-.026em;font-variant-numeric:tabular-nums;min-width:66px}
 #timer .bar{flex:1;height:4px;background:var(--surface-3);border-radius:99px;overflow:hidden}
-#timer .bar i{display:block;height:100%;background:var(--acc);transition:width 1s linear}
+#timer .bar i{display:block;height:100%;background:var(--tbar,var(--acc));transition:width 1s linear,background 1s linear}
+#timer.rest .t{color:var(--tbar,var(--label))}
 /* rest variant: −15/+15/Skip and the clock won't share one line on a phone, so the clock and
    bar take the top row and the controls take their own. The work timer keeps a single row —
    it only ever has two buttons. */
@@ -658,7 +677,7 @@ h4.sec{
 :root[data-theme="light"] .sheet{background:var(--bg)}
 @keyframes sheetup{from{transform:translateY(100%)}to{transform:none}}
 .sheet .grab{width:36px;height:5px;border-radius:99px;background:var(--label-4);margin:6px auto 14px}
-.sheet h3{font-size:20px;font-weight:600;letter-spacing:-.021em;margin-bottom:14px}
+.sheet h3{font-size:22px;font-weight:700;letter-spacing:-.025em;margin-bottom:14px}
 .center{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(84vw,300px);background:var(--bg-el);border-radius:var(--r-lg);padding:20px;
@@ -797,13 +816,13 @@ h4.sec{
 
 /* --- stat tiles --- */
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.tile{background:var(--surface);border-radius:var(--r-card);padding:14px}
+.tile{background:var(--surface);border-radius:var(--r-card);padding:16px}
 .tile .l{
   color:var(--label-2);font-size:13px;font-weight:400;letter-spacing:-.004em;
   text-transform:none;display:flex;align-items:center;gap:5px;
 }
 .tile .l .icn{font-size:14px;color:var(--label)}
-.tile .v{font-size:26px;font-weight:600;letter-spacing:-.026em;margin-top:5px;line-height:1.1}
+.tile .v{font-size:28px;font-weight:700;letter-spacing:-.03em;margin-top:6px;line-height:1.1}
 .tile.tappable:active{background:var(--surface-2)}
 
 /* --- PR badge --- */

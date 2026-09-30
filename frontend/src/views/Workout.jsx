@@ -132,7 +132,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       {ex.eq && <span className="tag">{t(ex.eq)}</span>}
       {best > 0 && <span className="tag nocap">{t('Best:')} {fmtNum(best)} {S.unit}</span>}
     </div>
-    {last && <div className="small dim" style={{ marginBottom: 4 }}>{t('Last time')} ({fmtDate(last.d)}): {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
+    {last && <div className="pill nocap" style={{ marginBottom: 6, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', fontWeight: 500 }}><Icon name="history" style={{ verticalAlign: '-2px', marginRight: 5 }} />{t('Last time')} · {fmtDate(last.d, true)}: {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
     {plan && plan.why && plan.kind !== 'off' && <div className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
       <span>{t(...plan.why)}</span>
@@ -151,13 +151,17 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
           onClick={() => onStartTimed(i)}><Icon name="play" /></button>}
         <Check checked={s.done} onChange={() => onToggle(i)} />
       </div>)}
+      <div style={{ height: 12 }} />
+      {/* The one big action mid-set: checks off the next open set. Tapping the row's own check
+          still works; this is the thumb-zone version of it (design/sleek brief, screen 5). */}
+      {(() => { const i = entry.sets.findIndex(s => !s.done); return i >= 0 && !timed
+        ? <Button variant="primary" icon="check" onClick={() => onToggle(i)}>{t('Complete set {0}', entry.sets.slice(0, i + 1).filter(x => !x.warmup).length)}</Button>
+        : null })()}
       <div style={{ height: 8 }} />
-      {mode === 'reps' && <><div className="row">
-        <Button size="sm" icon="flame" onClick={onAddWarmup}>{t('Add warm-up set')}</Button>
-      </div><div style={{ height: 8 }} /></>}
-      <div className="row">
-        <Button size="sm" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Remove set')}</Button>
-        <Button size="sm" icon="plus" onClick={onAddSet}>{t('Add set')}</Button>
+      <div className="row" style={{ gap: 6 }}>
+        {mode === 'reps' && <Button size="xs" icon="flame" onClick={onAddWarmup}>{t('Warm-up')}</Button>}
+        <Button size="xs" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Set')}</Button>
+        <Button size="xs" icon="plus" onClick={onAddSet}>{t('Set')}</Button>
       </div>
     </div>
   </>
