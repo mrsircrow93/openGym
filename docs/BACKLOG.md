@@ -20,7 +20,7 @@ items as they ship; move things around here rather than in the phase docs.
 | 12 | RevenueCat SDK + webhook → same tier record; store paywall | Second revenue channel | BILLING.md "Stores" | 1 week + review |
 | 13 | Native step source in the mobile app (HealthKit / Health Connect) feeding `lib/steps.js` | Steps are logged by hand today; the phone already counts them | STEPS.md | 2 days |
 | 14 | Progress photos: R2 bucket, signed routes, capture + compare UI | Pro feature that sells the subscription; storage cost negligible | PROGRESS_PHOTOS.md | 1 week |
-| 15 | Admin page for AI spend vs MRR, cap hits, top users | Needed once real money flows; data already collected | AI_COSTS.md "What to watch" | 2 days |
+| 15 | 🟡 2026-09-30 — AI spend card in the admin dashboard (per-user spend, cap hits) shipped; spend vs MRR still pending billing | Needed once real money flows; data already collected | AI_COSTS.md "What to watch" | 2 days |
 | 16 | Prompt caching on the trainer prompt + exercise list; 800 px meal photos | Cost tuning once volume exists | AI_COSTS.md levers 2–3 | 1 day |
 | 17 | Encrypted off-host backup of `data/` (restic → R2, daily) | Accounts and payments make data loss unacceptable | SECURITY_REVIEW.md "Still to do" | half a day |
 | 18 | Passkeys inside the mobile app (associated domains / asset links) | Nice-to-have once email sign-in works in the app | ACCOUNTS.md §5.4 | 2 days |
