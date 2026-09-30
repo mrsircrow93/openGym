@@ -4,7 +4,8 @@ import { useStore } from '../store/useStore.js'
 import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL } from '../lib/nutrition.js'
-import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
+import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
+import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
@@ -78,6 +79,38 @@ export default function Nutrition() {
       </div>
       <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{t('AI reads the foods and portions off the photo — you review the numbers before anything is saved.')}</div>
     </div>
+
+
+    {S.dietPlan ? <div className="card">
+      <div className="row between" style={{ marginBottom: 2 }}>
+        <h2 style={{ margin: 0 }}>{t('My diet plan')}</h2>
+        <Button size="xs" icon="upload" onClick={macroGoalSheet}>{t('Replace')}</Button>
+      </div>
+      <div className="small muted" style={{ marginBottom: 10 }}>{S.dietPlan.summary || S.dietPlan.file}{S.dietPlan.rules?.length ? ' · ' + t(S.dietPlan.rules.length === 1 ? '{0} rule' : '{0} rules', S.dietPlan.rules.length) : ''}</div>
+      <div className="list" style={{ display: 'flex', flexDirection: 'column' }}>
+        {S.dietPlan.meals.map((m, i) => <div key={i} className="item" onClick={() => planMealSheet(i)}>
+          <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 18, background: 'var(--teal)', color: '#0d211c' }}><Icon name="utensils" /></span>
+          <div className="grow">
+            <div className="tt">{m.name}{m.time ? <span className="dim small" style={{ fontWeight: 400 }}> · {m.time}</span> : null}</div>
+            <div className="ss">{m.options.length > 1 ? t('{0} options', m.options.length) + ' · ' : ''}{m.options[0].title}</div>
+          </div>
+          <button className="iconbtn" style={{ width: 32, height: 32, fontSize: 15, color: 'var(--violet)' }} aria-label={t('Other recipe')} onClick={e => { e.stopPropagation(); recipeSheet(i) }}><Icon name="sparkles" /></button>
+          <Icon name="chevronRight" className="chev" />
+        </div>)}
+      </div>
+      {S.dietPlan.rules?.length > 0 && <details className="plan-rules"><summary className="small muted">{t('Rules from your nutritionist')}</summary>
+        <ul className="plan-items small">{S.dietPlan.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></details>}
+      <div className="small dim" style={{ marginTop: 8 }}>{t('Tap a meal to see it, or the sparkle for a different recipe with the same numbers.')} <button className="linkbtn" onClick={() => confirmSheet({ title: t('Remove this plan?'), message: t('Your targets stay as they are.'), confirmText: t('Remove'), danger: true, onConfirm: removeDietPlan })}>{t('Remove plan')}</button></div>
+    </div> : <div className="card">
+      <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+        <span className="lrow-i" style={{ width: 40, height: 40, borderRadius: 12, fontSize: 20, background: 'var(--teal)', color: '#0d211c' }}><Icon name="clipboard" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{t('Got a plan from a nutritionist?')}</div>
+          <div className="dim small">{t('Upload it: targets, menu and rules load in, and the AI suggests recipes that fit it.')}</div>
+        </div>
+        <Button size="sm" variant="tinted" icon="upload" onClick={macroGoalSheet}>{t('Upload')}</Button>
+      </div>
+    </div>}
 
     <h4 className="sec">{meals.length ? t(meals.length === 1 ? '{0} meal' : '{0} meals', meals.length) : t('Meals')}</h4>
     {meals.length ? <div className="list" style={{ display: 'flex', flexDirection: 'column', marginBottom: 16 }}>

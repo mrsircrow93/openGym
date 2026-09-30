@@ -141,6 +141,7 @@ export function coachContext(S) {
     bodyweight: { unit: S.unit || 'kg', recent: bw, target: S.targetW || null },
     steps: { today: stepRow ? stepRow.n : 0, goal: Math.max(500, +S.stepGoal || 8000) },
     water: { goalMl: S.waterGoal || 2000 },
+    dietPlan: S.dietPlan ? { summary: S.dietPlan.summary || '', meals: (S.dietPlan.meals || []).map(m => ({ name: m.name, time: m.time || '', options: (m.options || []).map(o => o.title) })), rules: S.dietPlan.rules || [] } : null,
     nutrition, routines, recentWorkouts: recent
   }
 }
@@ -149,7 +150,8 @@ function coachSystemPrompt(S, asking, coach) {
     `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
     `about strength training and everyday nutrition. You have their data as JSON: routines, up to 15 recent ` +
     `sessions (each exercise's target vs what was actually done — "done" sets counted as hit), a week of logged ` +
-    `meals against their targets, today's steps and recent body weight. Weight unit is ${S.unit || 'kg'}. ` +
+    `meals against their targets, today's steps, recent body weight and, when present, the diet plan their ` +
+    `nutritionist wrote (menu and rules) — respect that plan in any food advice. Weight unit is ${S.unit || 'kg'}. ` +
     `Exercise ids come from a public database and are not human-readable — refer to exercises by their role ` +
     `("your pressing work", "the leg curl"), never by id. Ground every answer in their numbers when the data ` +
     `is there; if it isn't (e.g. no meals logged), say so in one short sentence and give a sensible general ` +
@@ -400,9 +402,9 @@ export async function directImportPlan({ image, mediaType, pdf, lang }) {
   const content = []
   if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } })
   else content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: image } })
-  content.push({ type: 'text', text: 'Read this meal / diet plan and extract the DAILY nutrition targets it prescribes.' })
+  content.push({ type: 'text', text: 'Read this meal / diet plan. Extract (1) the DAILY nutrition targets it prescribes, (2) the full menu: every meal with its options and the foods with quantities as written, and (3) its rules and restrictions.' })
   const r = await callDirect({
-    max_tokens: 1000,
+    max_tokens: 4000,
     system: 'You are a registered dietitian reading a meal plan written for one person (a photo of a printed ' +
       'or handwritten plan, or a PDF) for a fitness app that tracks daily calories and macros. Extract the ' +
       'daily targets: calories, protein, carbohydrates, fat, and when stated, sugars, fibre and sodium. ' +
@@ -411,7 +413,7 @@ export async function directImportPlan({ image, mediaType, pdf, lang }) {
       'as a percentage of calories, convert it to grams (4 kcal/g protein and carbs, 9 kcal/g fat). Never ' +
       'invent a number: leave optional fields out when the plan does not state or imply them, and set ' +
       'found=false when the document is not a meal plan or has no usable nutrition numbers. Give single ' +
-      'best values, never ranges. Write the summary and note in the language with ISO code "' + (lang || 'en') + '".',
+      'best values, never ranges. Transcribe the menu faithfully: keep the plan’s own meal names, order, options and quantities, in the plan’s language; do not invent meals or foods that are not there, and leave meals empty rather than guessing. Write the summary and note in the language with ISO code "' + (lang || 'en') + '".',
     messages: [{ role: 'user', content }],
     tools: [{
       name: 'set_targets',
@@ -427,6 +429,36 @@ export async function directImportPlan({ image, mediaType, pdf, lang }) {
           sugar: { type: 'number', description: 'daily grams of sugars, only if the plan states a limit' },
           fiber: { type: 'number', description: 'daily grams of fibre, only if the plan states it' },
           sodium: { type: 'number', description: 'daily milligrams of sodium, only if the plan states a limit' },
+          meals: {
+            type: 'array',
+            description: 'the menu: every meal of the day in the order the plan lists them, with the alternatives the plan offers for each',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'meal name as written, e.g. "Desayuno", "Colación 1", "Cena"' },
+                time: { type: 'string', description: 'time or moment if the plan states it, e.g. "8:00" or "media mañana"; otherwise empty' },
+                options: {
+                  type: 'array',
+                  description: 'each option / alternative the plan gives for this meal; one entry when there is a single menu',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      title: { type: 'string', description: 'short title for the option, e.g. "Avena con fruta"' },
+                      items: { type: 'array', items: { type: 'string' }, description: 'foods with their quantities exactly as prescribed, e.g. "120 g pechuga de pollo", "1/2 taza arroz"' },
+                      kcal: { type: 'number', description: 'calories for this option only if the plan states them' },
+                      protein: { type: 'number' }, carbs: { type: 'number' }, fat: { type: 'number' }
+                    },
+                    required: ['title', 'items']
+                  }
+                }
+              },
+              required: ['name', 'options']
+            }
+          },
+          rules: {
+            type: 'array', items: { type: 'string' },
+            description: 'the plan\'s instructions and restrictions, one per entry: forbidden or limited foods, allergies, substitution/equivalence rules, water, supplements, cooking methods, cheat meals'
+          },
           summary: { type: 'string', description: 'one short line describing the plan, or why nothing was found' },
           note: { type: 'string', description: 'one short clause on the main assumption' },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
@@ -442,4 +474,62 @@ export async function directImportPlan({ image, mediaType, pdf, lang }) {
 export async function directTrainerPlan({ profile, candidates }) {
   const r = await callDirect(trainerPlanRequest({ profile, candidates: (candidates || []).slice(0, 500) }))
   return { ok: true, ...toolInput(r, 'training_plan') }
+}
+
+
+// Recipe ideas for one meal slot of the person's diet plan, keeping the nutritionist's intent:
+// same macro slot, same kind of foods, and the plan's rules. Mirrored in frontend/src/lib/ai.js.
+function recipesRequest({ meal, targets, rules, lang, wish, avoid, mealsPerDay }) {
+  const slot = (meal.options || []).find(o => o.kcal > 0);
+  return {
+    max_tokens: 2500,
+    system: 'You are a registered dietitian helping a client who follows a written meal plan from their own ' +
+      'nutritionist. They want new recipes for ONE meal of that plan that they could eat INSTEAD of what the plan ' +
+      'lists, without drifting from it. Rules, in order: (1) obey the plan\'s rules and restrictions strictly; ' +
+      '(2) match the nutrition of that meal slot — use the option\'s stated calories/macros when given, otherwise ' +
+      'the meal\'s fair share of the daily targets for a ' + (mealsPerDay || 4) + '-meal day; (3) stay within the same ' +
+      'food groups and portions as the plan\'s own options (an exchange, not a different diet); (4) everyday ' +
+      'ingredients available in an ordinary supermarket, 30 minutes or less unless the plan is clearly elaborate. ' +
+      'Give 3 clearly different recipes. Quantities in grams or household measures. Calories and macros are for ' +
+      'the whole recipe as served to one person. Write everything in the language with ISO code "' + lang + '", in ' +
+      'the same regional variety and with the same food names the plan itself uses (a Mexican plan gets Mexican ' +
+      'Spanish: jitomate, camote, papa — not tomate, boniato, patata).',
+    messages: [{ role: 'user', content: JSON.stringify({
+      meal: { name: meal.name, time: meal.time || '', options: (meal.options || []).map(o => ({ title: o.title, items: o.items, kcal: o.kcal, protein: o.protein, carbs: o.carbs, fat: o.fat })) },
+      dailyTargets: targets, planRules: rules, targetForThisMeal: slot ? { kcal: slot.kcal, protein: slot.protein, carbs: slot.carbs, fat: slot.fat } : 'share of daily targets',
+      clientWish: wish || '', doNotRepeat: avoid
+    }) }],
+    tools: [{
+      name: 'suggest_recipes',
+      description: 'Three recipes for this meal slot',
+      input_schema: {
+        type: 'object',
+        properties: {
+          recipes: {
+            type: 'array', minItems: 3, maxItems: 3,
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                why: { type: 'string', description: 'one short line: how it matches the plan (macros, food groups, rules)' },
+                minutes: { type: 'integer' },
+                ingredients: { type: 'array', items: { type: 'string' }, description: 'with quantities, e.g. "120 g pechuga de pollo"' },
+                steps: { type: 'array', items: { type: 'string' }, description: '3-6 short steps' },
+                kcal: { type: 'number' }, protein: { type: 'number' }, carbs: { type: 'number' }, fat: { type: 'number' }
+              },
+              required: ['title', 'why', 'minutes', 'ingredients', 'steps', 'kcal', 'protein', 'carbs', 'fat']
+            }
+          },
+          note: { type: 'string', description: 'one short clause if something in the request could not be honoured' }
+        },
+        required: ['recipes']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'suggest_recipes' }
+  };
+}
+
+export async function directRecipes(body) {
+  const r = await callDirect(recipesRequest({ ...body, lang: body.lang || 'en', avoid: body.avoid || [], rules: body.rules || [], targets: body.targets || {} }))
+  return { ok: true, ...toolInput(r, 'suggest_recipes') }
 }

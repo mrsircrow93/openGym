@@ -6,7 +6,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtDate, fmtNum, todayISO, uid, MONTHS_LONG } from './lib/format.js'
 import { t, getLang } from './lib/i18n.js'
-import { aiAnalyzeMeal, aiImportPlan, fileToResizedBase64, fileToBase64, aiErrorMessage } from './lib/api.js'
+import { aiAnalyzeMeal, aiImportPlan, aiRecipes, fileToResizedBase64, fileToBase64, aiErrorMessage } from './lib/api.js'
 import {
   MEAL_TYPES, MEAL_TYPE_LABEL, MEAL_TYPE_ICON, macroGoalOf, cleanItem, scaleItem, totalsOf,
   guessMealType, nowHHMM, kcalByDay, pctOf, MICROS, MICRO_UNIT, MICRO_IS_CEILING
@@ -219,6 +219,114 @@ function MealFormSheet({ meal, close }) {
 export const mealFormSheet = meal => ui().openSheet(close => <MealFormSheet meal={meal} close={close} />)
 export const manualMealSheet = iso => mealFormSheet(newDraft(iso))
 
+/* ============================ diet plan (from a nutritionist) ============================ */
+
+// Tidy what the model read off the plan: short strings, no empty meals, at most a handful of
+// options each. Numbers only when the plan stated them.
+export function cleanPlanMenu(res) {
+  const num = v => (Number.isFinite(+v) && +v > 0 ? Math.round(+v) : undefined)
+  return (Array.isArray(res.meals) ? res.meals : []).slice(0, 8).map(m => ({
+    name: String(m.name || '').trim().slice(0, 60) || t('Meal'),
+    time: String(m.time || '').trim().slice(0, 30),
+    options: (Array.isArray(m.options) ? m.options : []).slice(0, 6).map(o => ({
+      title: String(o.title || '').trim().slice(0, 80) || t('Option'),
+      items: (Array.isArray(o.items) ? o.items : []).map(x => String(x).trim().slice(0, 80)).filter(Boolean).slice(0, 20),
+      kcal: num(o.kcal), protein: num(o.protein), carbs: num(o.carbs), fat: num(o.fat)
+    })).filter(o => o.items.length || o.title)
+  })).filter(m => m.options.length)
+}
+export const removeDietPlan = () => update(s => { delete s.dietPlan })
+
+function OptionMacros({ o }) {
+  if (!o.kcal) return null
+  return <span className="dim small" style={{ whiteSpace: 'nowrap' }}>{fmtNum(o.kcal)} kcal{o.protein ? ' · P ' + fmtNum(o.protein) + 'g' : ''}</span>
+}
+
+// One meal of the plan: what the nutritionist wrote, option by option. From here the person
+// logs an option as eaten today, or asks the AI for a different recipe with the same numbers.
+function PlanMeal({ idx, close }) {
+  const S = useStore(s => s.S)
+  const plan = S.dietPlan
+  const meal = plan && plan.meals[idx]
+  if (!meal) return null
+  const logOption = o => { close(); analyzeMealSheet(null, todayISO(), (o.title ? o.title + ': ' : '') + o.items.join(', ')) }
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="utensils" style={{ color: 'var(--orange)' }} />{meal.name}{meal.time ? <span className="dim" style={{ fontWeight: 400, fontSize: 15 }}>· {meal.time}</span> : null}</h3>
+    <div className="small muted" style={{ marginBottom: 12 }}>{t(meal.options.length === 1 ? 'What your plan says for this meal.' : 'Your plan gives {0} options for this meal — any of them works.', meal.options.length)}</div>
+    {meal.options.map((o, i) => <div key={i} className="card" style={{ marginBottom: 10 }}>
+      <div className="row between" style={{ gap: 8, marginBottom: 6 }}><b>{o.title}</b><OptionMacros o={o} /></div>
+      <ul className="plan-items">{o.items.map((x, k) => <li key={k}>{x}</li>)}</ul>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <Button size="sm" variant="tinted" icon="check" style={{ flex: 1 }} onClick={() => logOption(o)}>{t('I ate this')}</Button>
+        <Button size="sm" icon="sparkles" style={{ flex: 1, color: 'var(--violet)' }} onClick={() => { close(); recipeSheet(idx) }}>{t('Other recipe')}</Button>
+      </div>
+    </div>)}
+  </>
+}
+export const planMealSheet = idx => ui().openSheet(close => <PlanMeal idx={idx} close={close} />)
+
+// AI recipes for one meal slot. Always three, always inside the plan's numbers and rules; the
+// person can steer with a wish ("something with fish") and ask for three more.
+function Recipes({ idx, close }) {
+  const S = useStore.getState().S
+  const plan = S.dietPlan
+  const meal = plan && plan.meals[idx]
+  const [wish, setWish] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [res, setRes] = useState(null)
+  const [open, setOpen] = useState(-1)
+  const seen = useRef([])
+  const started = useRef(false)
+  const run = async () => {
+    setBusy(true); setErr(''); setOpen(-1)
+    try {
+      const g = macroGoalOf(S)
+      const r = await aiRecipes({ meal, targets: { kcal: g.kcal, protein: g.protein, carbs: g.carbs, fat: g.fat }, rules: plan.rules || [], lang: getLang(), wish: wish.trim(), avoid: seen.current, mealsPerDay: plan.meals.length })
+      seen.current = [...seen.current, ...(r.recipes || []).map(x => x.title)].slice(-12)
+      setRes(r)
+    } catch (e) { setErr(aiErrorMessage(e)) }
+    setBusy(false)
+  }
+  useEffect(() => { if (!started.current) { started.current = true; run() } }, [])
+  if (!meal) return null
+  const logRecipe = r => {
+    const item = cleanItem({ name: r.title, portion: t('1 serving'), grams: 0, kcal: r.kcal, protein: r.protein, carbs: r.carbs, fat: r.fat })
+    saveMeal(newDraft(todayISO(), { name: r.title, items: [item], ai: true, recipe: { ingredients: r.ingredients, steps: r.steps } }))
+    toast(t('Logged for today')); close()
+  }
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('Recipes for {0}', meal.name.toLowerCase())}</h3>
+    <div className="small muted" style={{ marginBottom: 10 }}>{t('Same calories and macros as your plan for this meal, and it follows your nutritionist’s rules.')}</div>
+    <form className="coach-ask" style={{ marginTop: 0, marginBottom: 12 }} onSubmit={e => { e.preventDefault(); run() }}>
+      <TextField value={wish} onChange={e => setWish(e.target.value)} placeholder={t('Any wish? e.g. “with fish”, “no cooking”')} disabled={busy} />
+      <button type="submit" className="coach-send" disabled={busy} aria-label={t('Suggest')}><Icon name="sparkles" /></button>
+    </form>
+    {busy && <div className="row small dim" style={{ gap: 8, marginBottom: 10 }}><span className="spin" />{t('Cooking up ideas — a few seconds…')}</div>}
+    {err && <div className="small" style={{ color: 'var(--red)', marginBottom: 10 }}>{err}</div>}
+    {res && !busy && (res.recipes || []).map((r, i) => <div key={i} className="card" style={{ marginBottom: 10 }}>
+      <button className="row" style={{ width: '100%', gap: 8, textAlign: 'left', alignItems: 'flex-start' }} onClick={() => setOpen(open === i ? -1 : i)}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b>{r.title}</b>
+          <div className="dim small" style={{ marginTop: 2 }}>{r.minutes} min · {fmtNum(r.kcal)} kcal · <MacroLine tot={r} dim /></div>
+          <div className="small muted" style={{ marginTop: 4 }}>{r.why}</div>
+        </div>
+        <Icon name={open === i ? 'chevronUp' : 'chevronDown'} style={{ color: 'var(--label-3)', flex: 'none', marginTop: 4 }} />
+      </button>
+      {open === i && <div style={{ marginTop: 10 }}>
+        <div className="eyebrow" style={{ marginBottom: 4 }}>{t('Ingredients')}</div>
+        <ul className="plan-items">{(r.ingredients || []).map((x, k) => <li key={k}>{x}</li>)}</ul>
+        <div className="eyebrow" style={{ margin: '10px 0 4px' }}>{t('Steps')}</div>
+        <ol className="plan-items">{(r.steps || []).map((x, k) => <li key={k}>{x}</li>)}</ol>
+        <Button size="sm" variant="tinted" icon="check" style={{ marginTop: 10 }} onClick={() => logRecipe(r)}>{t('I’ll make this — log it for today')}</Button>
+      </div>}
+    </div>)}
+    {res && !busy && res.note && <div className="small dim" style={{ marginBottom: 8 }}>{res.note}</div>}
+    {res && !busy && <Button icon="shuffle" onClick={run}>{t('Three more')}</Button>}
+  </>
+}
+export const recipeSheet = idx => ui().openSheet(close => <Recipes idx={idx} close={close} />)
+
 /* ============================ goals ============================ */
 
 const PLAN_FIELDS = ['kcal', 'protein', 'carbs', 'fat', 'sugar', 'fiber', 'sodium']
@@ -247,6 +355,9 @@ function ImportPlan({ file, onApply }) {
   }, [])
   const found = res && res.found && PLAN_FIELDS.some(k => +res[k] > 0)
   const picked = found ? Object.fromEntries(PLAN_FIELDS.filter(k => +res[k] > 0).map(k => [k, Math.round(+res[k])])) : {}
+  const menu = res ? cleanPlanMenu(res) : []
+  const rules = res && Array.isArray(res.rules) ? res.rules.map(r => String(r).trim().slice(0, 160)).filter(Boolean).slice(0, 25) : []
+  const plan = (menu.length || rules.length) ? { at: Date.now(), file: file.name, summary: res.summary || '', meals: menu, rules } : null
   return <div className="card" style={{ marginBottom: 12 }}>
     <div className="row" style={{ gap: 8, marginBottom: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} /><b>{t('From your plan')}</b><span className="dim small" style={{ marginLeft: 'auto' }}>{file.name}</span></div>
     {busy && <div className="row small dim" style={{ gap: 8 }}><span className="spin" />{t('Reading the plan — a few seconds…')}</div>}
@@ -257,8 +368,13 @@ function ImportPlan({ file, onApply }) {
       <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
         {Object.keys(picked).map(k => <span key={k} className="chip">{t(PLAN_LABEL[k])} <b>{fmtNum(picked[k])}</b> {PLAN_UNIT[k]}</span>)}
       </div>
+      {plan && <div className="small muted" style={{ marginBottom: 10 }}>
+        <Icon name="utensils" style={{ fontSize: 13, color: 'var(--orange)', marginRight: 5 }} />
+        {t(menu.length === 1 ? '{0} meal in the menu' : '{0} meals in the menu', menu.length)}{rules.length ? ' · ' + t(rules.length === 1 ? '{0} rule' : '{0} rules', rules.length) : ''}
+        {menu.length > 0 && <span className="dim"> — {menu.map(m => m.name).join(', ')}</span>}
+      </div>}
       {res.confidence === 'low' && <div className="small dim" style={{ marginBottom: 8 }}>{t('Low confidence — check the numbers before applying.')}</div>}
-      <Button variant="primary" size="sm" icon="check" onClick={() => onApply(picked)}>{t('Use these targets')}</Button>
+      <Button variant="primary" size="sm" icon="check" onClick={() => onApply(picked, plan)}>{plan ? t('Save plan and targets') : t('Use these targets')}</Button>
     </>}
   </div>
 }
@@ -278,7 +394,10 @@ function MacroGoal({ close }) {
       <Button size="sm" icon="upload" style={{ color: 'var(--violet)' }} onClick={() => planInput.current?.click()}>{t('Import from a diet plan (photo or PDF)')}</Button>
       <div className="small dim" style={{ marginTop: 4 }}>{t('Got a plan from a nutritionist? Snap it or upload the PDF and the targets fill themselves in.')}</div>
     </div>}
-    {planFile && <ImportPlan key={planFile.name + planFile.size} file={planFile} onApply={p => { set(p); setPlanFile(null); toast(t('Targets updated from your plan')) }} />}
+    {planFile && <ImportPlan key={planFile.name + planFile.size} file={planFile} onApply={(p, plan) => {
+      set(p); if (plan) update(s => { s.dietPlan = plan }); setPlanFile(null)
+      toast(plan ? t('Plan saved — find it in Nutrition') : t('Targets updated from your plan'))
+    }} />}
     <div className="row cfgrow" style={{ marginBottom: 8 }}>
       <Stepper label={t('Calories (kcal)')} value={g.kcal} step={50} decimal={false} onChange={v => set({ kcal: Math.max(0, v) })} />
     </div>

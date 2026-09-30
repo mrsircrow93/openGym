@@ -1038,3 +1038,11 @@ h4.sec{
   display:flex;align-items:center;justify-content:center;transition:opacity var(--fast)
 }
 .coach-send:disabled{opacity:.35}
+.plan-items{margin:0;padding-left:18px;line-height:1.5;font-size:14px;color:var(--label-2)}
+.plan-items li{margin:1px 0}
+.plan-rules{margin-top:10px}
+.plan-rules summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
+.plan-rules summary::before{content:"›";display:inline-block;transition:transform var(--fast);color:var(--label-3)}
+.plan-rules[open] summary::before{transform:rotate(90deg)}
+.plan-rules .plan-items{margin-top:6px}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}

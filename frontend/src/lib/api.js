@@ -1,6 +1,6 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
 import { t } from './i18n.js'
-import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan } from './ai.js'
+import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan, directRecipes } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
 export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
@@ -151,4 +151,10 @@ export async function passkeyLogin() {
   const cred = await navigator.credentials.get({ publicKey: toRequestOptions(options) })
   const res = await api('/api/login/verify', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
   return res.user
+}
+// One meal of the saved diet plan -> 3 alternative recipes that keep its macros and rules.
+// body: { meal, targets, rules, lang, wish, avoid, mealsPerDay }
+export async function aiRecipes(body) {
+  if (hasUserKey()) return directRecipes(body)
+  return api('/api/ai/recipes', { method: 'POST', body: JSON.stringify(body) })
 }
