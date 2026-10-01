@@ -61,6 +61,12 @@ const PLANS = [
   { id: 'yearly', months: 12, amount: +process.env.PRICE_YEARLY || 1549, price: process.env.STRIPE_PRICE_YEARLY || '' }
 ];
 const AI_TRIAL_USD_CAP = +process.env.AI_TRIAL_USD_CAP || 1;   // what a free trial may spend on AI
+// Referrals: every account has a share code. A new account that signs up with one gets extra
+// trial days; when that account first pays, the referrer gets days added to their own access.
+// Optional Stripe coupon for the referee's checkout (create it in the Stripe dashboard).
+const REF_REFEREE_TRIAL_DAYS = Math.max(0, +(process.env.REF_REFEREE_TRIAL_DAYS ?? 7) || 0);
+const REF_REFERRER_DAYS = Math.max(0, +(process.env.REF_REFERRER_DAYS ?? 30) || 0);
+const STRIPE_REFERRAL_COUPON = process.env.STRIPE_REFERRAL_COUPON || '';
 const DELETE_GRACE_DAYS = 30;
 
 fs.mkdirSync(DATA, { recursive: true });
@@ -262,7 +268,7 @@ function entitlement(user) {
     plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
 }
 const pubUser = user => ({ id: user.id, name: user.name, admin: isAdmin(user), email: user.email || null, emailVerified: !!user.emailVerified,
-  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), billing: entitlement(user) });
+  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), billing: entitlement(user), referredBy: !!user.referredBy });
 
 // One-time tokens for email links. Only the sha256 of the token is stored; the raw value is in
 // the link and nowhere else. Single use, short-lived, scoped by kind.
@@ -337,6 +343,36 @@ setInterval(() => {
   if (dirty) saveDb();
 }, 6 * 60 * 60_000).unref();
 
+/* ---------- referrals ---------- */
+const REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O/1/I
+function refCodeOf(user) {
+  if (user.refCode) return user.refCode;
+  const base = String(user.name || 'VX').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4) || 'VX';
+  for (let i = 0; i < 50; i++) {
+    const tail = Array.from(crypto.randomBytes(4)).map(b => REF_ALPHABET[b % REF_ALPHABET.length]).join('');
+    const code = base + tail;
+    if (!db.users.some(u => u.refCode === code)) { user.refCode = code; saveDb(); return code; }
+  }
+  return null;
+}
+const findReferrer = code => { const c = String(code || '').trim().toUpperCase(); return c ? db.users.find(u => u.refCode === c && !u.disabled && !u.deletedAt) || null : null; };
+const addDays = (iso, days) => new Date(Math.max(Date.now(), iso ? Date.parse(iso) : 0) + days * 86400_000).toISOString();
+// Called when a referred account pays for the first time: the referrer's access grows.
+function rewardReferrer(referee) {
+  if (!referee.referredBy || referee.referralRewarded || !REF_REFERRER_DAYS) return;
+  const ref = db.users.find(u => u.id === referee.referredBy);
+  if (!ref) return;
+  // paying referrer: extend the paid period; otherwise extend (or revive) the trial
+  if (ref.tierUntil && Date.parse(ref.tierUntil) > Date.now()) ref.tierUntil = addDays(ref.tierUntil, REF_REFERRER_DAYS);
+  else if (ref.tierUntil) ref.tierUntil = addDays(null, REF_REFERRER_DAYS);
+  else ref.trialEnds = addDays(ref.trialEnds, REF_REFERRER_DAYS);
+  ref.referralEarnedDays = (ref.referralEarnedDays || 0) + REF_REFERRER_DAYS;
+  referee.referralRewarded = true;
+  saveDb();
+  if (ref.email) sendEmail({ to: ref.email, ...mail(userLang(ref), 'referralReward', ref.name, referee.name, REF_REFERRER_DAYS, `${ORIGIN}/#/settings`) }).catch(() => {});
+  console.log('referral reward', ref.id, '+' + REF_REFERRER_DAYS + 'd for', referee.id);
+}
+
 /* ---------- Stripe (plain REST) ---------- */
 function formEncode(obj, prefix = '', out = new URLSearchParams()) {
   for (const [k, v] of Object.entries(obj)) {
@@ -379,7 +415,7 @@ function applySubscription(sub) {
   user.plan = planByPrice(item?.price?.id)?.id || user.plan || null;
   user.cancelAtPeriodEnd = !!sub.cancel_at_period_end;
   user.subscriptionStatus = sub.status;
-  if (good && periodEnd) user.tierUntil = new Date(periodEnd + 86400_000).toISOString();   // +1 day of grace for renewal timing
+  if (good && periodEnd) { user.tierUntil = new Date(periodEnd + 86400_000).toISOString(); rewardReferrer(user); }   // +1 day of grace for renewal timing
   else if (sub.status === 'canceled' || sub.status === 'unpaid' || sub.status === 'incomplete_expired') {
     // keep access until the period they paid for ends; never pull it back earlier
     if (periodEnd && periodEnd > Date.now()) user.tierUntil = new Date(periodEnd).toISOString();
@@ -965,7 +1001,9 @@ const routes = {
     if (INVITE_ONLY && !invite) return json(res, 403, { error: 'a valid invite code is required' });
     if (db.users.some(u => u.email === email)) return json(res, 409, { error: 'there is already an account with this email — sign in instead' });
     const user = { id: crypto.randomBytes(12).toString('base64url'), name, email, emailVerified: false, pw: hashPassword(password), created: nowISO() };
-    if (BILLING_ENABLED && TRIAL_DAYS > 0) user.trialEnds = new Date(Date.now() + TRIAL_DAYS * 86400_000).toISOString();
+    const referrer = findReferrer(body.ref);
+    if (referrer) { user.referredBy = referrer.id; referrer.referrals = [...(referrer.referrals || []), { id: user.id, at: user.created }]; }
+    if (BILLING_ENABLED && TRIAL_DAYS > 0) user.trialEnds = new Date(Date.now() + (TRIAL_DAYS + (referrer ? REF_REFEREE_TRIAL_DAYS : 0)) * 86400_000).toISOString();
     if (invite) { user.invitedBy = invite.code; invite.usedBy = user.id; invite.usedAt = user.created; }
     db.users.push(user);
     saveDb();
@@ -1010,6 +1048,17 @@ const routes = {
     if (mailLimited('rv:' + user.id)) return json(res, 429, { error: 'already sent — check your inbox and spam, and try again in an hour' });
     await sendVerifyMail(user);
     json(res, 200, { ok: true });
+  },
+
+  // My share code and what it has earned.
+  'GET /api/referral': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const code = refCodeOf(user);
+    const refs = user.referrals || [];
+    const converted = refs.filter(r => { const u = db.users.find(x => x.id === r.id); return u && u.referralRewarded; }).length;
+    json(res, 200, { code, link: `${ORIGIN}/?ref=${code}`, invited: refs.length, converted, earnedDays: user.referralEarnedDays || 0,
+      refereeBonusDays: REF_REFEREE_TRIAL_DAYS, referrerDays: REF_REFERRER_DAYS, trialDays: TRIAL_DAYS });
   },
 
   // Always 200: whether the email exists is not something this endpoint reveals.
@@ -1344,7 +1393,8 @@ const routes = {
         mode: 'subscription', customer: user.stripeCustomerId, client_reference_id: user.id,
         line_items: { 0: { price: plan.price, quantity: 1 } },
         subscription_data: { metadata: { userId: user.id, plan: plan.id } },
-        allow_promotion_codes: 'true', locale: userLang(user),
+        ...(user.referredBy && !user.referralRewarded && STRIPE_REFERRAL_COUPON ? { discounts: { 0: { coupon: STRIPE_REFERRAL_COUPON } } } : { allow_promotion_codes: 'true' }),
+        locale: userLang(user),
         success_url: `${ORIGIN}/#/settings?checkout=success`, cancel_url: `${ORIGIN}/#/settings?checkout=cancel`
       });
       json(res, 200, { url: session.url });

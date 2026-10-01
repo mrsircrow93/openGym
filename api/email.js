@@ -53,6 +53,11 @@ const T = {
       subject: `Tu cuenta se eliminará en 30 días · ${APP_NAME}`,
       text: `Hola ${name},\n\nTu cuenta quedó marcada para eliminarse. Tus datos se borran definitivamente en 30 días.\n\n¿Cambiaste de opinión? Vuelve a iniciar sesión antes de esa fecha y todo sigue donde estaba.`,
     }),
+    referralReward: (name, friend, days, url) => ({
+      subject: `${friend} se suscribió: tienes ${days} días de regalo · ${APP_NAME}`,
+      text: `Hola ${name},\n\n${friend} entró a ${APP_NAME} con tu código y acaba de suscribirse. Como agradecimiento, añadimos ${days} días a tu acceso.\n\nSigue compartiendo tu código desde Ajustes → Invita y gana:\n${url}`,
+      html: wrap('¡Tienes días de regalo!', `<p>Hola ${escapeHtml(name)},</p><p><b>${escapeHtml(friend)}</b> entró con tu código y acaba de suscribirse. Añadimos <b>${days} días</b> a tu acceso.</p>${button(url, 'Ver mi código')}`)
+    }),
     trialEnding: (name, days, url) => ({
       subject: days <= 1 ? `Tu prueba termina mañana · ${APP_NAME}` : `Tu prueba termina en ${days} días · ${APP_NAME}`,
       text: `Hola ${name},\n\nTu prueba gratis de ${APP_NAME} termina en ${days} día${days === 1 ? '' : 's'}. Para seguir con tu coach, tus planes y tu progreso, elige un plan aquí:\n${url}\n\nSi no continúas, tus datos se conservan y puedes volver cuando quieras.`,
@@ -73,6 +78,11 @@ const T = {
     passwordChanged: (name) => ({ subject: `Your password changed · ${APP_NAME}`, text: `Hi ${name},\n\nYour account password just changed and sessions on other devices were signed out.\n\nIf this wasn't you, reset your password right away from the sign-in screen.` }),
     emailChanged: (name, newEmail) => ({ subject: `Your email changed · ${APP_NAME}`, text: `Hi ${name},\n\nThe email on your account was changed to ${newEmail}.\n\nIf this wasn't you, reset your password right away from the sign-in screen.` }),
     deleted: (name) => ({ subject: `Your account will be deleted in 30 days · ${APP_NAME}`, text: `Hi ${name},\n\nYour account is marked for deletion. Your data is permanently erased in 30 days.\n\nChanged your mind? Sign in again before then and everything is where you left it.` }),
+    referralReward: (name, friend, days, url) => ({
+      subject: `${friend} subscribed: ${days} days on us · ${APP_NAME}`,
+      text: `Hi ${name},\n\n${friend} joined ${APP_NAME} with your code and just subscribed. As a thank-you we added ${days} days to your access.\n\nKeep sharing your code from Settings → Invite & earn:\n${url}`,
+      html: wrap('Days on us!', `<p>Hi ${escapeHtml(name)},</p><p><b>${escapeHtml(friend)}</b> joined with your code and just subscribed. We added <b>${days} days</b> to your access.</p>${button(url, 'See my code')}`)
+    }),
     trialEnding: (name, days, url) => ({
       subject: days <= 1 ? `Your trial ends tomorrow · ${APP_NAME}` : `Your trial ends in ${days} days · ${APP_NAME}`,
       text: `Hi ${name},\n\nYour free ${APP_NAME} trial ends in ${days} day${days === 1 ? '' : 's'}. To keep your coach, plans and progress, pick a plan here:\n${url}\n\nIf you don't continue, your data is kept and you can come back any time.`,

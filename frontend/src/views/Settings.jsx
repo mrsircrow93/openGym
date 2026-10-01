@@ -4,7 +4,7 @@ import { useStore, DEF, hasData, safeParse } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { ACCENTS, todayISO, localTZ, fmtNum } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
-import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID, BIO, authResendVerify, authChangePassword, authChangeEmail, passkeyAdd, deleteAccount, billingPortal } from '../lib/api.js'
+import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID, BIO, authResendVerify, authChangePassword, authChangeEmail, passkeyAdd, deleteAccount, billingPortal, fetchReferral } from '../lib/api.js'
 import { Plans, subscriptionLabel } from './Account.jsx'
 import { useLocation } from 'react-router-dom'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
@@ -89,6 +89,8 @@ export default function Settings() {
           onClick={() => authResendVerify().then(() => toast(t('Sent — check your inbox'))).catch(e => toast(e.message))} />}
         {user.billing?.enabled && <Row icon="crown" iconTint="var(--yellow)" title={t('Subscription')} subtitle={subscriptionLabel(user.billing)} accessory="chevron"
           onClick={() => useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />)} />}
+        {!STATIC && <Row icon="star" iconTint="var(--acc)" title={t('Invite & earn')} subtitle={t('Share your code: your friend gets a longer trial, you get free days.')} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <ReferralSheet close={close} />)} />}
         <Row icon="key" iconTint="var(--blue)" title={user.hasPassword ? t('Change password') : t('Add email and password')} accessory="chevron"
           onClick={() => useUI.getState().openSheet(close => <PasswordSheet user={user} close={close} />)} />
         {webauthnOK() && !MOBILE && !user.hasPasskey && <Row icon="person" iconTint="var(--acc)" title={t('Sign in with {0} next time', BIO)} subtitle={t('Adds a passkey to this account.')} accessory="chevron"
@@ -555,4 +557,38 @@ function HealthCard({ S, update, toast }) {
       <Row icon="xmark" iconTint="var(--grey)" title={t('Disconnect')} onClick={off} />
     </>}
   </Section>
+}
+
+/* ---------- referrals ---------- */
+function ReferralSheet({ close }) {
+  const toast = useUI(s => s.toast)
+  const [d, setD] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { fetchReferral().then(setD).catch(e => setErr(e.message || t('Something went wrong — try again'))) }, [])
+  const msg = d ? t('Join me on VantixGym — with my code {0} you get {1} days free instead of {2}: {3}', d.code, d.trialDays + d.refereeBonusDays, d.trialDays, d.link) : ''
+  const share = async () => {
+    try {
+      if (navigator.share) await navigator.share({ title: 'VantixGym', text: msg })
+      else { await navigator.clipboard.writeText(msg); toast(t('Copied')) }
+    } catch (e) { if (e.name !== 'AbortError') { try { await navigator.clipboard.writeText(msg); toast(t('Copied')) } catch { toast(msg) } } }
+  }
+  const copyCode = async () => { try { await navigator.clipboard.writeText(d.code); toast(t('Code copied')) } catch { toast(d.code) } }
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="star" style={{ color: 'var(--acc)' }} />{t('Invite & earn')}</h3>
+    {err && <div className="small" style={{ color: 'var(--red)' }}>{err}</div>}
+    {!d && !err && <div className="small dim">{t('Loading…')}</div>}
+    {d && <>
+      <div className="muted small" style={{ marginBottom: 14, lineHeight: 1.5 }}>{t('Your friend signs up with your code and gets {0} days free instead of {1}. When they pick a plan, you get {2} days added to your access. No limit.', d.trialDays + d.refereeBonusDays, d.trialDays, d.referrerDays)}</div>
+      <button className="ref-code tappable" onClick={copyCode} aria-label={t('Code copied')}><span>{d.code}</span><Icon name="clipboard" /></button>
+      <div className="row" style={{ gap: 8, marginTop: 12 }}>
+        <Button variant="primary" icon="upload" style={{ flex: 1 }} onClick={share}>{t('Share')}</Button>
+        <Button icon="link" style={{ flex: 1 }} onClick={async () => { try { await navigator.clipboard.writeText(d.link); toast(t('Link copied')) } catch { toast(d.link) } }}>{t('Copy link')}</Button>
+      </div>
+      <div className="tiles" style={{ marginTop: 16 }}>
+        <div className="tile"><div className="l">{t('Friends joined')}</div><div className="v">{d.invited}</div></div>
+        <div className="tile"><div className="l">{t('Subscribed')}</div><div className="v">{d.converted}</div></div>
+        <div className="tile" style={{ gridColumn: '1 / -1' }}><div className="l">{t('Days earned')}</div><div className="v">{d.earnedDays}</div></div>
+      </div>
+    </>}
+  </>
 }

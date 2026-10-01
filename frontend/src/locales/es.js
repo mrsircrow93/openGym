@@ -852,6 +852,23 @@ export default {
   'Steps and body weight come in from {0} every time you open the app. Days from your phone replace manual entries; weights you typed are kept.': 'Los pasos y el peso entran desde {0} cada vez que abres la app. Los días del teléfono reemplazan los manuales; los pesos que escribiste se conservan.',
   'Bring your steps and body weight in from {0} — the phone, your watch and your scale already count them.': 'Trae tus pasos y tu peso desde {0} — el teléfono, tu reloj y tu báscula ya los cuentan.',
 
+  /* ---- referrals ---- */
+  'Referral code (optional)': 'Código de referido (opcional)',
+  'With a friend\'s code your free trial is longer.': 'Con el código de un amigo tu prueba gratis dura más.',
+  'Invite & earn': 'Invita y gana',
+  'Share your code: your friend gets a longer trial, you get free days.': 'Comparte tu código: tu amigo tiene más días de prueba y tú ganas días gratis.',
+  'Join me on VantixGym — with my code {0} you get {1} days free instead of {2}: {3}': 'Únete a VantixGym — con mi código {0} tienes {1} días gratis en vez de {2}: {3}',
+  'Copied': 'Copiado',
+  'Code copied': 'Código copiado',
+  'Link copied': 'Enlace copiado',
+  'Share': 'Compartir',
+  'Copy link': 'Copiar enlace',
+  'Your friend signs up with your code and gets {0} days free instead of {1}. When they pick a plan, you get {2} days added to your access. No limit.': 'Tu amigo se registra con tu código y tiene {0} días gratis en vez de {1}. Cuando elija un plan, a ti se te añaden {2} días de acceso. Sin límite.',
+  'Friends joined': 'Amigos registrados',
+  'Subscribed': 'Suscritos',
+  'Days earned': 'Días ganados',
+  'Loading…': 'Cargando…',
+
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',
   'Choose your coach': 'Elige a tu coach',

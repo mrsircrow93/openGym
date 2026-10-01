@@ -10,6 +10,7 @@ import Icon from '../components/Icon.jsx'
 import Logo from '../components/Logo.jsx'
 import { Button, TextField, Segmented } from '../components/ui.jsx'
 import { getLang } from '../lib/i18n.js'
+import { fetchMe } from '../lib/api.js'
 
 function RegisterSheet({ close }) {
   const { setUser, pushState, pullState } = useStore()
@@ -93,6 +94,9 @@ function EmailLogin({ head, wrap, signInPasskey }) {
   const [pw, setPw] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  // ?ref=CODE on the app link (shared from Settings → Invite & earn) pre-fills the referral field
+  const [ref, setRef] = useState(() => { try { return new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('vx_ref') || '' } catch { return '' } })
+  useEffect(() => { try { if (ref) localStorage.setItem('vx_ref', ref.toUpperCase()) } catch {} }, [ref])
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
   const [cfg, setCfg] = useState({})
@@ -114,7 +118,8 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         if (!name.trim()) throw new Error(t('Enter a name'))
         if (pw.length < 8) throw new Error(t('Use at least 8 characters'))
         if (cfg.invite_only && !code.trim()) throw new Error(t('An invite code is required'))
-        await after(await authRegister(em, pw, name.trim(), code.trim(), getLang()))
+        await after(await authRegister(em, pw, name.trim(), code.trim(), getLang(), ref.trim()))
+        try { localStorage.removeItem('vx_ref') } catch {}
       } else {
         if (!pw) throw new Error(t('Enter your password'))
         await after(await authLogin(em, pw))
@@ -123,8 +128,15 @@ function EmailLogin({ head, wrap, signInPasskey }) {
     setBusy(false)
   }
   const field = { textAlign: 'left' }
+  const { S, update } = useStore()
+  const lang = S.lang || 'es'
+  const setLangPref = l => update(st => { st.lang = l }, false)
   return (
     <div className="narrow" style={wrap}>
+      <div className="lang-pick" role="group" aria-label="Idioma / Language">
+        <button type="button" className={lang === 'es' ? 'on' : ''} onClick={() => setLangPref('es')}>ES</button>
+        <button type="button" className={lang === 'en' ? 'on' : ''} onClick={() => setLangPref('en')}>EN</button>
+      </div>
       {head}
       <div className="muted" style={{ marginBottom: 22 }}>{mode === 'register' && cfg.billing && cfg.trialDays > 0 ? t('{0} days free, then pick a plan. Cancel any time.', cfg.trialDays) : t('Your workouts. Your coach. Your progress.')}</div>
 
@@ -139,6 +151,8 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         <TextField style={field} type="email" inputMode="email" autoComplete="email" placeholder={t('Email')} value={email} onChange={e => setEmail(e.target.value)} />
         {mode !== 'forgot' && <TextField style={field} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder={mode === 'register' ? t('Password (8+ characters)') : t('Password')} value={pw} onChange={e => setPw(e.target.value)} />}
         {mode === 'register' && cfg.invite_only && <TextField style={{ ...field, letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} placeholder={t('Invite code')} maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} />}
+        {mode === 'register' && <TextField style={{ ...field, letterSpacing: '.1em', fontWeight: 600 }} placeholder={t('Referral code (optional)')} maxLength={16} autoComplete="off" spellCheck={false} value={ref} onChange={e => setRef(e.target.value.toUpperCase())} />}
+        {mode === 'register' && ref && <div className="small" style={{ color: 'var(--acc)' }}>{t('With a friend\'s code your free trial is longer.')}</div>}
         <Button type="submit" variant="primary" disabled={busy}>
           {busy ? t('One moment…') : mode === 'forgot' ? t('Send me a link') : mode === 'register' ? (cfg.billing && cfg.trialDays > 0 ? t('Start my free trial') : t('Create account')) : t('Sign in')}
         </Button>

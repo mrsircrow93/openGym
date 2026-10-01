@@ -169,7 +169,8 @@ export async function aiRecipes(body) {
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) })
 // The store app asks for a bearer token with every sign-in shaped call and keeps it.
 const authPost = (path, body) => post(path, MOBILE ? { ...body, client: 'mobile' } : body).then(async r => { if (r.token) await setToken(r.token); return r })
-export const authRegister = (email, password, name, code, lang) => authPost('/api/auth/register', { email, password, name, code: code || '', lang }).then(r => r.user)
+export const authRegister = (email, password, name, code, lang, ref) => authPost('/api/auth/register', { email, password, name, code: code || '', lang, ref: ref || '' }).then(r => r.user)
+export const fetchReferral = () => api('/api/referral')
 export const authLogin = (email, password) => authPost('/api/auth/login', { email, password }).then(r => r.user)
 export const authVerify = token => post('/api/auth/verify', { token })
 export const authResendVerify = () => post('/api/auth/resend-verify')
