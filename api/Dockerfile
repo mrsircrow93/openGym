@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 # ci = exactly the lockfile, reproducible; no dev deps in the image
 RUN npm ci --omit=dev && npm cache clean --force
-COPY server.js ./
+COPY server.js password.js email.js ./
 ENV NODE_ENV=production
 # Runs as root on purpose: /data is a bind mount and its files (secret, mode 600) are owned by
 # the host user. Docker Desktop on macOS can't map that to an unprivileged container user

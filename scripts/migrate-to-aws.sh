@@ -5,7 +5,7 @@ set -euo pipefail
 
 IP="${1:?server ip}"; KEY="${2:?ssh key}"; USER_="${3:-ubuntu}"
 SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new $USER_@$IP"
-RSYNC="rsync -az --info=progress2 -e \"ssh -i $KEY -o StrictHostKeyChecking=accept-new\""
+RSYNC="rsync -az -e \"ssh -i $KEY -o StrictHostKeyChecking=accept-new\""
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 TUNNEL_ID="$(awk '/^tunnel:/{print $2}' ~/.cloudflared/config.yml)"
 
