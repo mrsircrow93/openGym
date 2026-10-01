@@ -17,6 +17,8 @@ import { COACHES, coachOf } from '../lib/coach.js'
 import CoachAvatar from '../components/CoachAvatar.jsx'
 import { stepsSheet } from '../sheets-steps.jsx'
 import { stepsOn, stepGoalOf, stepPct } from '../lib/steps.js'
+import { authResendVerify } from '../lib/api.js'
+import { useUI } from '../store/useUI.js'
 
 // A goal ring: the one shape the redesign uses for "how far along today" (steps, calories).
 export function Ring({ pct, size = 64, stroke = 7, color = 'var(--acc)', children }) {
@@ -77,6 +79,7 @@ export default function Home() {
   const stepGoal = stepGoalOf(S)
   const streak = streakWeeks(S)
   const coach = coachOf(S)
+  const toastU = useUI(s => s.toast)
   const hasAnyData = S.workouts.length > 0 || (S.meals || []).length > 0 || S.bodyweight.length > 0
   const exNames = routine ? routine.ex.slice(0, 3).map(e => exOr(e.id).n).join(', ') + (routine.ex.length > 3 ? '…' : '') : ''
 
@@ -94,6 +97,13 @@ export default function Home() {
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
       </div>
     </div>
+    {user && user.email && !user.emailVerified && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }}
+      onClick={() => authResendVerify().then(() => toastU(t('Sent — check your inbox'))).catch(e => toastU(e.message))}>
+      <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <Icon name="bell" style={{ color: 'var(--orange)', fontSize: 20 }} />
+        <div style={{ flex: 1, minWidth: 0 }}><b>{t('Confirm your email')}</b><div className="dim small">{t('We sent a link to {0}. Tap here to send it again.', user.email)}</div></div>
+      </div>
+    </button>}
 
     {/* the one thing to do now */}
     <div className={'card' + (routine || S.active ? ' hero' : '')}>

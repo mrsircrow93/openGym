@@ -118,6 +118,11 @@ export const useStore = create((set, get) => {
       else localStorage.removeItem('gym_user')
       set({ user: u })
     },
+    // Re-read the account from the server (after verifying the email, paying, adding a passkey…).
+    async refreshMe() {
+      try { const me = await api('/api/me'); get().setUser(me.user); return me.user }
+      catch (e) { if (e.status === 401) get().setUser(null); return null }
+    },
 
     async pushState() {
       if (!get().user) return

@@ -4,7 +4,9 @@ import { useStore, DEF, hasData, safeParse } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { ACCENTS, todayISO, localTZ, fmtNum } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
-import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID } from '../lib/api.js'
+import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID, BIO, authResendVerify, authChangePassword, authChangeEmail, passkeyAdd, deleteAccount, billingPortal } from '../lib/api.js'
+import { Plans, subscriptionLabel } from './Account.jsx'
+import { useLocation } from 'react-router-dom'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
@@ -22,6 +24,10 @@ export default function Settings() {
   const user = useStore(s => s.user)
   const { update, replaceState, setUser, pullState, pushState, signOut, signOutAll, resetDemo } = useStore()
   const toast = useUI(s => s.toast)
+  const refreshMe = useStore(s => s.refreshMe)
+  const loc = useLocation()
+  // back from Stripe: re-read the account so the subscription row is current
+  useEffect(() => { const q = new URLSearchParams(loc.search).get('checkout'); if (q) { refreshMe(); if (q === 'success') toast(t('Thank you! Your plan is active.')) } }, [loc.search])
   const fileRef = useRef(null)
   const importRef = useRef(null)
   const wakeOK = wakeLockSupported()
@@ -87,10 +93,20 @@ export default function Settings() {
         <Row icon="rocket" iconTint="var(--indigo)" title={t('Self-host openGym')} subtitle={t('Passkey sign-in, sync across your devices, your own data.')} accessory="chevron"
           onClick={() => window.open(REPO, '_blank', 'noopener')} />
       </> : user ? <>
-        <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={t('Signed in with passkey — data syncs to this profile.')} />
+        <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={user.email ? user.email + (user.emailVerified ? '' : ' · ' + t('not confirmed')) : t('Signed in with passkey — data syncs to this profile.')} />
+        {user.email && !user.emailVerified && <Row icon="bell" iconTint="var(--orange)" title={t('Confirm your email')} subtitle={t('Tap to send the link again.')} accessory="chevron"
+          onClick={() => authResendVerify().then(() => toast(t('Sent — check your inbox'))).catch(e => toast(e.message))} />}
+        {user.billing?.enabled && <Row icon="crown" iconTint="var(--yellow)" title={t('Subscription')} subtitle={subscriptionLabel(user.billing)} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />)} />}
+        <Row icon="key" iconTint="var(--blue)" title={user.hasPassword ? t('Change password') : t('Add email and password')} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <PasswordSheet user={user} close={close} />)} />
+        {webauthnOK() && !user.hasPasskey && <Row icon="person" iconTint="var(--acc)" title={t('Sign in with {0} next time', BIO)} subtitle={t('Adds a passkey to this account.')} accessory="chevron"
+          onClick={() => passkeyAdd().then(() => refreshMe()).then(() => toast(t('Passkey added'))).catch(e => { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message) })} />}
         {user.admin && <Row icon="wrench" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
         <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={() => confirmSheet({ title: t('Sign out?'), message: t('Your data is synced to your profile first, then cleared from this device.'), confirmText: t('Sign out'), danger: true, onConfirm: () => { signOut(); nav('/home') } })} />
         <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+        {!user.admin && <Row icon="trash" iconTint="var(--red)" title={t('Delete account')} subtitle={t('Everything is erased after 30 days.')} danger
+          onClick={() => useUI.getState().openSheet(close => <DeleteSheet user={user} close={close} />)} />}
       </> : webauthnOK() ? <>
         <Row icon="sparkles" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
         <Row icon="person" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={signInHere} />
@@ -430,5 +446,75 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
       <div className="dim small" style={{ marginTop: 6 }}>{t('This app is invite-only — enter the code you were given.')}</div>
     </>}
     <div style={{ height: 12 }} /><Button variant="primary" onClick={go}>{t('Create passkey')}</Button>
+  </>
+}
+
+/* ---------- account sheets ---------- */
+function SubscriptionSheet({ user, close }) {
+  const toast = useUI(s => s.toast)
+  const b = user.billing || {}
+  const portal = () => billingPortal().then(r => { if (r.url) window.location.href = r.url }).catch(e => toast(e.message))
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="crown" style={{ color: 'var(--yellow)' }} />{t('Subscription')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>{subscriptionLabel(b)}</div>
+    {b.status === 'pro' ? <>
+      <div className="small muted" style={{ marginBottom: 12 }}>{t('Change your card, switch plan or cancel from the billing portal. Access always runs to the end of the period you paid for.')}</div>
+      <Button variant="primary" onClick={portal}>{t('Manage subscription')}</Button>
+    </> : <>
+      {!user.emailVerified && <div className="card small" style={{ marginBottom: 12 }}>{t('Confirm your email before paying — the link is in your inbox.')}</div>}
+      <Plans compact />
+    </>}
+  </>
+}
+
+function PasswordSheet({ user, close }) {
+  const toast = useUI(s => s.toast)
+  const refreshMe = useStore(s => s.refreshMe)
+  const [email, setEmail] = useState(user.email || '')
+  const [cur, setCur] = useState('')
+  const [next, setNext] = useState('')
+  const [busy, setBusy] = useState(false)
+  const linking = !user.hasPassword
+  const go = async e => {
+    e.preventDefault()
+    if (next.length < 8) return toast(t('Use at least 8 characters'))
+    setBusy(true)
+    try {
+      if (linking) await authChangeEmail(email.trim(), next)
+      else await authChangePassword(cur, next)
+      await refreshMe(); toast(linking ? t('Saved — confirm the email we just sent you') : t('Password updated — other devices were signed out')); close()
+    } catch (err) { toast(err.message || t('Something went wrong — try again')) }
+    setBusy(false)
+  }
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="key" style={{ color: 'var(--blue)' }} />{linking ? t('Add email and password') : t('Change password')}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>{linking ? t('So you can sign in on any device and recover the account.') : t('At least 8 characters. Every other device is signed out afterwards.')}</div>
+    <form onSubmit={go} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {linking && <TextField type="email" autoComplete="email" placeholder={t('Email')} value={email} onChange={e => setEmail(e.target.value)} />}
+      {!linking && <TextField type="password" autoComplete="current-password" placeholder={t('Current password')} value={cur} onChange={e => setCur(e.target.value)} />}
+      <TextField type="password" autoComplete="new-password" placeholder={t('New password')} value={next} onChange={e => setNext(e.target.value)} />
+      <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Saving…') : t('Save')}</Button>
+    </form>
+  </>
+}
+
+function DeleteSheet({ user, close }) {
+  const toast = useUI(s => s.toast)
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+  const go = async e => {
+    e.preventDefault(); setBusy(true)
+    try { await deleteAccount(pw); close(); clearLocalAfterDelete() }
+    catch (err) { toast(err.message || t('Something went wrong — try again')) }
+    setBusy(false)
+  }
+  const clearLocalAfterDelete = () => { useStore.getState().setUser(null); try { localStorage.removeItem('gym_state_v1'); localStorage.removeItem('gym_dirty') } catch {} ; window.location.hash = '#/'; window.location.reload() }
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="trash" style={{ color: 'var(--red)' }} />{t('Delete account')}</h3>
+    <div className="muted small" style={{ marginBottom: 12, lineHeight: 1.5 }}>{t('Your account is signed out everywhere and hidden right away, and erased for good after 30 days. Any subscription is cancelled. If you change your mind, just sign in again within those 30 days.')}</div>
+    <form onSubmit={go} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {user.hasPassword && <TextField type="password" autoComplete="current-password" placeholder={t('Your password')} value={pw} onChange={e => setPw(e.target.value)} />}
+      <Button type="submit" variant="danger" disabled={busy || (user.hasPassword && !pw)}>{busy ? t('Deleting…') : t('Delete my account')}</Button>
+    </form>
   </>
 }

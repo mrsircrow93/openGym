@@ -9,6 +9,8 @@ import {
   generateAuthenticationOptions, verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import webpush from 'web-push';
+import { hashPassword, verifyPassword, needsRehash, passwordProblem, DUMMY_HASH } from './password.js';
+import { sendEmail, mail, emailConfigured } from './email.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -44,6 +46,21 @@ const ANTHROPIC_MODEL_TEXT = process.env.ANTHROPIC_MODEL_TEXT || ANTHROPIC_MODEL
 const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan']);
 const modelFor = feature => (VISION_FEATURES.has(feature) ? ANTHROPIC_MODEL_VISION : ANTHROPIC_MODEL_TEXT);
 const MODELS_IN_USE = { vision: ANTHROPIC_MODEL_VISION, text: ANTHROPIC_MODEL_TEXT };
+// Billing (docs/BILLING.md). Off by default so a self-hosted instance stays free; when on, a new
+// account gets TRIAL_DAYS of everything, then needs an active subscription. Stripe is reached over
+// plain fetch — no SDK. Prices are display amounts; the real charge is whatever the Stripe price is.
+const BILLING_ENABLED = /^(1|true|yes|on)$/i.test(process.env.BILLING_ENABLED || '');
+const TRIAL_DAYS = Math.max(0, +(process.env.TRIAL_DAYS || 7) || 0);
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const CURRENCY = (process.env.CURRENCY || 'MXN').toUpperCase();
+const PLANS = [
+  { id: 'monthly', months: 1, amount: +process.env.PRICE_MONTHLY || 129, price: process.env.STRIPE_PRICE_MONTHLY || '' },
+  { id: 'semester', months: 6, amount: +process.env.PRICE_SEMESTER || 779, price: process.env.STRIPE_PRICE_SEMESTER || '' },
+  { id: 'yearly', months: 12, amount: +process.env.PRICE_YEARLY || 1549, price: process.env.STRIPE_PRICE_YEARLY || '' }
+];
+const AI_TRIAL_USD_CAP = +process.env.AI_TRIAL_USD_CAP || 1;   // what a free trial may spend on AI
+const DELETE_GRACE_DAYS = 30;
 
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -57,6 +74,8 @@ let db = { users: [], creds: [], subs: [], invites: [] };
 try { db = JSON.parse(fs.readFileSync(dbFile, 'utf8')); } catch {}
 db.subs = db.subs || [];
 db.invites = db.invites || [];
+db.tokens = db.tokens || [];          // email verification / password reset (hashes only)
+db.stripeEvents = db.stripeEvents || [];   // processed webhook ids (idempotency)
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
 function saveDb() { atomicWrite(dbFile, JSON.stringify(db, null, 2)); }
 function atomicWrite(file, content) {
@@ -199,6 +218,7 @@ function readSession(req) {
   const user = db.users.find(u => u.id === uid) || null;
   if (!user) return null;
   if (user.disabled) return null;           // disabled accounts are locked out everywhere
+  if (user.deletedAt) return null;          // soft-deleted: only a fresh sign-in (which restores) gets back in
   // Missing third field = pre-versioning cookie = version 0. Anything non-numeric is a malformed
   // payload (it still had to pass the HMAC, so this is belt-and-braces) and is refused outright.
   const claimed = ver === undefined ? 0 : Number(ver);
@@ -216,6 +236,152 @@ function sessionCookie(user) {
   return `gymsid=${makeSession(user)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${SECURE} SameSite=Lax`;
 }
 const clearCookie = `gymsid=; Path=/; Max-Age=0; HttpOnly;${SECURE} SameSite=Lax`;
+
+/* ---------- accounts: public shape, entitlement, tokens, lockout, mail ---------- */
+const nowISO = () => new Date().toISOString();
+const normEmail = e => String(e || '').trim().toLowerCase().slice(0, 254);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const userLang = user => { const S = readState(user.id); return (S && S.lang) === 'en' ? 'en' : 'es'; };
+const hasPasskey = user => db.creds.some(c => c.userId === user.id);
+
+// What the client may know about an account. Everything the UI needs to decide what to show
+// (verify banner, add-passkey row, paywall) travels here, so /api/me is the single source.
+function entitlement(user) {
+  const now = Date.now();
+  const trial = user.trialEnds ? Date.parse(user.trialEnds) : 0;
+  const paid = user.tierUntil ? Date.parse(user.tierUntil) : 0;
+  const active = !BILLING_ENABLED || isAdmin(user) || now < trial || now < paid;
+  const status = !BILLING_ENABLED || isAdmin(user) ? 'free' : paid > now ? 'pro' : trial > now ? 'trial' : 'expired';
+  return { enabled: BILLING_ENABLED, active, status, trialEnds: user.trialEnds || null, tierUntil: user.tierUntil || null,
+    plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
+}
+const pubUser = user => ({ id: user.id, name: user.name, admin: isAdmin(user), email: user.email || null, emailVerified: !!user.emailVerified,
+  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), billing: entitlement(user) });
+
+// One-time tokens for email links. Only the sha256 of the token is stored; the raw value is in
+// the link and nowhere else. Single use, short-lived, scoped by kind.
+const tokenHash = raw => crypto.createHash('sha256').update(raw).digest('base64url');
+function issueToken(userId, kind, ttlMs) {
+  // one live token per (user, kind): asking twice invalidates the first link
+  db.tokens = db.tokens.filter(t => !(t.userId === userId && t.kind === kind) && t.exp > Date.now());
+  const raw = crypto.randomBytes(32).toString('base64url');
+  db.tokens.push({ id: crypto.randomBytes(8).toString('base64url'), userId, kind, hash: tokenHash(raw), exp: Date.now() + ttlMs, used: false });
+  saveDb();
+  return raw;
+}
+function consumeToken(raw, kind) {
+  const h = tokenHash(String(raw || ''));
+  const t = db.tokens.find(x => x.kind === kind && x.hash === h);
+  if (!t || t.used || t.exp < Date.now()) return null;
+  t.used = true;
+  db.tokens = db.tokens.filter(x => x.exp > Date.now());
+  return db.users.find(u => u.id === t.userId) || null;
+}
+
+// Brute force: per account, 5 failures in 15 minutes locks sign-in for 15 minutes (nginx limits
+// per IP on top). Memory only — a restart clears it, which is fine.
+const loginFails = new Map();   // email -> [timestamps]
+const LOCK_N = 5, LOCK_WINDOW = 15 * 60_000;
+function lockedFor(email) {
+  const arr = (loginFails.get(email) || []).filter(t => Date.now() - t < LOCK_WINDOW);
+  loginFails.set(email, arr);
+  return arr.length >= LOCK_N ? Math.ceil((arr[0] + LOCK_WINDOW - Date.now()) / 1000) : 0;
+}
+const noteFail = email => loginFails.set(email, [...(loginFails.get(email) || []), Date.now()]);
+const clearFails = email => loginFails.delete(email);
+setInterval(() => { for (const [k, v] of loginFails) if (!v.some(t => Date.now() - t < LOCK_WINDOW)) loginFails.delete(k); }, 60_000).unref();
+// forgot / resend: 3 per hour per email, and per IP
+const mailBursts = new Map();
+function mailLimited(key, n = 3, windowMs = 60 * 60_000) {
+  const arr = (mailBursts.get(key) || []).filter(t => Date.now() - t < windowMs);
+  if (arr.length >= n) return true;
+  arr.push(Date.now()); mailBursts.set(key, arr); return false;
+}
+const clientIp = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+
+async function sendVerifyMail(user) {
+  const raw = issueToken(user.id, 'verify', 24 * 60 * 60_000);
+  const m = mail(userLang(user), 'verify', user.name, `${ORIGIN}/#/verify?token=${raw}`);
+  return sendEmail({ to: user.email, ...m });
+}
+
+// Daily housekeeping: purge accounts deleted 30+ days ago, and warn trials that end in 2 days.
+function purgeUser(u) {
+  try { fs.unlinkSync(stateFile(u.id)); } catch {}
+  db.creds = db.creds.filter(c => c.userId !== u.id);
+  db.subs = db.subs.filter(s => s.userId !== u.id);
+  db.tokens = db.tokens.filter(t => t.userId !== u.id);
+  if (db.aiUsage) delete db.aiUsage[u.id];
+  db.users = db.users.filter(x => x.id !== u.id);
+  console.log('purged account', u.id);
+}
+setInterval(() => {
+  let dirty = false;
+  for (const u of [...db.users]) {
+    if (u.deletedAt && Date.now() - Date.parse(u.deletedAt) > DELETE_GRACE_DAYS * 86400_000) { purgeUser(u); dirty = true; }
+  }
+  if (BILLING_ENABLED) for (const u of db.users) {
+    if (!u.email || !u.trialEnds || u.tierUntil || u.trialWarned || u.deletedAt) continue;
+    const left = Date.parse(u.trialEnds) - Date.now();
+    if (left > 0 && left < 2 * 86400_000) {
+      u.trialWarned = true; dirty = true;
+      sendEmail({ to: u.email, ...mail(userLang(u), 'trialEnding', u.name, Math.max(1, Math.ceil(left / 86400_000)), `${ORIGIN}/#/settings`) }).catch(() => {});
+    }
+  }
+  if (dirty) saveDb();
+}, 6 * 60 * 60_000).unref();
+
+/* ---------- Stripe (plain REST) ---------- */
+function formEncode(obj, prefix = '', out = new URLSearchParams()) {
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}[${k}]` : k;
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'object') formEncode(v, key, out); else out.append(key, String(v));
+  }
+  return out;
+}
+async function stripe(method, path, params) {
+  const r = await fetch('https://api.stripe.com/v1' + path, {
+    method, headers: { authorization: 'Bearer ' + STRIPE_SECRET_KEY, 'content-type': 'application/x-www-form-urlencoded', 'stripe-version': '2024-06-20' },
+    body: method === 'GET' ? undefined : formEncode(params || {})
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error?.message || 'Stripe ' + r.status); e.status = r.status; throw e; }
+  return data;
+}
+// Stripe-Signature: t=<ts>,v1=<hmac>. HMAC-SHA256 over "<ts>.<raw body>" with the endpoint
+// secret; 5-minute tolerance against replay.
+function verifyStripeSignature(raw, header) {
+  const parts = Object.fromEntries(String(header || '').split(',').map(kv => kv.split('=').map(x => x.trim())));
+  const ts = +parts.t, sig = parts.v1;
+  if (!ts || !sig || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+  const expect = crypto.createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(ts + '.' + raw).digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect)); } catch { return false; }
+}
+const planByPrice = priceId => PLANS.find(p => p.price && p.price === priceId) || null;
+// Fold a Stripe subscription object into the user record. Access runs to the end of the paid
+// period whatever happens next (cancel, card failure) — Stripe retries and tells us again.
+function applySubscription(sub) {
+  const user = db.users.find(u => u.id === sub.metadata?.userId) || db.users.find(u => u.stripeCustomerId === sub.customer);
+  if (!user) { console.error('stripe: subscription for unknown user', sub.id, sub.customer); return; }
+  const item = sub.items?.data?.[0];
+  const periodEnd = (item?.current_period_end || sub.current_period_end || 0) * 1000;
+  const good = ['active', 'trialing', 'past_due'].includes(sub.status);
+  user.stripeCustomerId = sub.customer;
+  user.stripeSubscriptionId = sub.id;
+  user.provider = 'stripe';
+  user.plan = planByPrice(item?.price?.id)?.id || user.plan || null;
+  user.cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+  user.subscriptionStatus = sub.status;
+  if (good && periodEnd) user.tierUntil = new Date(periodEnd + 86400_000).toISOString();   // +1 day of grace for renewal timing
+  else if (sub.status === 'canceled' || sub.status === 'unpaid' || sub.status === 'incomplete_expired') {
+    // keep access until the period they paid for ends; never pull it back earlier
+    if (periodEnd && periodEnd > Date.now()) user.tierUntil = new Date(periodEnd).toISOString();
+    else if (!user.tierUntil || Date.parse(user.tierUntil) > Date.now()) user.tierUntil = nowISO();
+  }
+  saveDb();
+  console.log('stripe: subscription', sub.status, 'user', user.id, 'until', user.tierUntil);
+}
 
 /* ---------- challenge store (in-memory, 5 min TTL) ---------- */
 const challenges = new Map(); // cid -> {challenge, name?, uid?, exp}
@@ -373,7 +539,8 @@ function recordAiUsage(uid, feature, usage, model) {
 }
 // Per-user monthly spend ceiling. Off by default; a paid plan sets it per tier (docs/BILLING.md).
 const aiGlobalUsd = (month = monthKey()) => Object.values(db.aiUsage).reduce((a, u) => a + ((u[month] || {}).usd || 0), 0);
-const aiOverBudget = uid => (AI_MONTHLY_USD_CAP > 0 && aiUsageOf(uid).usd >= AI_MONTHLY_USD_CAP) ||
+const userCap = uid => { const u = db.users.find(x => x.id === uid); return u && BILLING_ENABLED && entitlement(u).status === 'trial' ? AI_TRIAL_USD_CAP : AI_MONTHLY_USD_CAP; };
+const aiOverBudget = uid => (userCap(uid) > 0 && aiUsageOf(uid).usd >= userCap(uid)) ||
   (AI_GLOBAL_MONTHLY_USD_CAP > 0 && aiGlobalUsd() >= AI_GLOBAL_MONTHLY_USD_CAP);
 
 async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }, meta) {
@@ -662,12 +829,12 @@ const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true }),
 
   // Public config the login screen needs before anyone is signed in.
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY }),
+  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured() }),
 
   'GET /api/me': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } });
+    json(res, 200, { user: pubUser(user) });
   },
 
   'POST /api/register/options': async (req, res) => {
@@ -722,7 +889,7 @@ const routes = {
       transports: body.credential?.response?.transports || []
     });
     saveDb();
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/login/options': async (req, res) => {
@@ -761,7 +928,8 @@ const routes = {
     const user = db.users.find(u => u.id === cred.userId);
     if (!user) return json(res, 500, { error: 'user missing' });
     if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
-    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+    if (user.deletedAt) { delete user.deletedAt; saveDb(); }   // signing in within the grace period undoes the deletion
+    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
@@ -775,6 +943,186 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     user.sv = sessionVersion(user) + 1;
     saveDb();
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+  },
+
+  /* ---------- email + password accounts (docs/ACCOUNTS.md) ---------- */
+  'POST /api/auth/register': async (req, res) => {
+    const body = await readBody(req);
+    const email = normEmail(body.email), name = String(body.name || '').trim().slice(0, 40), password = String(body.password || '');
+    if (!EMAIL_RE.test(email)) return json(res, 400, { error: 'enter a valid email' });
+    if (!name) return json(res, 400, { error: 'name required' });
+    const bad = passwordProblem(password);
+    if (bad) return json(res, 400, { error: bad === 'too short' ? 'password must be at least 8 characters' : bad === 'too long' ? 'password is too long' : 'that password is too common — pick another' });
+    const code = String(body.code || '').trim().toUpperCase();
+    const invite = INVITE_ONLY ? db.invites.find(i => i.code === code && !i.usedBy && !i.revoked) : null;
+    if (INVITE_ONLY && !invite) return json(res, 403, { error: 'a valid invite code is required' });
+    if (db.users.some(u => u.email === email)) return json(res, 409, { error: 'there is already an account with this email — sign in instead' });
+    const user = { id: crypto.randomBytes(12).toString('base64url'), name, email, emailVerified: false, pw: hashPassword(password), created: nowISO() };
+    if (BILLING_ENABLED && TRIAL_DAYS > 0) user.trialEnds = new Date(Date.now() + TRIAL_DAYS * 86400_000).toISOString();
+    if (invite) { user.invitedBy = invite.code; invite.usedBy = user.id; invite.usedAt = user.created; }
+    db.users.push(user);
+    saveDb();
+    if (body.lang === 'en' || body.lang === 'es') { try { atomicWrite(stateFile(user.id), JSON.stringify({ lang: body.lang, _ts: Date.now() })); } catch {} }
+    sendVerifyMail(user).catch(e => console.error('verify mail', e));
+    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  'POST /api/auth/login': async (req, res) => {
+    const body = await readBody(req);
+    const email = normEmail(body.email), password = String(body.password || '');
+    if (!email || !password) return json(res, 400, { error: 'email and password required' });
+    const wait = lockedFor(email);
+    if (wait) return json(res, 429, { error: 'too many attempts — try again in a few minutes', retryAfter: wait });
+    const user = db.users.find(u => u.email === email);
+    // verify against a dummy hash when the account doesn't exist so timing doesn't reveal it
+    const ok = verifyPassword(password, user && user.pw ? user.pw : DUMMY_HASH) && !!(user && user.pw);
+    if (!ok) { noteFail(email); return json(res, 401, { error: 'invalid email or password' }); }
+    if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    clearFails(email);
+    if (needsRehash(user.pw)) user.pw = hashPassword(password);
+    if (user.deletedAt) delete user.deletedAt;
+    user.lastLogin = nowISO();
+    saveDb();
+    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  'POST /api/auth/verify': async (req, res) => {
+    const body = await readBody(req);
+    const user = consumeToken(body.token, 'verify');
+    if (!user) return json(res, 400, { error: 'this link is no longer valid — request a new one from Settings' });
+    user.emailVerified = true;
+    saveDb();
+    json(res, 200, { ok: true, user: pubUser(user) });
+  },
+
+  'POST /api/auth/resend-verify': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!user.email) return json(res, 400, { error: 'no email on this account' });
+    if (user.emailVerified) return json(res, 200, { ok: true, already: true });
+    if (mailLimited('rv:' + user.id)) return json(res, 429, { error: 'already sent — check your inbox and spam, and try again in an hour' });
+    await sendVerifyMail(user);
+    json(res, 200, { ok: true });
+  },
+
+  // Always 200: whether the email exists is not something this endpoint reveals.
+  'POST /api/auth/forgot': async (req, res) => {
+    const body = await readBody(req);
+    const email = normEmail(body.email);
+    if (!EMAIL_RE.test(email)) return json(res, 200, { ok: true });
+    if (mailLimited('fg:' + email) || mailLimited('fgip:' + clientIp(req), 10)) return json(res, 200, { ok: true });
+    const user = db.users.find(u => u.email === email && !u.disabled);
+    if (user) {
+      const raw = issueToken(user.id, 'reset', 60 * 60_000);
+      sendEmail({ to: user.email, ...mail(userLang(user), 'reset', user.name, `${ORIGIN}/#/reset?token=${raw}`) }).catch(e => console.error('reset mail', e));
+    }
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/auth/reset': async (req, res) => {
+    const body = await readBody(req);
+    const password = String(body.password || '');
+    const bad = passwordProblem(password);
+    if (bad) return json(res, 400, { error: bad === 'too short' ? 'password must be at least 8 characters' : bad === 'too long' ? 'password is too long' : 'that password is too common — pick another' });
+    const user = consumeToken(body.token, 'reset');
+    if (!user) return json(res, 400, { error: 'this link is no longer valid — request a new one' });
+    user.pw = hashPassword(password);
+    user.pwChangedAt = nowISO();
+    user.sv = sessionVersion(user) + 1;          // every other session dies
+    if (user.deletedAt) delete user.deletedAt;
+    if (!user.emailVerified) user.emailVerified = true;   // they just proved they own the inbox
+    clearFails(user.email);
+    saveDb();
+    sendEmail({ to: user.email, ...mail(userLang(user), 'passwordChanged', user.name) }).catch(() => {});
+    json(res, 200, { ok: true, user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  'POST /api/auth/password': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (user.pw && !verifyPassword(String(body.current || ''), user.pw)) return json(res, 401, { error: 'current password is wrong' });
+    const bad = passwordProblem(String(body.next || ''));
+    if (bad) return json(res, 400, { error: bad === 'too short' ? 'password must be at least 8 characters' : bad === 'too long' ? 'password is too long' : 'that password is too common — pick another' });
+    user.pw = hashPassword(String(body.next));
+    user.pwChangedAt = nowISO();
+    user.sv = sessionVersion(user) + 1;
+    saveDb();
+    if (user.email) sendEmail({ to: user.email, ...mail(userLang(user), 'passwordChanged', user.name) }).catch(() => {});
+    json(res, 200, { ok: true, user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  // Change email (password required), or add email + password to a passkey-only account.
+  'POST /api/auth/email': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const email = normEmail(body.email);
+    if (!EMAIL_RE.test(email)) return json(res, 400, { error: 'enter a valid email' });
+    if (db.users.some(u => u.email === email && u.id !== user.id)) return json(res, 409, { error: 'that email is already used by another account' });
+    if (user.pw) {
+      if (!verifyPassword(String(body.password || ''), user.pw)) return json(res, 401, { error: 'password is wrong' });
+    } else {
+      const bad = passwordProblem(String(body.password || ''));
+      if (bad) return json(res, 400, { error: bad === 'too short' ? 'password must be at least 8 characters' : bad === 'too long' ? 'password is too long' : 'that password is too common — pick another' });
+      user.pw = hashPassword(String(body.password));
+    }
+    const old = user.email;
+    user.email = email; user.emailVerified = false;
+    saveDb();
+    sendVerifyMail(user).catch(() => {});
+    if (old && old !== email) sendEmail({ to: old, ...mail(userLang(user), 'emailChanged', user.name, email) }).catch(() => {});
+    json(res, 200, { ok: true, user: pubUser(user) });
+  },
+
+  // Add a passkey to the signed-in account (any account — email ones get Face ID too).
+  'POST /api/passkey/options': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const options = await generateRegistrationOptions({
+      rpName: RP_NAME, rpID: RP_ID,
+      userID: Buffer.from(user.id), userName: user.email || user.name, userDisplayName: user.name,
+      attestationType: 'none',
+      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+      excludeCredentials: db.creds.filter(c => c.userId === user.id).map(c => ({ id: c.id, transports: c.transports }))
+    });
+    const cid = putChallenge({ challenge: options.challenge, addTo: user.id });
+    json(res, 200, { cid, options });
+  },
+  'POST /api/passkey/verify': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const c = takeChallenge(body.cid);
+    if (!c || c.addTo !== user.id) return json(res, 400, { error: 'challenge expired — try again' });
+    let verification;
+    try {
+      verification = await verifyRegistrationResponse({ response: body.credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID, requireUserVerification: false });
+    } catch (e) { return json(res, 400, { error: 'verification failed' }); }
+    if (!verification.verified) return json(res, 400, { error: 'not verified' });
+    const { credential } = verification.registrationInfo;
+    if (db.creds.find(x => x.id === credential.id)) return json(res, 409, { error: 'credential already registered' });
+    db.creds.push({ id: credential.id, userId: user.id, publicKey: Buffer.from(credential.publicKey).toString('base64url'), counter: credential.counter || 0, transports: body.credential?.response?.transports || [] });
+    saveDb();
+    json(res, 200, { ok: true, user: pubUser(user) });
+  },
+
+  // Soft delete: hidden and signed out everywhere at once, purged after 30 days unless they
+  // sign in again. Password required when there is one; passkey-only accounts just confirm.
+  'DELETE /api/account': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (user.pw && !verifyPassword(String(body.password || ''), user.pw)) return json(res, 401, { error: 'password is wrong' });
+    if (isAdmin(user)) return json(res, 400, { error: 'admin accounts cannot be deleted from the app' });
+    user.deletedAt = nowISO();
+    user.sv = sessionVersion(user) + 1;
+    db.subs = db.subs.filter(s => s.userId !== user.id);
+    presence.delete(user.id);
+    saveDb();
+    if (user.stripeSubscriptionId && STRIPE_SECRET_KEY) stripe('DELETE', '/subscriptions/' + user.stripeSubscriptionId).catch(e => console.error('stripe cancel on delete', e.message));
+    if (user.email) sendEmail({ to: user.email, ...mail(userLang(user), 'deleted', user.name) }).catch(() => {});
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
   },
 
@@ -865,7 +1213,7 @@ const routes = {
   // One row per user, cheap enough for a personal instance (reads each state file once).
   'GET /api/admin/users': async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    const users = db.users.map(u => {
+    const users = db.users.filter(u => !u.deletedAt).map(u => {
       const S = readState(u.id) || {};
       const workouts = S.workouts || [];
       const last = workouts[workouts.length - 1];
@@ -962,17 +1310,70 @@ const routes = {
     json(res, 200, { month, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
   },
 
-  /* ---------- billing (scaffold — see docs/BILLING.md) ---------- */
-  // Everything is free until billing ships; the client reads the tier from here and never
-  // hard-codes it. Checkout/webhook are stubs so the client wiring can be built against them.
+  /* ---------- billing (docs/BILLING.md) ---------- */
+  'GET /api/billing/plans': async (req, res) => json(res, 200, { enabled: BILLING_ENABLED, payments: !!STRIPE_SECRET_KEY, currency: CURRENCY, trialDays: TRIAL_DAYS,
+    plans: PLANS.map(p => ({ id: p.id, months: p.months, amount: p.amount, perMonth: Math.round(p.amount / p.months), available: !!p.price })) }),
+
   'GET /api/billing/status': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { enabled: false, tier: 'free', renewsAt: null, aiCapUsd: AI_MONTHLY_USD_CAP || null });
+    json(res, 200, { ...entitlement(user), tier: entitlement(user).status, aiCapUsd: entitlement(user).status === 'trial' ? AI_TRIAL_USD_CAP : (AI_MONTHLY_USD_CAP || null) });
   },
-  'POST /api/billing/checkout': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
-  'POST /api/billing/portal': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
-  'POST /api/billing/webhook': async (req, res) => json(res, 501, { error: 'billing not enabled on this instance' }),
+
+  'POST /api/billing/checkout': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!BILLING_ENABLED || !STRIPE_SECRET_KEY) return json(res, 501, { error: 'payments are not set up yet' });
+    if (!user.email) return json(res, 400, { error: 'add an email to your account first' });
+    if (!user.emailVerified) return json(res, 403, { error: 'confirm your email first' });
+    const body = await readBody(req);
+    const plan = PLANS.find(p => p.id === body.plan && p.price);
+    if (!plan) return json(res, 400, { error: 'unknown plan' });
+    try {
+      if (!user.stripeCustomerId) {
+        const c = await stripe('POST', '/customers', { email: user.email, name: user.name, metadata: { userId: user.id } });
+        user.stripeCustomerId = c.id; saveDb();
+      }
+      const session = await stripe('POST', '/checkout/sessions', {
+        mode: 'subscription', customer: user.stripeCustomerId, client_reference_id: user.id,
+        line_items: { 0: { price: plan.price, quantity: 1 } },
+        subscription_data: { metadata: { userId: user.id, plan: plan.id } },
+        allow_promotion_codes: 'true', locale: userLang(user),
+        success_url: `${ORIGIN}/#/settings?checkout=success`, cancel_url: `${ORIGIN}/#/settings?checkout=cancel`
+      });
+      json(res, 200, { url: session.url });
+    } catch (e) { console.error('stripe checkout', e.message); json(res, 502, { error: 'could not start the payment — try again' }); }
+  },
+
+  'POST /api/billing/portal': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!STRIPE_SECRET_KEY || !user.stripeCustomerId) return json(res, 400, { error: 'no subscription to manage' });
+    try {
+      const p = await stripe('POST', '/billing_portal/sessions', { customer: user.stripeCustomerId, return_url: `${ORIGIN}/#/settings` });
+      json(res, 200, { url: p.url });
+    } catch (e) { console.error('stripe portal', e.message); json(res, 502, { error: 'could not open the billing portal — try again' }); }
+  },
+
+  // Stripe → us. Signature-verified, idempotent on event id, and tolerant: any event we don't
+  // care about is acknowledged so Stripe stops retrying it.
+  'POST /api/billing/webhook': async (req, res) => {
+    if (!STRIPE_WEBHOOK_SECRET) return json(res, 501, { error: 'webhook not configured' });
+    const raw = await new Promise((resolve, reject) => { const c = []; let n = 0; req.on('data', d => { n += d.length; if (n > MAX_BODY) { req.destroy(); reject(new Error('too large')); } c.push(d); }); req.on('end', () => resolve(Buffer.concat(c).toString('utf8'))); req.on('error', reject); });
+    if (!verifyStripeSignature(raw, req.headers['stripe-signature'])) return json(res, 400, { error: 'bad signature' });
+    let ev; try { ev = JSON.parse(raw, noProto); } catch { return json(res, 400, { error: 'bad json' }); }
+    if (db.stripeEvents.includes(ev.id)) return json(res, 200, { ok: true, duplicate: true });
+    db.stripeEvents = [...db.stripeEvents.slice(-499), ev.id];
+    try {
+      const obj = ev.data?.object || {};
+      if (ev.type === 'checkout.session.completed' && obj.subscription) applySubscription(await stripe('GET', '/subscriptions/' + obj.subscription));
+      else if (ev.type.startsWith('customer.subscription.')) applySubscription(obj);
+      else if ((ev.type === 'invoice.paid' || ev.type === 'invoice.payment_failed') && (obj.subscription || obj.parent?.subscription_details?.subscription))
+        applySubscription(await stripe('GET', '/subscriptions/' + (obj.subscription || obj.parent.subscription_details.subscription)));
+      saveDb();
+      json(res, 200, { ok: true });
+    } catch (e) { console.error('stripe webhook', ev.type, e.message); json(res, 500, { error: 'handler failed' }); }
+  },
 
   /* ---------- progress photos (scaffold — see docs/PROGRESS_PHOTOS.md) ---------- */
   // Contract only. The real implementation needs object storage; the JSON state file is the
@@ -1292,6 +1693,12 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
+  // Paid feature gate (docs/BILLING.md): the AI routes need an active trial or subscription.
+  // Checked here, once, so no route can forget it.
+  if (BILLING_ENABLED && handler && url.pathname.startsWith('/api/ai/')) {
+    const u = readSession(req);
+    if (u && !entitlement(u).active) return json(res, 402, { error: 'subscription required', code: 'subscription_required' });
+  }
   if (!handler) return json(res, 404, { error: 'not found' });
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin && !ALLOWED_ORIGINS.has(req.headers.origin)) {
     return json(res, 403, { error: 'cross-origin request refused' });

@@ -9,12 +9,12 @@ items as they ship; move things around here rather than in the phase docs.
 | 2 | ✅ 2026-09-29 — Redeploy with the hardened nginx/Dockerfile (headers, rate limits, 6 MB bodies, 180 s AI timeout) | Fixes silent sync failures and adds the security headers; `docker compose up -d --build` | SECURITY_REVIEW.md | 1 h |
 | 2.5 | Move the live instance to AWS Lightsail + daily snapshots + nightly `data/` copy to S3 | The Mac can't be the production server once there are paying users or Stripe webhooks; also the missing backup | AWS.md | 1 afternoon |
 | 3 | ✅ 2026-09-29 — Split AI models: `ANTHROPIC_MODEL_VISION` (Sonnet 5) / `ANTHROPIC_MODEL_TEXT` (Haiku 4.5) | Best quality where it matters, ~40 % cheaper overall; small server change | AI_COSTS.md lever 1 | 2 h |
-| 4 | Email + password accounts, verification, reset, lockout | Prerequisite for billing, receipts, recovery and the store apps | ACCOUNTS.md §1–4, 6 | 1 week |
-| 5 | Account deletion + 30-day purge; terms, privacy, refund pages | Stores require deletion and legal pages; do it while accounts are fresh | ACCOUNTS.md §3 (DELETE), ROADMAP phase 1.5 | 2 days |
-| 6 | Transactional email (Resend, SPF/DKIM) | Needed by #4; also trial-ending and receipts later | ACCOUNTS.md §4 | 1 day |
-| 7 | Tier/trial fields + `GET /api/billing/status` + server-side gates on AI and photo routes | Makes `can()` real; no user-visible change until checkout exists | BILLING.md "Order of work" 1–2 | 2 days |
-| 8 | Stripe: products in MXN, 7-day trial with card, checkout, portal, webhook (test mode) | First revenue channel, best margin, no store review | BILLING.md | 1 week |
-| 9 | Paywall sheet + pricing pulled from the server; intro/launch coupons | Turns #8 on for users | BILLING.md "Offers" | 2 days |
+| 4 | ✅ 2026-09-30 — Email + password accounts, verification, reset, lockout | Prerequisite for billing, receipts, recovery and the store apps | ACCOUNTS.md §1–4, 6 | 1 week |
+| 5 | 🟡 2026-09-30 — Account deletion + 30-day purge shipped; terms, privacy, refund pages pending | Stores require deletion and legal pages; do it while accounts are fresh | ACCOUNTS.md §3 (DELETE), ROADMAP phase 1.5 | 2 days |
+| 6 | 🟡 2026-09-30 — Resend sender + templates shipped; needs RESEND_API_KEY and SPF/DKIM on the domain | Needed by #4; also trial-ending and receipts later | ACCOUNTS.md §4 | 1 day |
+| 7 | ✅ 2026-09-30 — Tier/trial fields, `GET /api/billing/status`, 7-day trial on sign-up, server-side gate on AI routes | Makes `can()` real; no user-visible change until checkout exists | BILLING.md "Order of work" 1–2 | 2 days |
+| 8 | 🟡 2026-09-30 — Stripe checkout, portal and signed webhook shipped (trial is card-less at sign-up instead); needs the Stripe account, prices and keys | First revenue channel, best margin, no store review | BILLING.md | 1 week |
+| 9 | 🟡 2026-09-30 — Paywall + plans from the server shipped; coupons via Stripe promotion codes (allowed at checkout) | Turns #8 on for users | BILLING.md "Offers" | 2 days |
 | 10 | Mobile build signs in (API base, bearer token in secure storage, `ALLOWED_ORIGINS`) | Prerequisite for anything sold in the stores | ACCOUNTS.md §5 | 3 days |
 | 11 | Apple Small Business + Google 15 % enrolment; store products with 7-day intro trial | Paperwork with lead time — start early, finish before #12 | BILLING.md "Stores" | 1 day + waiting |
 | 12 | RevenueCat SDK + webhook → same tier record; store paywall | Second revenue channel | BILLING.md "Stores" | 1 week + review |

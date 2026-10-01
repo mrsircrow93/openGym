@@ -1046,3 +1046,18 @@ h4.sec{
 .plan-rules[open] summary::before{transform:rotate(90deg)}
 .plan-rules .plan-items{margin-top:6px}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
+/* ---------------------------------------------------------------- account / plans -- */
+.auth-seg{margin-bottom:14px}
+.linkbtn.small{font-size:13px;text-decoration:none;color:var(--label-2);padding:6px 0}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:left}
+@media (max-width:380px){.plans{grid-template-columns:1fr 1fr}}
+.plan-card{
+  position:relative;display:flex;flex-direction:column;gap:2px;padding:14px 12px 12px;border-radius:16px;
+  background:var(--surface);border:2px solid transparent;color:var(--label);text-align:left;
+}
+.plan-card.best{border-color:var(--acc)}
+.plan-card:disabled{opacity:.6}
+.plan-tag{position:absolute;top:-10px;left:10px;background:var(--acc);color:var(--on-acc);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+.plan-name{font-size:13px;color:var(--label-2);font-weight:600}
+.plan-price{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.banner{margin-bottom:12px;border:1px solid color-mix(in srgb,var(--orange) 40%,transparent)}

@@ -1,12 +1,13 @@
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO } from '../lib/api.js'
+import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authRegister, authForgot } from '../lib/api.js'
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
-import { Button } from '../components/ui.jsx'
+import { Button, TextField, Segmented } from '../components/ui.jsx'
+import { getLang } from '../lib/i18n.js'
 
 function RegisterSheet({ close }) {
   const { setUser, pushState, pullState } = useStore()
@@ -80,18 +81,77 @@ export default function Login() {
     </div>
   )
 
+  return <EmailLogin head={head} wrap={wrap} signInPasskey={signIn} />
+}
+
+// Hosted instance: accounts are email + password (what billing, receipts and recovery need),
+// with a passkey as the fast way back in. Three modes in one card; no guest mode here.
+function EmailLogin({ head, wrap, signInPasskey }) {
+  const { setUser, pushState, pullState } = useStore()
+  const toast = m => useUI.getState().toast(m)
+  const [mode, setMode] = useState('login')   // login | register | forgot
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [cfg, setCfg] = useState({})
+  useEffect(() => { api('/api/config').then(setCfg).catch(() => {}) }, [])
+  const after = async u => {
+    setUser(u)
+    if (hasData(useStore.getState().S)) { await pushState(); toast(t('Welcome, {0} — the data on this device moved into your account', u.name)) }
+    else { await pullState(); toast(t('Welcome, {0}', u.name)) }
+  }
+  const submit = async e => {
+    e.preventDefault()
+    if (busy) return
+    const em = email.trim()
+    if (!/^\S+@\S+\.\S+$/.test(em)) return toast(t('Enter a valid email'))
+    setBusy(true)
+    try {
+      if (mode === 'forgot') { await authForgot(em); setSent(true) }
+      else if (mode === 'register') {
+        if (!name.trim()) throw new Error(t('Enter a name'))
+        if (pw.length < 8) throw new Error(t('Use at least 8 characters'))
+        if (cfg.invite_only && !code.trim()) throw new Error(t('An invite code is required'))
+        await after(await authRegister(em, pw, name.trim(), code.trim(), getLang()))
+      } else {
+        if (!pw) throw new Error(t('Enter your password'))
+        await after(await authLogin(em, pw))
+      }
+    } catch (err) { toast(err.message || t('Something went wrong — try again')) }
+    setBusy(false)
+  }
+  const field = { textAlign: 'left' }
   return (
     <div className="narrow" style={wrap}>
       {head}
-      <div className="muted" style={{ marginBottom: 34 }}>{t('Your workouts. Your weights. Your profile.')}</div>
-      {webauthnOK() ? <>
-        <Button variant="primary" icon="person" onClick={signIn}>{t('Sign in with passkey')}</Button>
-        <div style={{ height: 10 }} />
-        <Button icon="sparkles" onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create new profile')}</Button>
-        <div style={{ height: 10 }} />
-      </> : <div className="card small muted" style={{ textAlign: 'left' }}>{t("This browser doesn't support passkeys — you can still use openGym locally on this device.")}</div>}
-      <Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>
-      <div className="dim small" style={{ marginTop: 26, lineHeight: 1.5 }}>{t('Passkeys use {0} — no passwords.', BIO)}<br />{t('Each profile keeps its own plan, workouts & body weight.')}</div>
+      <div className="muted" style={{ marginBottom: 22 }}>{mode === 'register' && cfg.billing && cfg.trialDays > 0 ? t('{0} days free, then pick a plan. Cancel any time.', cfg.trialDays) : t('Your workouts. Your coach. Your progress.')}</div>
+
+      <Segmented className="auth-seg" value={mode === 'forgot' ? 'login' : mode} onChange={v => { setMode(v); setSent(false) }}
+        options={[{ value: 'login', label: t('Sign in') }, { value: 'register', label: cfg.billing && cfg.trialDays > 0 ? t('Try free') : t('Create account') }]} />
+
+      {sent && mode === 'forgot' ? <div className="card small muted" style={{ textAlign: 'left' }}>
+        {t('If there is an account for {0}, a link to choose a new password is on its way. Check spam too.', email.trim())}
+        <div style={{ marginTop: 10 }}><button className="linkbtn" onClick={() => { setSent(false); setMode('login') }}>{t('Back to sign in')}</button></div>
+      </div> : <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {mode === 'register' && <TextField style={field} placeholder={t('Your name')} maxLength={40} value={name} onChange={e => setName(e.target.value)} autoComplete="name" />}
+        <TextField style={field} type="email" inputMode="email" autoComplete="email" placeholder={t('Email')} value={email} onChange={e => setEmail(e.target.value)} />
+        {mode !== 'forgot' && <TextField style={field} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder={mode === 'register' ? t('Password (8+ characters)') : t('Password')} value={pw} onChange={e => setPw(e.target.value)} />}
+        {mode === 'register' && cfg.invite_only && <TextField style={{ ...field, letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} placeholder={t('Invite code')} maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} />}
+        <Button type="submit" variant="primary" disabled={busy}>
+          {busy ? t('One moment…') : mode === 'forgot' ? t('Send me a link') : mode === 'register' ? (cfg.billing && cfg.trialDays > 0 ? t('Start my free trial') : t('Create account')) : t('Sign in')}
+        </Button>
+        {mode === 'login' && <button type="button" className="linkbtn small" onClick={() => setMode('forgot')}>{t('Forgot your password?')}</button>}
+        {mode === 'forgot' && <button type="button" className="linkbtn small" onClick={() => setMode('login')}>{t('Back to sign in')}</button>}
+        {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the terms of service and privacy policy. No card needed for the trial.')}</div>}
+      </form>}
+
+      {webauthnOK() && mode === 'login' && <>
+        <div className="dim small" style={{ margin: '18px 0 8px' }}>{t('or')}</div>
+        <Button icon="person" onClick={signInPasskey}>{t('Sign in with {0}', BIO)}</Button>
+      </>}
     </div>
   )
 }

@@ -26,9 +26,12 @@ export async function refreshBilling() {
 export function can(feature) {
   if (!status.enabled) return true
   if (feature === 'ai' && hasUserKey()) return true
-  const f = FEATURES[status.tier] || FEATURES.free
-  return !!f[feature]
+  return status.active !== false
 }
+// True when the signed-in account has neither an active trial nor a subscription: the app
+// shows the paywall instead of the tabs. Admins and self-hosted (billing off) are never locked.
+export const locked = user => !!(user && user.billing && user.billing.enabled && !user.billing.active)
+export const daysLeft = iso => (iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 86400000)) : 0)
 
 // Where a gated feature sends people. Stub until checkout exists — see docs/BILLING.md.
 export async function startCheckout(tier = 'pro') {

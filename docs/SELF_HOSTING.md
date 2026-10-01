@@ -94,6 +94,26 @@ If you'd rather control who gets in, two optional settings in `.env` turn that a
 
 ```bash
 ADMIN_UIDS=youruserid      # comma-separated; these users get the admin dashboard
+
+# Accounts: email + password sign-up is always on. Transactional mail via Resend;
+# without the key the verification / reset links are printed in the API log.
+RESEND_API_KEY=
+EMAIL_FROM="openGym <no-reply@example.com>"
+
+# Paid tier (off by default — a personal instance stays free). With BILLING_ENABLED=1 a new
+# account gets TRIAL_DAYS of everything, then needs a subscription. Stripe over plain REST.
+BILLING_ENABLED=0
+TRIAL_DAYS=7
+AI_TRIAL_USD_CAP=1
+CURRENCY=MXN
+PRICE_MONTHLY=129
+PRICE_SEMESTER=779
+PRICE_YEARLY=1549
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=     # endpoint: POST https://your-host/api/billing/webhook
+STRIPE_PRICE_MONTHLY=      # price ids from the Stripe dashboard
+STRIPE_PRICE_SEMESTER=
+STRIPE_PRICE_YEARLY=
 INVITE_ONLY=1              # new profiles need an invite code
 ```
 

@@ -25,6 +25,8 @@ import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Nutrition from './views/Nutrition.jsx'
 import Admin from './views/Admin.jsx'
+import { Verify, Reset, Paywall } from './views/Account.jsx'
+import { locked } from './lib/entitlements.js'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -52,6 +54,11 @@ function Shell() {
   useWakeLock(!!S.active && S.keepAwake !== false)
 
   const authed = user || isGuest
+  // Links from the account emails work whether or not someone is signed in on this device.
+  const authLink = loc.pathname === '/verify' ? <Verify /> : loc.pathname === '/reset' ? <Reset /> : null
+  if (authLink) return <><div id="app" className="vfade"><ErrorBoundary>{authLink}</ErrorBoundary></div><Toast /></>
+  // Trial over, no subscription: the paywall is the whole app until that changes.
+  if (user && locked(user)) return <><div id="app" className="vfade"><ErrorBoundary><Paywall /></ErrorBoundary></div><Modals /><Toast /></>
   if (!ready && !authed) return (
     <div id="app">
       <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', fontSize: 34, color: 'var(--label-3)' }}>

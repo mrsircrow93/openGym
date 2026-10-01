@@ -159,3 +159,25 @@ export async function aiRecipes(body) {
   if (hasUserKey()) return directRecipes(body)
   return api('/api/ai/recipes', { method: 'POST', body: JSON.stringify(body) })
 }
+
+/* ---------- email + password accounts, subscription (docs/ACCOUNTS.md, BILLING.md) ---------- */
+const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) })
+export const authRegister = (email, password, name, code, lang) => post('/api/auth/register', { email, password, name, code: code || '', lang }).then(r => r.user)
+export const authLogin = (email, password) => post('/api/auth/login', { email, password }).then(r => r.user)
+export const authVerify = token => post('/api/auth/verify', { token })
+export const authResendVerify = () => post('/api/auth/resend-verify')
+export const authForgot = email => post('/api/auth/forgot', { email })
+export const authReset = (token, password) => post('/api/auth/reset', { token, password })
+export const authChangePassword = (current, next) => post('/api/auth/password', { current, next })
+export const authChangeEmail = (email, password) => post('/api/auth/email', { email, password })
+export const deleteAccount = password => api('/api/account', { method: 'DELETE', body: JSON.stringify({ password: password || '' }) })
+export const fetchMe = () => api('/api/me').then(r => r.user)
+// Add a passkey to the signed-in account (so an email account gets Face ID next time).
+export async function passkeyAdd() {
+  const { cid, options } = await post('/api/passkey/options')
+  const cred = await navigator.credentials.create({ publicKey: toCreationOptions(options) })
+  return post('/api/passkey/verify', { cid, credential: credToJSON(cred) })
+}
+export const billingPlans = () => api('/api/billing/plans')
+export const billingCheckout = plan => post('/api/billing/checkout', { plan })
+export const billingPortal = () => post('/api/billing/portal')
