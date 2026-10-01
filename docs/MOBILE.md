@@ -48,7 +48,7 @@ brand mark (see `frontend/src/components/Logo.jsx`). The server allows the shell
 ## Prerequisites
 
 - Node 20+
-- **Android:** Android Studio (bundles the SDK). Java 21 for Gradle.
+- **Android:** Android Studio (bundles the SDK). **JDK 21** for Gradle (Capacitor 8); on this Mac `/opt/homebrew/opt/openjdk@21`. Min Android 8.0 (API 26, required by Health Connect).
 - **iOS:** a Mac with Xcode 15+ and CocoaPods (`brew install cocoapods`). A free Apple ID
   is enough to run the app on your own iPhone (see below); paid membership is only needed
   for App Store distribution, which openGym doesn't do.
