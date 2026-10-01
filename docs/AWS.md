@@ -72,7 +72,7 @@ What it copies:
 | `~/openGym/data/`                            | `~/openGym/data/`                    | accounts, passkeys, histories, session secret |
 | `~/.cloudflared/config.yml` + tunnel `.json` | `/etc/cloudflared/`                  | the same tunnel, so DNS and the hostname don't change |
 
-Then on the server it runs `docker compose pull && docker compose up -d`, installs
+Then on the server it runs `docker compose up -d --build`, installs
 cloudflared as a systemd service (`cloudflared service install`) and checks `/api/health`.
 
 The media folder (`media/img`, `media/gif`, ~140 MB) is **not** copied — the `media` service

@@ -22,7 +22,7 @@ echo "→ Stopping the local stack so data/ is quiescent…"
 
 echo "→ Copying .env and data/…"
 eval $RSYNC "$HERE/.env" "$USER_@$IP:~/openGym/.env"
-eval $RSYNC --delete "$HERE/data/" "$USER_@$IP:~/openGym/data/"
+eval $RSYNC --delete --exclude "db.backup-*" "$HERE/data/" "$USER_@$IP:~/openGym/data/"
 
 echo "→ Copying the Cloudflare tunnel ($TUNNEL_ID)…"
 $SSH 'sudo mkdir -p /etc/cloudflared && sudo chown $USER /etc/cloudflared'
@@ -30,9 +30,9 @@ eval $RSYNC ~/.cloudflared/config.yml ~/.cloudflared/"$TUNNEL_ID".json "$USER_@$
 # The Mac config points at the Mac's home dir and port 8081; rewrite for the server.
 $SSH "sed -i -e 's#credentials-file: .*#credentials-file: /etc/cloudflared/$TUNNEL_ID.json#' -e 's#http://localhost:[0-9]*#http://localhost:8081#' /etc/cloudflared/config.yml && sudo chown -R root:root /etc/cloudflared && sudo chmod 600 /etc/cloudflared/*.json"
 
-echo "→ Starting the stack on the server (API as uid 1000)…"
+echo "→ Building and starting the stack on the server (API as uid 1000) — the first build takes a few minutes…"
 $SSH 'cd ~/openGym && git pull -q && sudo chown -R 1000:1000 data && grep -q COMPOSE_FILE ~/.bashrc || echo "export COMPOSE_FILE=docker-compose.yml:docker-compose.aws.yml" >> ~/.bashrc'
-$SSH 'cd ~/openGym && export COMPOSE_FILE=docker-compose.yml:docker-compose.aws.yml && docker compose pull -q && docker compose up -d'
+$SSH 'cd ~/openGym && export COMPOSE_FILE=docker-compose.yml:docker-compose.aws.yml && docker compose up -d --build'
 
 echo "→ Installing cloudflared as a service…"
 $SSH 'sudo cloudflared --config /etc/cloudflared/config.yml service install 2>/dev/null || true; sudo systemctl enable --now cloudflared; sudo systemctl restart cloudflared'
