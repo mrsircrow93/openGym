@@ -6,7 +6,7 @@ awake, Stripe webhooks need a server that is always reachable, daily snapshots r
 missing backup, and progress photos (ROADMAP phase 4) will land in S3 in the same account.
 
 The stack does not change: same `docker-compose.yml`, same `.env`, same Cloudflare Tunnel and
-therefore the same hostname. Because `RP_ID` stays `gym.pentaforge.com.mx`, every existing
+therefore the same hostname. Because `RP_ID` is `app.vantixgym.app` (changed 2026-10-01 from gym.pentaforge.com.mx, which now redirects), every existing
 passkey keeps working. Nothing is exposed on a public port; all traffic enters through the tunnel.
 
 ## 1. Create the instance (10 minutes, AWS console)
@@ -81,7 +81,7 @@ in compose downloads it on first start.
 ## 4. Verify, then switch off the Mac copy
 
 ```bash
-curl -s https://gym.pentaforge.com.mx/api/health      # {"ok":true} — now served from AWS
+curl -s https://app.vantixgym.app/api/health      # {"ok":true} — now served from AWS
 ```
 
 Open the app on the phone and sign in with the passkey. If that works the migration is done.
@@ -138,7 +138,7 @@ matters; nothing in the setup ties it to Lightsail.
 - **Backups**: daily snapshots cover `data/`. `docs/SELF_HOSTING.md` §5 still applies for an
   off-account copy (a nightly `tar` of `data/` to S3 is a five-line cron; add it before billing).
 - **Billing** (BACKLOG #7-9): Stripe webhooks need a stable, always-on HTTPS endpoint. That is
-  now `https://gym.pentaforge.com.mx/api/billing/webhook` behind the tunnel.
+  now `https://app.vantixgym.app/api/billing/webhook` behind the tunnel.
 - **Transactional email** (BACKLOG #6): Resend or SES. SES is in the same account and cheaper;
   either way the DNS records go in the Cloudflare zone.
 - **Progress photos** (ROADMAP phase 4): S3 bucket in the same region with an IAM user scoped

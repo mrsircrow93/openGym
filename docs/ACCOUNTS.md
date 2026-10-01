@@ -89,7 +89,7 @@ Without `RESEND_API_KEY` the server logs the link to stdout (dev) and the UI say
 
 Today the mobile build is offline guest mode. Changes:
 
-1. `VITE_API_BASE` env for the mobile build (`https://gym.pentaforge.com.mx`); `api()` prefixes it.
+1. `VITE_API_BASE` env for the mobile build (`https://app.vantixgym.app`); `api()` prefixes it.
 2. WebView cookies are unreliable across restarts → the app stores the bearer token from
    `POST /api/auth/mobile/token` in secure storage (Keychain / EncryptedSharedPreferences via
    `@capacitor/preferences` + the secure-storage plugin), and `api()` sends

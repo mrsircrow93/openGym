@@ -45,7 +45,7 @@ done
 $SSH 'curl -s localhost:8081/api/health'; echo
 sleep 5
 echo "→ Public check:"
-curl -s -o /dev/null -w "https://gym.pentaforge.com.mx -> %{http_code}\n" https://gym.pentaforge.com.mx
+curl -s -o /dev/null -w "https://app.vantixgym.app -> %{http_code}\n" https://app.vantixgym.app
 
 cat <<MSG
 
