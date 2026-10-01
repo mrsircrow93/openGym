@@ -96,3 +96,17 @@ talks to the API. First step for mobile billing is therefore sign-in from the ap
   `AI_MONTHLY_USD_CAP=2` as insurance anyway.
 - **Server model:** `tier`, `tierUntil`, `trialEnds`, `provider` (stripe | apple | google) on the
   user record; `can()` is true while `now < trialEnds || now < tierUntil`.
+
+## Referrals (live 2026-10-01)
+
+Every account has a share code (`GET /api/referral`, Settings → Invite & earn; link
+`https://app.vantixgym.app/?ref=CODE`). Sign-up takes an optional `ref`.
+
+| Env | Default | Meaning |
+|---|---|---|
+| `REF_REFEREE_TRIAL_DAYS` | 7 | extra trial days for the friend (7 + 7 = 14) |
+| `REF_REFERRER_DAYS` | 30 | days added to the referrer's access when the friend first pays (`rewardReferrer`, from the Stripe webhook) |
+| `STRIPE_REFERRAL_COUPON` | — | optional Stripe coupon id applied to the friend's first checkout (replaces the promo-code box for that checkout) |
+
+The referrer is rewarded once per friend, by email too. `INVITE_ONLY` is now off in production;
+the invite code remains for private instances.
