@@ -1747,6 +1747,18 @@ const routes = {
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  // CORS for the store apps: they load from capacitor://localhost (iOS) / https://localhost
+  // (Android) and call this API cross-origin with a bearer token. Only the allowed shell
+  // origins get the headers; the web app is same-origin and needs none.
+  const reqOrigin = req.headers.origin;
+  if (reqOrigin && reqOrigin !== ORIGIN && ALLOWED_ORIGINS.has(reqOrigin)) {
+    res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Max-Age', '600');
+    if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  }
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
   // Paid feature gate (docs/BILLING.md): the AI routes need an active trial or subscription.
