@@ -223,7 +223,7 @@ export default function Settings() {
 
     <div className="dim small" style={{ textAlign: 'center', marginTop: 4, lineHeight: 1.6 }}>
       VantixGym · {t('built on openGym, open source (AGPL v3)')}<br />
-      <a href={REPO} target="_blank" rel="noopener">{t('source code')}</a> · exercise data: hasaneyldrm/exercises-dataset (CC)
+      <a href="#/terms">{t('terms of service')}</a> · <a href="#/privacy">{t('privacy policy')}</a> · <a href={REPO} target="_blank" rel="noopener">{t('source code')}</a> · exercise data: hasaneyldrm/exercises-dataset (CC)
     </div>
   </div>
 }

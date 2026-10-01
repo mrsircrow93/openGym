@@ -143,7 +143,7 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         </Button>
         {mode === 'login' && <button type="button" className="linkbtn small" onClick={() => setMode('forgot')}>{t('Forgot your password?')}</button>}
         {mode === 'forgot' && <button type="button" className="linkbtn small" onClick={() => setMode('login')}>{t('Back to sign in')}</button>}
-        {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the terms of service and privacy policy. No card needed for the trial.')}</div>}
+        {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the')} <a href="#/terms">{t('terms of service')}</a> {t('and the')} <a href="#/privacy">{t('privacy policy')}</a>. {t('No card needed for the trial.')}</div>}
       </form>}
 
       {webauthnOK() && mode === 'login' && <>

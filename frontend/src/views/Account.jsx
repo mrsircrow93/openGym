@@ -93,7 +93,7 @@ export function Plans({ compact }) {
       <div className="dim small">{p.months === 1 ? t('per month') : t('{0} per month', fmt(p.perMonth))}</div>
     </button>)}
     {!data.payments && <div className="small dim" style={{ gridColumn: '1 / -1' }}>{t('Payments are not open yet — we will email you when they are.')}</div>}
-    {!compact && <div className="small dim" style={{ gridColumn: '1 / -1', lineHeight: 1.5 }}>{t('Prices include tax. Cancel any time from Settings; access runs to the end of the period you paid for.')}</div>}
+    {!compact && <div className="small dim" style={{ gridColumn: '1 / -1', lineHeight: 1.5 }}>{t('Prices include tax. Cancel any time from Settings; access runs to the end of the period you paid for.')} <a href="#/terms">{t('terms of service')}</a></div>}
   </div>
 }
 
