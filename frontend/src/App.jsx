@@ -9,6 +9,7 @@ import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
 import { startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
+import { Mark } from './components/Logo.jsx'
 import TabBar from './components/TabBar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Modals from './components/Modals.jsx'
@@ -35,7 +36,7 @@ function applyPrefs(theme, accent) {
   de.dataset.theme = theme === 'light' ? 'light' : 'dark'
   de.dataset.accent = ACCENTS[accent] ? accent : 'lime'
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#000000'
+  if (meta) meta.content = de.dataset.theme === 'light' ? '#f3f5f1' : '#121212'
 }
 
 function Shell() {
@@ -61,8 +62,8 @@ function Shell() {
   if (user && locked(user)) return <><div id="app" className="vfade"><ErrorBoundary><Paywall /></ErrorBoundary></div><Modals /><Toast /></>
   if (!ready && !authed) return (
     <div id="app">
-      <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', fontSize: 34, color: 'var(--label-3)' }}>
-        <Icon name="dumbbell" />
+      <div style={{ paddingTop: '44vh', display: 'flex', justifyContent: 'center', color: 'var(--acc)', opacity: .8 }}>
+        <Mark size={56} />
       </div>
     </div>
   )

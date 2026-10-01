@@ -6,6 +6,7 @@ import { t } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
+import Logo from '../components/Logo.jsx'
 import { Button, TextField, Segmented } from '../components/ui.jsx'
 import { getLang } from '../lib/i18n.js'
 
@@ -49,10 +50,7 @@ export default function Login() {
     try { const u = await passkeyLogin(); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') useUI.getState().toast(e.message || t('Sign-in failed')) }
   }
-  const head = <>
-    <div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="dumbbell" /></div>
-    <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.028em', margin: '10px 0 4px' }}>openGym</h1>
-  </>
+  const head = <Logo mark={72} word={36} style={{ margin: '0 0 12px' }} />
   const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
 
   // Static build: no backend — start straight into a local, on-device profile (boot() usually

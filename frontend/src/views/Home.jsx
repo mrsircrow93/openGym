@@ -90,7 +90,7 @@ export default function Home() {
     <div className="hdr" style={{ alignItems: 'center' }}>
       <div>
         <div className="eyebrow" style={{ marginBottom: 4 }}>{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-        <h1>{firstName ? t('Hi {0}', firstName) + '! 👋' : 'openGym'}</h1>
+        <h1>{firstName ? t('Hi {0}', firstName) + '! 👋' : 'VantixGym'}</h1>
       </div>
       <div className="row" style={{ gap: 8 }}>
         {streak > 0 && <button className="pill" onClick={() => calendarSheet()}><Icon name="flame" style={{ color: 'var(--orange)' }} />{t('{0} wk', streak)}</button>}

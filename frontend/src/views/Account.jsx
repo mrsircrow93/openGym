@@ -11,11 +11,12 @@ import { nav } from '../lib/nav.js'
 import { authVerify, authReset, billingPlans, billingCheckout, billingPortal, authResendVerify } from '../lib/api.js'
 import { daysLeft } from '../lib/entitlements.js'
 import Icon from '../components/Icon.jsx'
+import { Mark } from '../components/Logo.jsx'
 import { Button, TextField } from '../components/ui.jsx'
 
 const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
 const Head = ({ icon = 'dumbbell', title, sub }) => <>
-  <div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name={icon} /></div>
+  <div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}>{icon === 'dumbbell' ? <Mark size={64} /> : <Icon name={icon} />}</div>
   <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-.028em', margin: '10px 0 6px' }}>{title}</h1>
   {sub && <div className="muted" style={{ marginBottom: 24, lineHeight: 1.5 }}>{sub}</div>}
 </>

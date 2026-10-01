@@ -25,7 +25,7 @@
    cards a few points lighter, one lime accent. Depth comes from tonal layering, not lines. */
 :root {
   /* surfaces — dark is the default */
-  --bg:        #101312;
+  --bg:        #121212;
   --bg-el:     #151a18;   /* elevated backdrop (sheets, bars) */
   --surface:   #181e1c;   /* card / grouped-list fill */
   --surface-2: #202824;   /* pressed + nested fill */
@@ -43,14 +43,14 @@
   --hair:      .5px;
 
   /* system palette (iOS dark values) */
-  --blue:#5aa9ff; --green:#b8f34a; --red:#e87968; --orange:#ffb454;
+  --blue:#5aa9ff; --green:#d0ff52; --red:#e87968; --orange:#ffb454;
   --yellow:#ffd866; --teal:#7bc8b6; --indigo:#5e5ce6; --pink:#ff375f;
   --purple:#bf5af2; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
 
   /* accent (per-account, synced) */
   --acc:  var(--green);
-  --acc-2:#9fd93a;
-  --on-acc:#162006;
+  --acc-2:#b4e63a;
+  --on-acc:#121212;
   --acc-soft: color-mix(in srgb, var(--acc) 16%, transparent);
   --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
 
@@ -90,7 +90,7 @@
 }
 
 /* accents — Apple's system colours, so a recolour never looks off-system */
-:root[data-accent="lime"]  { --acc:var(--green);  --acc-2:#9fd93a; --on-acc:#162006 }
+:root[data-accent="lime"]  { --acc:var(--green);  --acc-2:#b4e63a; --on-acc:#121212 }
 :root[data-accent="sky"]   { --acc:var(--blue);   --acc-2:#0060df; --on-acc:#fff }
 :root[data-accent="orange"]{ --acc:var(--orange); --acc-2:#c76b00; --on-acc:#000 }
 :root[data-accent="violet"]{ --acc:var(--purple); --acc-2:#8944ab; --on-acc:#fff }
