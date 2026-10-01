@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><mask id="m"><rect width="100" height="100" fill="#fff"/>
+    <g fill="none" stroke="#000" stroke-width="3.4" stroke-linejoin="miter" stroke-miterlimit="8"><polyline points="13.1,32.3 42.0,90.0 82.6,16.1"/><polyline points="63.9,19.5 86.0,10.0 89.8,33.7"/></g></mask></defs>
+  <g fill="none" stroke="#D0FF52" stroke-width="12.5" stroke-linejoin="miter" stroke-miterlimit="8" mask="url(#m)"><polyline points="10.0,26.0 42.0,90.0 86.0,10.0"/><polyline points="58.4,21.8 86.0,10.0 90.8,39.6"/></g>
+</svg>

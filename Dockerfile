@@ -17,4 +17,6 @@ RUN npm run build
 FROM nginx:alpine
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+# marketing site (vantixgym.app) — plain static files, second server block in nginx.conf
+COPY website/ /usr/share/nginx/site
 # exercise media (img/gif) is mounted at runtime from the media volume
