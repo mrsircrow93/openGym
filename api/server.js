@@ -32,7 +32,8 @@ const MAX_BODY = 5 * 1024 * 1024;
 // SameSite=Lax already, this is the second lock. Non-browser clients (curl, payment webhooks)
 // send no Origin and pass. Add the mobile app's origin (capacitor://localhost, https://localhost)
 // via ALLOWED_ORIGINS (comma-separated) once the store build signs in.
-const ALLOWED_ORIGINS = new Set([ORIGIN, ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)]);
+// The Capacitor shells (store apps) load from capacitor://localhost (iOS) / https://localhost (Android).
+const ALLOWED_ORIGINS = new Set([ORIGIN, 'capacitor://localhost', 'https://localhost', 'http://localhost', ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)]);
 // Secure cookies require HTTPS; over plain http://localhost the flag would drop the cookie
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
 // AI features (natural-language set logging, coach insights) are entirely optional — unset
@@ -201,15 +202,20 @@ function verifySig(token) {
 // signing out the whole instance. Cookies minted before `sv` existed have no third field and are
 // read as version 0, matching a user who has never bumped — they stay valid until they expire.
 const sessionVersion = user => user.sv || 0;
-function makeSession(user) {
-  const exp = Date.now() + SESSION_DAYS * 86400000;
+function makeSession(user, days = SESSION_DAYS) {
+  const exp = Date.now() + days * 86400000;
   return sign(user.id + ':' + exp + ':' + sessionVersion(user));
 }
+// The store apps keep a bearer token in the app's own storage instead of a cookie (WebView
+// cookies don't survive reliably). Same signed payload, same `sv` revocation, longer life.
+const MOBILE_TOKEN_DAYS = 180;
+const withToken = (body, user, payload) => (body && body.client === 'mobile' ? { ...payload, token: makeSession(user, MOBILE_TOKEN_DAYS) } : payload);
 function readSession(req) {
   const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(c => {
     const i = c.indexOf('='); return i < 0 ? ['', ''] : [c.slice(0, i).trim(), c.slice(i + 1).trim()];
   }));
-  const tok = cookies.gymsid;
+  const auth = req.headers.authorization || '';
+  const tok = auth.startsWith('Bearer ') ? auth.slice(7).trim() : cookies.gymsid;
   if (!tok) return null;
   const payload = verifySig(tok);
   if (!payload) return null;
@@ -965,7 +971,7 @@ const routes = {
     saveDb();
     if (body.lang === 'en' || body.lang === 'es') { try { atomicWrite(stateFile(user.id), JSON.stringify({ lang: body.lang, _ts: Date.now() })); } catch {} }
     sendVerifyMail(user).catch(e => console.error('verify mail', e));
-    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, withToken(body, user, { user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/auth/login': async (req, res) => {
@@ -984,7 +990,7 @@ const routes = {
     if (user.deletedAt) delete user.deletedAt;
     user.lastLogin = nowISO();
     saveDb();
-    json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, withToken(body, user, { user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/auth/verify': async (req, res) => {
@@ -1035,7 +1041,7 @@ const routes = {
     clearFails(user.email);
     saveDb();
     sendEmail({ to: user.email, ...mail(userLang(user), 'passwordChanged', user.name) }).catch(() => {});
-    json(res, 200, { ok: true, user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, withToken(body, user, { ok: true, user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
   },
 
   'POST /api/auth/password': async (req, res) => {
@@ -1050,7 +1056,7 @@ const routes = {
     user.sv = sessionVersion(user) + 1;
     saveDb();
     if (user.email) sendEmail({ to: user.email, ...mail(userLang(user), 'passwordChanged', user.name) }).catch(() => {});
-    json(res, 200, { ok: true, user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
+    json(res, 200, withToken(body, user, { ok: true, user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
   },
 
   // Change email (password required), or add email + password to a passkey-only account.

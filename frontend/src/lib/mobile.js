@@ -12,6 +12,24 @@
 import { t } from './i18n.js'
 
 export const MOBILE = import.meta.env.VITE_MOBILE === '1'
+// Where the store app talks to. Baked in at build time (package.json build:mobile).
+export const API_BASE = (MOBILE && import.meta.env.VITE_API_BASE) ? String(import.meta.env.VITE_API_BASE).replace(/\/$/, '') : ''
+
+// Session token for the store app (the browser version uses a cookie). Kept in the app's own
+// sandboxed storage; loaded once at boot into memory so api() can attach it synchronously.
+let token = null
+const TOKEN_KEY = 'vx_session'
+export const getToken = () => token
+export async function loadToken() {
+  if (!MOBILE) return null
+  try { const { Preferences } = await import('@capacitor/preferences'); token = (await Preferences.get({ key: TOKEN_KEY })).value || null } catch { token = null }
+  return token
+}
+export async function setToken(t) {
+  token = t || null
+  if (!MOBILE) return
+  try { const { Preferences } = await import('@capacitor/preferences'); if (t) await Preferences.set({ key: TOKEN_KEY, value: t }); else await Preferences.remove({ key: TOKEN_KEY }) } catch { /* memory copy still works this session */ }
+}
 
 const FILE = 'opengym-state.json'
 

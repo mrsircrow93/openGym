@@ -835,6 +835,23 @@ export default {
   'Delete my account': 'Eliminar mi cuenta',
   'We sent a link to {0}. Tap here to send it again.': 'Enviamos un enlace a {0}. Toca aquí para reenviarlo.',
 
+  /* ---- health (store apps) ---- */
+  'Apple Health': 'Apple Salud',
+  'Health Connect': 'Health Connect',
+  'Health': 'Salud',
+  'Connect {0}': 'Conectar {0}',
+  'Connected': 'Conectado',
+  'Connected — {0} days of steps and {1} weigh-ins imported': 'Conectado — {0} días de pasos y {1} pesajes importados',
+  'Synced — {0} days of steps and {1} weigh-ins': 'Sincronizado — {0} días de pasos y {1} pesajes',
+  'Steps and weight, read-only': 'Pasos y peso, solo lectura',
+  'Health Connect is not installed — tap to get it': 'Health Connect no está instalado — toca para instalarlo',
+  '{0} connected': '{0} conectado',
+  'Last sync {0}': 'Última sincronización {0}',
+  'Sync now': 'Sincronizar ahora',
+  'Syncing…': 'Sincronizando…',
+  'Steps and body weight come in from {0} every time you open the app. Days from your phone replace manual entries; weights you typed are kept.': 'Los pasos y el peso entran desde {0} cada vez que abres la app. Los días del teléfono reemplazan los manuales; los pesos que escribiste se conservan.',
+  'Bring your steps and body weight in from {0} — the phone, your watch and your scale already count them.': 'Trae tus pasos y tu peso desde {0} — el teléfono, tu reloj y tu báscula ya los cuentan.',
+
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',
   'Choose your coach': 'Elige a tu coach',

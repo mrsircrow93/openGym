@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { api } from '../lib/api.js'
 import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
+import { loadToken, setToken } from '../lib/mobile.js'
 import { DEMO, DEMO_SEEDED, STATIC } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 import { refreshBilling } from '../lib/entitlements.js'
@@ -146,6 +147,7 @@ export const useStore = create((set, get) => {
 
     async signOut() {
       try { await get().pushState(); await api('/api/logout', { method: 'POST', body: '{}' }) } catch (e) { /* */ }
+      await setToken(null)
       clearLocalSession()
     },
 
@@ -173,14 +175,28 @@ export const useStore = create((set, get) => {
       // Mobile build: no backend either — restore from the file mirror (the durable copy;
       // localStorage may have been evicted since the last run) and go straight in.
       if (MOBILE) {
+        // Store app: the file mirror is the offline copy; the account lives on the server.
         const saved = await nativeLoad()
         const S = get().S
         if (saved && (!hasData(S) || (saved._ts || 0) >= (S._ts || 0))) {
           persist(Object.assign(clone(DEF), saved), false)
         } else if (hasData(S)) {
-          nativeSave(S)   // first run after an update from a file-less version: seed the mirror
+          nativeSave(S)
         }
-        get().setGuest(true)
+        const tok = await loadToken()
+        if (tok) {
+          try {
+            const me = await api('/api/me')
+            get().setUser(me.user)
+            refreshBilling()
+            await get().pullState()
+          } catch (e) {
+            if (e.status === 401) { await setToken(null); get().setUser(null) }
+            // any other error = offline: keep the cached user and data, work locally
+          }
+        } else if (get().user) {
+          get().setUser(null)   // token gone (reinstall): back to the sign-in screen
+        }
         syncReminder(get().S)
         set({ ready: true })
         return

@@ -1,20 +1,49 @@
 # Building the mobile app (iOS / Android)
 
-openGym ships in two flavors from the same codebase:
+VantixGym ships as native store apps from the same codebase (Capacitor shell, `VITE_MOBILE=1`).
+Since 2026-10-01 the store build is a real client of the hosted service:
 
-| | **Self-hosted** (this repo's default) | **Mobile app** (`VITE_MOBILE=1`) |
+| | **Web / PWA** (app.vantixgym.app) | **Store app** (`npm run build:mobile`) |
 |---|---|---|
-| Runs | in any browser, against your own server | natively on iPhone / Android (Capacitor shell) |
-| Accounts | passkey sign-in, one profile per person | none — the phone *is* the account |
-| Data | synced to your server, readable on desktop | stays on the device (file in the app's private storage) |
-| Reminders | Web Push from your server | native local notifications, no server involved |
-| Exercise media | served by your server (`img/`, `gif/`) | loaded from the jsDelivr CDN |
+| Accounts | email + password, passkey optional | same account, email + password (passkeys need associated domains — later) |
+| Session | HttpOnly cookie | bearer token from `/api/auth/*` with `client: "mobile"`, kept in `@capacitor/preferences`, 180 days, revoked by `sv` like cookies |
+| Data | synced to the server | synced to the server **and** mirrored to a file in the app sandbox (offline copy) |
+| AI, billing, paywall | server | server (same `/api`, base URL baked in via `VITE_API_BASE`) |
+| Reminders | Web Push | native local notifications |
+| Steps / weight | typed by hand | **Apple Health / Health Connect** (`capacitor-health`, read-only: steps + weight), Settings → Health |
+| Exercise media | served by nginx | jsDelivr CDN |
 
-The mobile flavor never talks to a backend: no sign-in screen, no sync, no telemetry.
-State is mirrored from `localStorage` into `opengym-state.json` in the app's private data
-directory on every change (iOS is allowed to evict WebView storage under pressure — the
-file mirror is the durable copy and is restored on launch). Backups go out through the
-OS share sheet instead of a browser download.
+Identifiers: app id `app.vantixgym.mobile`, name `VantixGym`, icons/splash generated from the
+brand mark (see `frontend/src/components/Logo.jsx`). The server allows the shells' origins
+(`capacitor://localhost`, `https://localhost`) for state-changing calls.
+
+## Health (Apple Health / Health Connect)
+
+- Plugin `capacitor-health@7`. Permissions requested: `READ_STEPS`, `READ_WEIGHT` only.
+- iOS: `App.entitlements` has the HealthKit capability; `Info.plist` has the two usage strings.
+  In Xcode the **HealthKit** capability must also be turned on for the bundle id in the Apple
+  developer portal (Signing & Capabilities → + HealthKit) the first time.
+- Android: manifest declares the two health permissions, the `<queries>` entry and the
+  rationale activity/alias the plugin needs. Health Connect must be installed on the phone
+  (Android 14+ has it built in); the Settings card sends older phones to the Play Store listing.
+- Sync: on launch and whenever the app returns to the foreground (`lib/health.js`). Days from
+  the phone are written with `src: 'health'` and win over manual steps; weights typed by hand
+  are never overwritten.
+
+## Store checklist (what the owner does)
+
+1. Apple Developer Program (US$99/yr) and Google Play Console (US$25 once). Enrol in Apple's
+   Small Business Program and Google's 15 % tier before launch.
+2. In-app subscriptions: Apple and Google require their own billing for digital subscriptions.
+   Plan: RevenueCat (`@revenuecat/purchases-capacitor`) feeding the same `tierUntil` on the user
+   record through `/api/billing/webhook` (provider `apple` / `google`). Not built yet — see
+   docs/BILLING.md. Until then the store build shows the paywall but cannot sell.
+3. Google Play: closed test with 12 testers for 14 days before production is unlocked.
+4. Listings: screenshots (6.7", 6.5", 5.5" iPhone; phone + 7" tablet Android), description,
+   privacy policy URL (`https://app.vantixgym.app/#/privacy`), data-safety form (email, health
+   data read-only, no ads/tracking), a test account with an active plan for the reviewers.
+5. Health data review notes: explain steps/weight are read to show them next to training and
+   for coaching; no data is written back; HealthKit data is never used for advertising.
 
 ## Prerequisites
 
@@ -29,9 +58,10 @@ OS share sheet instead of a browser download.
 ```sh
 cd frontend
 npm install
-npm run build:mobile        # VITE_MOBILE build + `cap sync` into android/ and ios/
+npm run build:mobile        # VITE_MOBILE + VITE_API_BASE build, `cap sync android`, `cap copy ios`
 
 npx cap open android        # opens Android Studio → run on emulator or device
+cd ios/App && pod install    # once per new plugin (CocoaPods: brew install cocoapods)
 npx cap open ios            # opens Xcode (Mac only) → set your signing team, then run
 ```
 

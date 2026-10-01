@@ -4,6 +4,7 @@ import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authReg
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
+import { MOBILE } from '../lib/mobile.js'
 import { useState, useRef, useEffect } from 'react'
 import Icon from '../components/Icon.jsx'
 import Logo from '../components/Logo.jsx'
@@ -55,7 +56,7 @@ export default function Login() {
 
   // Static build: no backend — start straight into a local, on-device profile (boot() usually
   // sets guest before this ever renders; this is the fallback if the app lands here).
-  if (STATIC) return (
+  if (STATIC && !MOBILE) return (
     <div className="narrow" style={wrap}>
       {head}
       <div className="muted" style={{ marginBottom: 30 }}>{t('Your workouts. Your weights. On this device.')}</div>
@@ -146,7 +147,7 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the')} <a href="#/terms">{t('terms of service')}</a> {t('and the')} <a href="#/privacy">{t('privacy policy')}</a>. {t('No card needed for the trial.')}</div>}
       </form>}
 
-      {webauthnOK() && mode === 'login' && <>
+      {webauthnOK() && !MOBILE && mode === 'login' && <>
         <div className="dim small" style={{ margin: '18px 0 8px' }}>{t('or')}</div>
         <Button icon="person" onClick={signInPasskey}>{t('Sign in with {0}', BIO)}</Button>
       </>}

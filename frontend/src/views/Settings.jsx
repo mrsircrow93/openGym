@@ -14,6 +14,7 @@ import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { COACHES } from '../lib/coach.js'
 import { getAIKey, setAIKey, getAIModel, setAIModel, hasUserKey, AI_MODELS, testAIKey } from '../lib/ai.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
+import { healthSupported, healthAvailable, installHealthConnect, requestHealth, syncHealth, IS_IOS_SHELL } from '../lib/health.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
@@ -81,8 +82,23 @@ export default function Settings() {
     </div>
 
     {/* ---------- account (demo and mobile builds have nothing to sign in to) ---------- */}
-    <Section title={MOBILE || STATIC ? t('Your data') : DEMO ? t('Demo') : t('Account')}>
-      {MOBILE || STATIC ? <>
+    <Section title={user ? t('Account') : MOBILE || STATIC ? t('Your data') : DEMO ? t('Demo') : t('Account')}>
+      {user ? <>
+        <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={user.email ? user.email + (user.emailVerified ? '' : ' · ' + t('not confirmed')) : t('Signed in with passkey — data syncs to this profile.')} />
+        {user.email && !user.emailVerified && <Row icon="bell" iconTint="var(--orange)" title={t('Confirm your email')} subtitle={t('Tap to send the link again.')} accessory="chevron"
+          onClick={() => authResendVerify().then(() => toast(t('Sent — check your inbox'))).catch(e => toast(e.message))} />}
+        {user.billing?.enabled && <Row icon="crown" iconTint="var(--yellow)" title={t('Subscription')} subtitle={subscriptionLabel(user.billing)} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />)} />}
+        <Row icon="key" iconTint="var(--blue)" title={user.hasPassword ? t('Change password') : t('Add email and password')} accessory="chevron"
+          onClick={() => useUI.getState().openSheet(close => <PasswordSheet user={user} close={close} />)} />
+        {webauthnOK() && !MOBILE && !user.hasPasskey && <Row icon="person" iconTint="var(--acc)" title={t('Sign in with {0} next time', BIO)} subtitle={t('Adds a passkey to this account.')} accessory="chevron"
+          onClick={() => passkeyAdd().then(() => refreshMe()).then(() => toast(t('Passkey added'))).catch(e => { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message) })} />}
+        {user.admin && <Row icon="wrench" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
+        <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={() => confirmSheet({ title: t('Sign out?'), message: t('Your data is synced to your profile first, then cleared from this device.'), confirmText: t('Sign out'), danger: true, onConfirm: () => { signOut(); nav('/home') } })} />
+        <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+        {!user.admin && <Row icon="trash" iconTint="var(--red)" title={t('Delete account')} subtitle={t('Everything is erased after 30 days.')} danger
+          onClick={() => useUI.getState().openSheet(close => <DeleteSheet user={user} close={close} />)} />}
+      </> : MOBILE || STATIC ? <>
         <Row icon="lock" iconTint="var(--acc)" title={t('All data stays on this device')} subtitle={t('No account, no cloud — back it up anytime with Export below.')} />
         <Row icon="rocket" iconTint="var(--indigo)" title={t('Sync across devices')} subtitle={t('Passkey sign-in and cross-device sync need the openGym backend.')} accessory="chevron"
           onClick={() => window.open(REPO, '_blank', 'noopener')} />
@@ -92,21 +108,6 @@ export default function Settings() {
           onClick={() => confirmSheet({ title: t('Reset demo data?'), message: t('Puts the example plan, workouts and weigh-ins back the way they started.'), confirmText: t('Reset'), onConfirm: () => { resetDemo(); nav('/home'); toast(t('Demo data reset')) } })} />
         <Row icon="rocket" iconTint="var(--indigo)" title={t('Self-host openGym')} subtitle={t('Passkey sign-in, sync across your devices, your own data.')} accessory="chevron"
           onClick={() => window.open(REPO, '_blank', 'noopener')} />
-      </> : user ? <>
-        <Row icon="personCircle" iconTint="var(--grey)" title={user.name} subtitle={user.email ? user.email + (user.emailVerified ? '' : ' · ' + t('not confirmed')) : t('Signed in with passkey — data syncs to this profile.')} />
-        {user.email && !user.emailVerified && <Row icon="bell" iconTint="var(--orange)" title={t('Confirm your email')} subtitle={t('Tap to send the link again.')} accessory="chevron"
-          onClick={() => authResendVerify().then(() => toast(t('Sent — check your inbox'))).catch(e => toast(e.message))} />}
-        {user.billing?.enabled && <Row icon="crown" iconTint="var(--yellow)" title={t('Subscription')} subtitle={subscriptionLabel(user.billing)} accessory="chevron"
-          onClick={() => useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />)} />}
-        <Row icon="key" iconTint="var(--blue)" title={user.hasPassword ? t('Change password') : t('Add email and password')} accessory="chevron"
-          onClick={() => useUI.getState().openSheet(close => <PasswordSheet user={user} close={close} />)} />
-        {webauthnOK() && !user.hasPasskey && <Row icon="person" iconTint="var(--acc)" title={t('Sign in with {0} next time', BIO)} subtitle={t('Adds a passkey to this account.')} accessory="chevron"
-          onClick={() => passkeyAdd().then(() => refreshMe()).then(() => toast(t('Passkey added'))).catch(e => { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message) })} />}
-        {user.admin && <Row icon="wrench" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
-        <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={() => confirmSheet({ title: t('Sign out?'), message: t('Your data is synced to your profile first, then cleared from this device.'), confirmText: t('Sign out'), danger: true, onConfirm: () => { signOut(); nav('/home') } })} />
-        <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
-        {!user.admin && <Row icon="trash" iconTint="var(--red)" title={t('Delete account')} subtitle={t('Everything is erased after 30 days.')} danger
-          onClick={() => useUI.getState().openSheet(close => <DeleteSheet user={user} close={close} />)} />}
       </> : webauthnOK() ? <>
         <Row icon="sparkles" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
         <Row icon="person" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={signInHere} />
@@ -165,6 +166,7 @@ export default function Settings() {
     </Section>
 
     {(user || MOBILE) && <NotificationsCard S={S} update={update} toast={toast} />}
+    {healthSupported() && <HealthCard S={S} update={update} toast={toast} />}
 
     <AICard toast={toast} user={user} />
 
@@ -284,9 +286,9 @@ function AICard({ toast, user }) {
   // Does this server pay for AI itself? Then the whole section is operator business: customers
   // just get the features, with nothing to configure or read. null = not known yet, so the
   // section doesn't flash in and out while /api/config loads.
-  const [serverAi, setServerAi] = useState(STATIC || MOBILE ? false : null)
+  const [serverAi, setServerAi] = useState(STATIC ? false : null)
   const [showKey, setShowKey] = useState(false)
-  useEffect(() => { if (!STATIC && !MOBILE) api('/api/config').then(c => setServerAi(!!c.ai)).catch(() => setServerAi(false)) }, [])
+  useEffect(() => { if (!STATIC) api('/api/config').then(c => setServerAi(!!c.ai)).catch(() => setServerAi(false)) }, [])
   const saved = getAIKey()
   const has = hasUserKey()
   const dirty = key.trim() !== saved
@@ -323,7 +325,7 @@ function AICard({ toast, user }) {
     </div>}
     {has && <SelectRow icon="sparkles" iconTint="var(--violet)" title={t('AI model')}
       value={model} onChange={changeModel} options={AI_MODELS} />}
-    {!has && !STATIC && !MOBILE && <AIUsageRow />}
+    {!has && !STATIC && <AIUsageRow />}
   </Section>
 }
 
@@ -517,4 +519,40 @@ function DeleteSheet({ user, close }) {
       <Button type="submit" variant="danger" disabled={busy || (user.hasPassword && !pw)}>{busy ? t('Deleting…') : t('Delete my account')}</Button>
     </form>
   </>
+}
+
+/* ---------- Apple Health / Health Connect (store builds) ---------- */
+function HealthCard({ S, update, toast }) {
+  const [busy, setBusy] = useState(false)
+  const [avail, setAvail] = useState(null)
+  useEffect(() => { healthAvailable().then(setAvail) }, [])
+  const name = IS_IOS_SHELL ? t('Apple Health') : t('Health Connect')
+  const on = !!S.health?.on
+  const connect = async () => {
+    setBusy(true)
+    try {
+      if (avail === false && !IS_IOS_SHELL) { await installHealthConnect(); setBusy(false); return }
+      await requestHealth()
+      const r = await syncHealth(update)
+      toast(r ? t('Connected — {0} days of steps and {1} weigh-ins imported', r.days, r.weights) : t('Connected'))
+    } catch (e) { toast(e.message || t('Could not connect')) }
+    setBusy(false)
+  }
+  const sync = async () => {
+    setBusy(true)
+    try { const r = await syncHealth(update); toast(t('Synced — {0} days of steps and {1} weigh-ins', r.days, r.weights)) }
+    catch (e) { toast(e.message || t('Something went wrong — try again')) }
+    setBusy(false)
+  }
+  const off = () => update(s => { s.health = { ...(s.health || {}), on: false } })
+  return <Section title={t('Health')} footer={on
+    ? t('Steps and body weight come in from {0} every time you open the app. Days from your phone replace manual entries; weights you typed are kept.', name)
+    : t('Bring your steps and body weight in from {0} — the phone, your watch and your scale already count them.', name)}>
+    {!on && <Row icon="heart" iconTint="var(--red)" title={t('Connect {0}', name)} subtitle={avail === false && !IS_IOS_SHELL ? t('Health Connect is not installed — tap to get it') : t('Steps and weight, read-only')} accessory="chevron" onClick={busy ? undefined : connect} />}
+    {on && <>
+      <Row icon="heart" iconTint="var(--red)" title={t('{0} connected', name)} subtitle={S.health?.at ? t('Last sync {0}', new Date(S.health.at).toLocaleString()) : ''} value={t('On')} />
+      <Row icon="reset" iconTint="var(--blue)" title={busy ? t('Syncing…') : t('Sync now')} accessory="chevron" onClick={busy ? undefined : sync} />
+      <Row icon="xmark" iconTint="var(--grey)" title={t('Disconnect')} onClick={off} />
+    </>}
+  </Section>
 }

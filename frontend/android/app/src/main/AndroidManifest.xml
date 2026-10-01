@@ -20,6 +20,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Health Connect: rationale screens (Android 13 and 14+), required by the capacitor-health plugin -->
+        <activity android:name="com.fit_up.health.capacitor.PermissionsRationaleActivity" android:exported="true">
+            <intent-filter><action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" /></intent-filter>
+        </activity>
+        <activity-alias android:name="ViewPermissionUsageActivity" android:exported="true"
+            android:targetActivity="com.fit_up.health.capacitor.PermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -30,6 +43,10 @@
     </application>
 
     <!-- Permissions -->
+    <!-- Health Connect (steps + weight only — every declared permission shows on the consent screen) -->
+    <queries><package android:name="com.google.android.apps.healthdata" /></queries>
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Workout-day reminder: lets the local-notifications plugin fire at the exact minute

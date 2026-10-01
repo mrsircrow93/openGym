@@ -29,6 +29,8 @@ import Admin from './views/Admin.jsx'
 import { Verify, Reset, Paywall } from './views/Account.jsx'
 import Legal from './views/Legal.jsx'
 import { locked } from './lib/entitlements.js'
+import { MOBILE } from './lib/mobile.js'
+import { syncHealth } from './lib/health.js'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -47,6 +49,15 @@ function Shell() {
   const isGuest = useStore(s => s.isGuest())
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useEffect(() => { setNav(navigate) }, [navigate])
+  // Store app: refresh steps/weight from the phone's health store on launch and whenever the
+  // app comes back to the foreground (quietly — the Settings card has the interactive path).
+  useEffect(() => {
+    if (!MOBILE || !user || !S.health?.on) return
+    const run = () => { if (document.visibilityState === 'visible') syncHealth(useStore.getState().update).catch(() => {}) }
+    run()
+    document.addEventListener('visibilitychange', run)
+    return () => document.removeEventListener('visibilitychange', run)
+  }, [MOBILE, !!user, !!S.health?.on])
   useEffect(() => { applyPrefs(S.theme, S.accent) }, [S.theme, S.accent])
   useEffect(() => { setLang(S.lang || 'en') }, [S.lang])
   useEffect(() => { document.documentElement.lang = S.lang || 'en' }, [langV, S.lang])

@@ -1,5 +1,6 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
 import { t } from './i18n.js'
+import { MOBILE, API_BASE, getToken, setToken } from './mobile.js'
 import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan, directRecipes } from './ai.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
@@ -8,7 +9,11 @@ export const VAULT = IS_APPLE ? 'iCloud Keychain' : IS_ANDROID ? 'Google Passwor
 export const webauthnOK = () => !!(window.PublicKeyCredential && navigator.credentials)
 
 export async function api(path, opts) {
-  const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts))
+  const headers = { 'Content-Type': 'application/json' }
+  const tok = getToken()
+  if (tok) headers.Authorization = 'Bearer ' + tok
+  const r = await fetch(API_BASE + path, Object.assign({ headers }, opts))
+  if (r.status === 401 && tok && path === '/api/me') setToken(null)   // token revoked or expired: forget it
   // parsed with a reviver that drops __proto__/constructor keys: replies are merged into state
   // with Object.assign, which would otherwise honour them
   const data = await r.text().then(s => (s ? JSON.parse(s, (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v) : {})).catch(() => ({}))
@@ -162,13 +167,15 @@ export async function aiRecipes(body) {
 
 /* ---------- email + password accounts, subscription (docs/ACCOUNTS.md, BILLING.md) ---------- */
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) })
-export const authRegister = (email, password, name, code, lang) => post('/api/auth/register', { email, password, name, code: code || '', lang }).then(r => r.user)
-export const authLogin = (email, password) => post('/api/auth/login', { email, password }).then(r => r.user)
+// The store app asks for a bearer token with every sign-in shaped call and keeps it.
+const authPost = (path, body) => post(path, MOBILE ? { ...body, client: 'mobile' } : body).then(async r => { if (r.token) await setToken(r.token); return r })
+export const authRegister = (email, password, name, code, lang) => authPost('/api/auth/register', { email, password, name, code: code || '', lang }).then(r => r.user)
+export const authLogin = (email, password) => authPost('/api/auth/login', { email, password }).then(r => r.user)
 export const authVerify = token => post('/api/auth/verify', { token })
 export const authResendVerify = () => post('/api/auth/resend-verify')
 export const authForgot = email => post('/api/auth/forgot', { email })
-export const authReset = (token, password) => post('/api/auth/reset', { token, password })
-export const authChangePassword = (current, next) => post('/api/auth/password', { current, next })
+export const authReset = (token, password) => authPost('/api/auth/reset', { token, password })
+export const authChangePassword = (current, next) => authPost('/api/auth/password', { current, next })
 export const authChangeEmail = (email, password) => post('/api/auth/email', { email, password })
 export const deleteAccount = password => api('/api/account', { method: 'DELETE', body: JSON.stringify({ password: password || '' }) })
 export const fetchMe = () => api('/api/me').then(r => r.user)
