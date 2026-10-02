@@ -99,6 +99,7 @@ export default function Plan() {
     </>}
     <div className="row" style={{ gap: 8, marginTop: 10 }}>
       <Button size="sm" icon="plus" style={{ flex: 1 }} onClick={addRoutine}>{t('Create a routine by hand')}</Button>
+      <Button size="sm" icon="list" style={{ flex: 1 }} onClick={() => nav('/library')}>{t('All exercises')}</Button>
       {!S.routines.length && <Button size="sm" style={{ flex: 1 }} onClick={loadStarterPlan}>{t('Example gym plan (barbell)')}</Button>}
     </div>
 

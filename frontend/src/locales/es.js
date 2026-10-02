@@ -1031,6 +1031,9 @@ export default {
 
   '{0} suggestion(s) didn’t match your equipment and were left out — tap “Show me another option” if a routine looks thin.': '{0} sugerencia(s) no encajaban con tu equipo y se dejaron fuera — toca “Enséñame otra opción” si una rutina se ve corta.',
   'Example gym plan (barbell)': 'Plan de ejemplo de gimnasio (barra)',
+  'Food': 'Comida',
+  'Preferences': 'Preferencias',
+  'Advanced: backups, import, data': 'Avanzado: respaldos, importar, datos',
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',
   'Choose your coach': 'Elige a tu coach',

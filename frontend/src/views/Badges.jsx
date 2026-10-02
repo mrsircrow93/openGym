@@ -7,6 +7,7 @@ import { computeBadges, CATS, CAT_NAME, latestInCat, nextInCat } from '../lib/ba
 import Badge from '../components/Badge.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+import Confetti from '../components/Confetti.jsx'
 
 // Achievements: one card per category with the latest badge earned (or the next one to get),
 // and a sheet per category listing every badge, locked ones with progress.
@@ -70,11 +71,12 @@ export function NewBadgesSheet({ ids, close }) {
   // Recomputed at render so names come out in the current language.
   const S = useStore(s => s.S)
   const list = computeBadges(S).filter(b => ids.includes(b.id))
-  return <div style={{ textAlign: 'center' }}>
+  return <div style={{ textAlign: 'center' }} className="celebrate">
+    <Confetti />
     <div className="eyebrow acc" style={{ marginBottom: 8 }}>{t(list.length === 1 ? 'New achievement' : 'New achievements')}</div>
     <div className="row" style={{ justifyContent: 'center', gap: 14, flexWrap: 'wrap', margin: '8px 0 12px' }}>
-      {list.slice(0, 3).map(b => <div key={b.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, maxWidth: 120 }}>
-        <Badge badge={b} size={96} />
+      {list.slice(0, 3).map((b, i) => <div key={b.id} className="badge-pop" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, maxWidth: 120, animationDelay: (i * 160) + 'ms' }}>
+        <div className="badge-glow"><Badge badge={b} size={104} /></div>
         <div style={{ fontWeight: 700, lineHeight: 1.2 }}>{b.name}</div>
       </div>)}
     </div>
