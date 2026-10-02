@@ -1,6 +1,19 @@
 import { useEffect, useRef } from 'react'
 import { useUI } from '../store/useUI.js'
 
+// Every scrollable box between the touch target and the sheet is at its top (or there is none).
+function innerAtTop(target, root) {
+  let n = target
+  while (n && n !== root) {
+    if (n.nodeType === 1) {
+      const oy = getComputedStyle(n).overflowY
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1 && n.scrollTop > 0) return false
+    }
+    n = n.parentNode
+  }
+  return true
+}
+
 // One bottom sheet (or centered dialog) with swipe-to-dismiss.
 function Sheet({ sheet }) {
   const { closeSheet } = useUI()
@@ -15,13 +28,15 @@ function Sheet({ sheet }) {
       drag.current = { startY: null, delta: 0 }
       return
     }
-    drag.current = { startY: el.scrollTop <= 0 ? e.touches[0].clientY : null, delta: 0 }
+    // Only a drag that starts with every scroll area at its top may pull the sheet down. A
+    // gesture inside a scrolled chat or list belongs to that list (the coach's long answers).
+    drag.current = { startY: el.scrollTop <= 0 && innerAtTop(e.target, el) ? e.touches[0].clientY : null, delta: 0 }
   }
   const onTouchMove = e => {
     const el = ref.current, d = drag.current
     if (d.startY === null) return
     d.delta = e.touches[0].clientY - d.startY
-    if (d.delta > 0 && el.scrollTop <= 0) {
+    if (d.delta > 0 && el.scrollTop <= 0 && innerAtTop(e.target, el)) {
       e.preventDefault()
       el.style.transition = 'none'
       el.style.transform = `translateY(${d.delta}px)`
