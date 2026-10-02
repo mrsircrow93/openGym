@@ -869,6 +869,28 @@ export default {
   'Days earned': 'Días ganados',
   'Loading…': 'Cargando…',
 
+  /* ---- plan (plain-language redesign) ---- */
+  'My plan': 'Mi plan',
+  '{0} workouts a week': '{0} entrenamientos a la semana',
+  'and': 'y',
+  'Done for today — well done!': 'Hecho por hoy — ¡bien!',
+  'Train again': 'Entrenar otra vez',
+  'Start today’s workout': 'Empezar el entrenamiento de hoy',
+  'Do a different workout today': 'Hacer otro entrenamiento hoy',
+  'Nothing planned. Recover well — or pick a workout if you feel like it.': 'No hay nada planeado. Recupérate bien — o elige un entrenamiento si te apetece.',
+  'Your week': 'Tu semana',
+  'Change': 'Cambiar',
+  'Tap “Change” to put a workout on a day or make it a rest day.': 'Toca “Cambiar” para poner un entrenamiento en un día o dejarlo de descanso.',
+  'Every {0}': 'Cada {0}',
+  'Not on the week yet': 'Aún sin día asignado',
+  'See exercises': 'Ver ejercicios',
+  'Let the trainer build your week, load a ready-made plan, or create one by hand.': 'Deja que el entrenador arme tu semana, carga un plan listo o crea una rutina a mano.',
+  'Create a routine by hand': 'Crear una rutina a mano',
+  'Change my plan': 'Cambiar mi plan',
+  'Want us to build your plan?': '¿Quieres que te armemos el plan?',
+  'Different days, equipment or goal: answer again and the week is rebuilt.': 'Otros días, equipo u objetivo: responde de nuevo y se rearma la semana.',
+  'Five quick questions and your week is ready.': 'Cinco preguntas rápidas y tu semana queda lista.',
+
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',
   'Choose your coach': 'Elige a tu coach',

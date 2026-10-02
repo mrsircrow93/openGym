@@ -1070,3 +1070,14 @@ h4.sec{
 .lang-pick button.on{background:var(--surface);color:var(--label)}
 .ref-code{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px;border-radius:16px;background:var(--acc-soft);color:var(--acc);font-size:28px;font-weight:800;letter-spacing:.18em;font-variant-numeric:tabular-nums}
 .ref-code .icn{font-size:18px;letter-spacing:0}
+/* ---------------------------------------------------------------- plan -- */
+.plan-week{background:var(--surface);border-radius:var(--r-card);overflow:hidden}
+.plan-day{display:grid;grid-template-columns:96px 1fr auto;align-items:center;gap:10px;padding:13px 14px;border-top:1px solid var(--sep)}
+.plan-day:first-child{border-top:0}
+.plan-day.today{background:color-mix(in srgb,var(--acc) 7%,var(--surface))}
+.plan-day-n{font-weight:600;font-size:16px;display:flex;flex-direction:column;gap:2px}
+.plan-today{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--acc)}
+.plan-day-r{font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plan-day-btn{padding:8px 14px;border-radius:999px;background:var(--surface-2);color:var(--acc);font-weight:700;font-size:14px}
+.plan-day-btn:active{background:var(--surface-3)}
+.plan-routine .avatar-l{font-size:22px}

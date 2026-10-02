@@ -1,17 +1,39 @@
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { DAYN, uid, exCount, fmtDate } from '../lib/format.js'
+import { DAYN, uid, exCount, fmtDate, todayISO } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { dayAssignSheet, loadStarterPlan, planToolsSheet, deleteRoutine, startFlow } from '../sheets.jsx'
+import { dayAssignSheet, dayOverrideSheet, loadStarterPlan, planToolsSheet, startFlow } from '../sheets.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
-import SwipeRow from '../components/SwipeRow.jsx'
+import { effectiveRoutine, modeOf } from '../lib/history.js'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
-import { DEFAULT_GLYPH } from '../lib/glyphs.js'
-import { exOr } from '../lib/exercises.js'
+import { DEFAULT_GLYPH, glyphOf } from '../lib/glyphs.js'
+import { exOr, isCardio } from '../lib/exercises.js'
 
-// Layout follows design/sleek/03-plan.png: the AI builder as the hero, then one card per
-// routine (letter, day, last done, first exercises), then the week grid to move days around.
+// Plan, written for everyone: what's on today (one big button), the week in plain rows with a
+// visible "Change" on each day, then the routines as cards with words instead of letters —
+// which muscles, how long, when you last did it — and visible buttons instead of swipe
+// gestures. The trainer sits at the bottom as help, not as the first thing you must decide.
+
+// Rough session length: strength sets ~2.5 min each (work + rest), cardio by its minutes.
+export function routineMinutes(r) {
+  let min = 0
+  for (const cfg of r.ex || []) {
+    if (isCardio(cfg.id) || modeOf(cfg) === 'cardio') min += (cfg.sets || 1) * (cfg.min || 20)
+    else min += (cfg.sets || 3) * 2.5
+  }
+  return Math.max(5, Math.round(min / 5) * 5)
+}
+// "Pecho, hombros y brazos" — body parts of the routine, in the person's language.
+export function routineMuscles(r) {
+  const seen = []
+  for (const cfg of r.ex || []) { const bp = exOr(cfg.id).bp; if (bp && !seen.includes(bp)) seen.push(bp) }
+  const names = seen.slice(0, 3).map(bp => t(bp))
+  if (!names.length) return ''
+  const txt = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' ' + t('and') + ' ' + names[names.length - 1]
+  return txt.charAt(0).toUpperCase() + txt.slice(1)
+}
+
 export default function Plan() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -22,77 +44,93 @@ export default function Plan() {
     update(s => { s.routines.push(r) })
     nav('/plan/r/' + r.id)
   }
+  const today = todayISO()
+  const todayDow = new Date().getDay()
+  const todayRoutine = effectiveRoutine(S, today)
+  const doneToday = S.workouts.some(w => w.d === today)
   const daysPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
   const dayOf = r => { const d = Object.keys(S.week).find(k => S.week[k] === r.id); return d == null ? null : t(DAYN[+d]) }
   const lastDone = r => { const w = [...S.workouts].reverse().find(w => w.routineId === r.id || w.name === r.name); return w ? w.d : null }
+  const onToday = () => { if (S.active) nav('/workout'); else if (todayRoutine) startFlow(todayRoutine.id); else dayOverrideSheet(today) }
 
   return <>
     <div className="hdr">
-      <div><h1>{t('My routines')}</h1><div className="sub">{S.routines.length ? t('{0} routines · {1} days a week', S.routines.length, daysPerWeek) : t('Your weekly routine')}</div></div>
-      <div className="row" style={{ gap: 6 }}>
-        <button className="iconbtn" onClick={planToolsSheet} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
-        <button className="iconbtn on-ss" onClick={addRoutine} aria-label={t('New')} title={t('New')}><Icon name="plus" /></button>
-      </div>
+      <div><h1>{t('My plan')}</h1><div className="sub">{S.routines.length ? t('{0} workouts a week', daysPerWeek) : t('Your weekly routine')}</div></div>
+      <button className="iconbtn" onClick={planToolsSheet} aria-label={t('Share your plan')} title={t('Share your plan')}><Icon name="upload" /></button>
     </div>
 
-    <div className="card hero">
-      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <span className="pill acc"><Icon name="sparkles" />{S.trainer ? t('Personal trainer') : t('New')}</span>
-        <span className="small" style={{ color: 'var(--acc)', fontWeight: 600 }}>{S.trainer ? (S.trainer.split || t('Your plan')) : t('Personalised routines')}</span>
-      </div>
-      <div className="big" style={{ fontSize: 24 }}>{S.trainer ? t('Adjust my plan') : t('Build my routine for me')}</div>
-      <div className="muted small" style={{ margin: '4px 0 14px', lineHeight: 1.45 }}>{S.trainer ? t('Change your days, equipment or goal and the trainer rebuilds the week.') : t('Answer four quick questions and we build a plan around your equipment and goal.')}</div>
-      <Button variant="primary" size="sm" trailingIcon="chevronRight" onClick={trainerSheet}>{S.trainer ? t('Rebuild or tweak') : t('Start questionnaire')}</Button>
-    </div>
-
-    <div className="cols"><div>
-      <div className="row between" style={{ marginTop: 18, marginBottom: 10 }}>
-        <div className="eyebrow">{t('Your routines')}</div>
-        {S.routines.length > 0 && <span className="dim small">{t('Swipe for options')}</span>}
-      </div>
-      {S.routines.length ? <div className="list">{S.routines.map((r, i) => {
-        const day = dayOf(r), last = lastDone(r)
-        const names = r.ex.slice(0, 3).map(e => exOr(e.id).n)
-        return <SwipeRow key={r.id} actions={[
-          { icon: 'pencil', label: t('Edit'), onClick: () => nav('/plan/r/' + r.id) },
-          { icon: 'trash', label: t('Delete'), danger: true, onClick: () => deleteRoutine(r.id) }
-        ]}>
-          <div className="item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, padding: 14 }} onClick={() => nav('/plan/r/' + r.id)}>
-            <div className="row" style={{ gap: 12 }}>
-              <span className="avatar-l">{String.fromCharCode(65 + (i % 26))}</span>
-              <div className="grow">
-                <div className="tt" style={{ fontWeight: 700, fontSize: 17, textTransform: 'capitalize' }}>{r.name}</div>
-                <div className="ss">{exCount(r.ex.length)}</div>
-                {last && <div className="small" style={{ color: 'var(--acc)', marginTop: 2 }}>{t('Last time: {0}', fmtDate(last, true))}</div>}
-              </div>
-              <div className="row" style={{ gap: 8, flex: 'none' }}>
-                {day && <span className="pill">{day}</span>}
-                {r.ex.length > 0 && <button className="iconbtn on-ss" aria-label={t('Start')} onClick={e => { e.stopPropagation(); startFlow(r.id) }}><Icon name="play" /></button>}
-              </div>
-            </div>
-            {names.length > 0 && <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-              {names.map((n, k) => <span key={k} className="tag">{n}</span>)}
-              {r.ex.length > 3 && <span className="tag nocap">+{r.ex.length - 3} {t('more')}</span>}
-            </div>}
-          </div>
-        </SwipeRow>
-      })}</div> : <>
-        <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Create one or load the starter plan.')}</div>
-        <Button onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
-        <div style={{ height: 8 }} /><Button variant="tinted" icon="plus" onClick={addRoutine}>{t('Build my own')}</Button>
+    {/* ---- today ---- */}
+    {S.routines.length > 0 && <div className="card hero">
+      <div className="eyebrow acc" style={{ marginBottom: 6 }}>{t('Today')} · {t(DAYN[todayDow])}</div>
+      {todayRoutine ? <>
+        <div className="big" style={{ fontSize: 26, textTransform: 'capitalize' }}>{todayRoutine.name}</div>
+        <div className="muted small" style={{ margin: '4px 0 12px' }}>{[exCount(todayRoutine.ex.length), '~' + routineMinutes(todayRoutine) + ' min', routineMuscles(todayRoutine)].filter(Boolean).join(' · ')}</div>
+        {doneToday && !S.active && <div className="small" style={{ color: 'var(--acc)', marginBottom: 10 }}><Icon name="checkCircle" /> {t('Done for today — well done!')}</div>}
+        <Button variant="primary" icon={S.active ? 'play' : 'dumbbell'} onClick={onToday}>{S.active ? t('Continue workout') : doneToday ? t('Train again') : t('Start today’s workout')}</Button>
+        <Button variant="ghost" className="dim" size="sm" style={{ marginTop: 6 }} onClick={() => dayOverrideSheet(today)}>{t('Do a different workout today')}</Button>
+      </> : <>
+        <div className="big" style={{ fontSize: 26 }}>{t('Rest day')}</div>
+        <div className="muted small" style={{ margin: '4px 0 12px' }}>{t('Nothing planned. Recover well — or pick a workout if you feel like it.')}</div>
+        <Button variant="tinted" icon="dumbbell" onClick={() => dayOverrideSheet(today)}>{t('Train anyway')}</Button>
       </>}
-    </div><div>
-      <div className="eyebrow" style={{ margin: '22px 0 10px' }}>{t('Week schedule')}</div>
-      <div className="list" style={{ display: 'flex', flexDirection: 'column', gap: 0, background: 'var(--surface)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
+    </div>}
+
+    {/* ---- the week ---- */}
+    {S.routines.length > 0 && <>
+      <div className="eyebrow" style={{ margin: '22px 0 10px' }}>{t('Your week')}</div>
+      <div className="plan-week">
         {[1, 2, 3, 4, 5, 6, 0].map(d => {
           const r = S.routines.find(x => x.id === S.week[d])
-          return <button key={d} className="lrow tap" onClick={() => dayAssignSheet(d)}>
-            <span className="lrow-m"><span className="lrow-t">{t(DAYN[d])}</span></span>
-            {r ? <span className="pill acc" style={{ textTransform: 'capitalize' }}>{r.name}</span> : <span className="dim small">{t('Rest')}</span>}
-            <Icon name="chevronRight" className="lrow-c" />
-          </button>
+          const isToday = d === todayDow
+          return <div key={d} className={'plan-day' + (isToday ? ' today' : '')}>
+            <div className="plan-day-n">{t(DAYN[d])}{isToday && <span className="plan-today">{t('Today')}</span>}</div>
+            <div className="plan-day-r" style={r ? { textTransform: 'capitalize' } : undefined}>{r ? r.name : <span className="dim">{t('Rest')}</span>}</div>
+            <button className="plan-day-btn" onClick={() => dayAssignSheet(d)}>{t('Change')}</button>
+          </div>
         })}
       </div>
-    </div></div>
+      <div className="small dim" style={{ marginTop: 8 }}>{t('Tap “Change” to put a workout on a day or make it a rest day.')}</div>
+    </>}
+
+    {/* ---- routines ---- */}
+    <div className="eyebrow" style={{ margin: '24px 0 10px' }}>{t('Your routines')}</div>
+    {S.routines.length ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{S.routines.map(r => {
+      const day = dayOf(r), last = lastDone(r)
+      return <div key={r.id} className="card plan-routine">
+        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+          <span className="avatar-l"><Icon name={glyphOf(r.emoji)} /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 18, textTransform: 'capitalize', letterSpacing: '-.015em' }}>{r.name}</div>
+            <div className="muted small" style={{ marginTop: 2 }}>{[exCount(r.ex.length), r.ex.length ? '~' + routineMinutes(r) + ' min' : null].filter(Boolean).join(' · ')}</div>
+            {routineMuscles(r) && <div className="small" style={{ marginTop: 2 }}>{routineMuscles(r)}</div>}
+            <div className="small dim" style={{ marginTop: 4 }}>
+              {day ? t('Every {0}', day) : t('Not on the week yet')}{last ? ' · ' + t('Last time: {0}', fmtDate(last, true)) : ''}
+            </div>
+          </div>
+        </div>
+        <div className="row" style={{ gap: 8, marginTop: 12 }}>
+          <Button size="sm" variant="tinted" icon="list" style={{ flex: 1 }} onClick={() => nav('/plan/r/' + r.id)}>{t('See exercises')}</Button>
+          {r.ex.length > 0 && <Button size="sm" variant="primary" icon="play" style={{ flex: 1 }} onClick={() => startFlow(r.id)}>{t('Start')}</Button>}
+        </div>
+      </div>
+    })}</div> : <>
+      <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Let the trainer build your week, load a ready-made plan, or create one by hand.')}</div>
+    </>}
+    <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      <Button size="sm" icon="plus" style={{ flex: 1 }} onClick={addRoutine}>{t('Create a routine by hand')}</Button>
+      {!S.routines.length && <Button size="sm" style={{ flex: 1 }} onClick={loadStarterPlan}>{t('Starter plan (PPL)')}</Button>}
+    </div>
+
+    {/* ---- trainer ---- */}
+    <div className="card" style={{ marginTop: 22 }}>
+      <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+        <span className="lrow-i" style={{ '--tint': 'var(--acc)', color: 'var(--on-acc)', width: 40, height: 40, borderRadius: 12 }}><Icon name="sparkles" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{S.trainer ? t('Change my plan') : t('Want us to build your plan?')}</div>
+          <div className="dim small">{S.trainer ? t('Different days, equipment or goal: answer again and the week is rebuilt.') : t('Five quick questions and your week is ready.')}</div>
+        </div>
+        <Button size="sm" variant="tinted" onClick={trainerSheet}>{S.trainer ? t('Change') : t('Start')}</Button>
+      </div>
+    </div>
   </>
 }
