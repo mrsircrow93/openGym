@@ -185,7 +185,20 @@ setInterval(() => {
   for (const user of db.users) {
     if (!db.subs.some(s => s.userId === user.id)) continue;
     const S = readState(user.id);
-    if (!S?.reminder?.on) continue;
+    if (!S) continue;
+    // Monthly photos nudge: 10:00 local, 28+ days after the last check-in, at most once per 27 days.
+    const pn = userNow((S.reminder && S.reminder.tz) || 'America/Mexico_City');
+    if (pn && pn.hhmm === '10:00' && S.photoReminder !== false && Array.isArray(S.checkins) && S.checkins.length) {
+      const last = S.checkins.map(c => c.d).sort().pop();
+      const since = (Date.parse(pn.date) - Date.parse(last)) / 86400_000;
+      const nudged = user.lastPhotoNudge ? (Date.parse(pn.date) - Date.parse(user.lastPhotoNudge)) / 86400_000 : 99;
+      if (since >= 28 && nudged >= 27) {
+        user.lastPhotoNudge = pn.date; saveDb();
+        const es = (S.lang || 'es') !== 'en';
+        sendPush(user.id, { title: es ? 'Fotos del mes 📸' : 'Monthly photos 📸', body: es ? 'Ya pasaron cuatro semanas desde tu último check-in. Toma hoy tus fotos de frente, perfil y espalda y mira qué cambió.' : 'Four weeks since your last check-in — take today’s front, side and back photos and see what changed.', tag: 'photo-checkin' });
+      }
+    }
+    if (!S.reminder?.on) continue;
     const now = userNow(S.reminder.tz || 'UTC');
     if (!now || S.reminder.time !== now.hhmm) continue;
     if (user.lastReminder === now.date) continue;

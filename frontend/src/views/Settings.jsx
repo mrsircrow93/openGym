@@ -367,6 +367,13 @@ function MobileReminderCard({ S, update, toast }) {
             onChange={e => setReminder({ time: e.target.value })} />
         </Row>
       )}
+      <Row icon="camera" iconTint="var(--acc)" title={t('Monthly photo reminder')} subtitle={t('Four weeks after each check-in, at 10:00')}>
+        <Switch checked={S.photoReminder !== false} onChange={async () => {
+          const on = S.photoReminder === false
+          if (on) { const ok = await syncReminder({ ...S, photoReminder: true }, true); if (!ok) { toast(t('Could not change notification settings')); return } }
+          update(s => { s.photoReminder = on })
+        }} />
+      </Row>
     </Section>
   )
 }
@@ -420,6 +427,11 @@ function PushCard({ S, update, toast }) {
         <Row icon="clock" iconTint="var(--purple)" title={t('Reminder time')}>
           <input type="time" className="timef" value={S.reminder?.time || DEF.reminder.time}
             onChange={e => update(s => { s.reminder = { ...(s.reminder || DEF.reminder), time: e.target.value, tz: localTZ() } })} />
+        </Row>
+      )}
+      {on && (
+        <Row icon="camera" iconTint="var(--acc)" title={t('Monthly photo reminder')} subtitle={t('Four weeks after each check-in, at 10:00')}>
+          <Switch checked={S.photoReminder !== false} onChange={() => update(s => { s.photoReminder = s.photoReminder === false })} />
         </Row>
       )}
     </Section>

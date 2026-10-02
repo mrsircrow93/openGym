@@ -1208,3 +1208,27 @@ h4.sec{
 .ph-strip .photo{border-radius:6px;font-size:13px}
 .ph-big{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.92);border:0;padding:16px;display:flex;align-items:center;justify-content:center}
 .ph-big .photo{width:auto;max-width:100%;max-height:100%;aspect-ratio:auto;object-fit:contain;border-radius:8px}
+
+/* ---- meal result v2 ---- */
+.meal-hero{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;align-items:center;background:var(--surface-2);border-radius:16px;padding:14px}
+.meal-kcal b{display:block;font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.meal-kcal span{display:block;font-size:12px;color:var(--label-2);margin-top:4px}
+.meal-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.meal-macros>div{background:var(--surface);border-radius:12px;padding:8px 6px;text-align:center;position:relative;overflow:hidden}
+.meal-macros i{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px}
+.meal-macros b{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.meal-macros span{display:block;font-size:11px;color:var(--label-2);margin-top:1px}
+.meal-skel{display:grid;gap:10px;margin:8px 0 16px}
+.meal-skel>div{height:52px;border-radius:14px;background:var(--surface-2);animation:phpulse 1.2s ease-in-out infinite}
+.meal-skel>div:first-child{height:92px}
+/* ---- routine editor v2 ---- */
+.re-item{align-items:center}
+.re-num{width:22px;height:22px;border-radius:999px;background:var(--surface-3);color:var(--label-2);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;margin-right:2px}
+.re-actions{display:flex;flex-direction:column;gap:4px;flex:none}
+.re-actions .iconbtn{width:34px;height:28px;border-radius:8px;font-size:13px}
+.re-actions .iconbtn:disabled{opacity:.25}
+.re-link{display:flex;align-items:center;gap:6px;width:100%;margin:-2px 0 6px;padding:6px 12px;border:0;background:transparent;color:var(--dim);font-size:12px;text-align:left}
+.re-link .icn{font-size:12px}
+.re-link.on{color:var(--acc)}
+.add-dashed{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:14px;border-radius:14px;border:2px dashed var(--sep);background:transparent;color:var(--acc);font-weight:600;font-size:15px}
+.add-dashed:active{background:var(--surface-2)}

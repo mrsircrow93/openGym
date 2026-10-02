@@ -55,14 +55,19 @@ export async function nativeSave(state) {
 export async function syncReminder(S, interactive = false) {
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    await LocalNotifications.cancel({ notifications: [0, 1, 2, 3, 4, 5, 6].map(d => ({ id: 100 + d })) }).catch(() => {})
+    await LocalNotifications.cancel({ notifications: [0, 1, 2, 3, 4, 5, 6, 100].map(d => ({ id: 100 + d })) }).catch(() => {})
     const r = S.reminder
-    if (!r?.on) return true
+    const photoAt = photoReminderAt(S)
+    if (!r?.on && !photoAt) return true
     let perm = await LocalNotifications.checkPermissions()
     if (perm.display !== 'granted' && interactive) perm = await LocalNotifications.requestPermissions()
     if (perm.display !== 'granted') return false
+    const notifications = []
+    // Monthly photos: one shot, 28 days after the last check-in at 10:00 (id 200).
+    if (photoAt) notifications.push({ id: 200, title: t('Monthly photos'), body: t('Four weeks since your last check-in — take today’s front, side and back photos and see what changed.'), schedule: { at: photoAt, allowWhileIdle: true } })
+    if (!r?.on) { if (notifications.length) await LocalNotifications.schedule({ notifications }); return true }
     const [hour, minute] = (r.time || '08:00').split(':').map(Number)
-    const notifications = Object.entries(S.week || {})
+    notifications.push(...Object.entries(S.week || {})
       .filter(([, rid]) => rid && (S.routines || []).some(x => x.id === rid))
       .map(([day, rid]) => ({
         id: 100 + Number(day),
@@ -70,10 +75,22 @@ export async function syncReminder(S, interactive = false) {
         body: t('{0} is on the plan today — let’s go!', S.routines.find(x => x.id === rid).name),
         // Capacitor weekdays are 1 (Sunday) … 7 (Saturday); S.week uses getDay() 0…6.
         schedule: { on: { weekday: Number(day) + 1, hour, minute }, allowWhileIdle: true },
-      }))
+      })))
     if (notifications.length) await LocalNotifications.schedule({ notifications })
     return true
   } catch (e) { return false }
+}
+// When the next "monthly photos" nudge should fire, or null (switched off, or no check-in yet
+// — the first set is invited from the Home card, not by a notification). Mirrors the server
+// rule for web push (api/server.js photo nudge).
+export function photoReminderAt(S) {
+  if (S.photoReminder === false) return null
+  const list = (S.checkins || []).map(c => c.d).sort()
+  if (!list.length) return null
+  const d = new Date(list[list.length - 1] + 'T10:00:00')
+  d.setDate(d.getDate() + 28)
+  if (d.getTime() < Date.now()) { const t2 = new Date(); t2.setDate(t2.getDate() + 1); t2.setHours(10, 0, 0, 0); return t2 }
+  return d
 }
 
 // WKWebView can't do blob-URL downloads, so the backup goes out through the OS share sheet

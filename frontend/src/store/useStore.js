@@ -25,6 +25,8 @@ export const DEF = {
   // Progress photos: metadata only (lib/progress-photos.js) — the images live on the server.
   // `progressPhotos` is the old, never-used slot; `checkins` is the real one.
   progressPhotos: [], checkins: [],
+  // Monthly "take your photos" nudge (local notification on mobile, web push otherwise).
+  photoReminder: true,
   // Step counter: one row per day { d, n, src: 'manual' | 'health' } + a daily goal (lib/steps.js).
   steps: [], stepGoal: 8000,
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so

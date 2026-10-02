@@ -110,37 +110,55 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
     onSave({ ...m, name: (m.name || '').trim() || t(MEAL_TYPE_LABEL[m.type]), items })
     close()
   }
+  const goalM = macroGoalOf(useStore.getState().S)
+  const pct = k => goalM && goalM[k] ? Math.round((tot[k] || 0) / goalM[k] * 100) : null
   return <>
-    <TextField value={m.name} onChange={e => setM({ ...m, name: e.target.value })} placeholder={t('Meal name')} style={{ marginBottom: 10 }} />
-    <Segmented className="seg-range" value={m.type} onChange={v => setM({ ...m, type: v })}
-      options={MEAL_TYPES.map(k => ({ value: k, icon: MEAL_TYPE_ICON[k], label: t(MEAL_TYPE_LABEL[k]) }))} />
-    <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-      <span className="small muted">{fmtDate(m.d, true)}</span>
-      <input className="input" type="time" value={m.t} onChange={e => setM({ ...m, t: e.target.value || m.t })} style={{ width: 'auto', marginLeft: 'auto', padding: '6px 10px' }} />
+    {/* 1. The answer first: what this meal adds up to, against the day's targets. */}
+    <div className="meal-hero">
+      <div className="meal-kcal"><b>{fmtNum(tot.kcal)}</b><span>kcal{pct('kcal') !== null ? ' · ' + t('{0}% of your day', pct('kcal')) : ''}</span></div>
+      <div className="meal-macros">
+        <div><i style={{ background: 'var(--blue)' }} /><b>{fmtNum(tot.protein)} g</b><span>{t('Protein')}</span></div>
+        <div><i style={{ background: 'var(--orange)' }} /><b>{fmtNum(tot.carbs)} g</b><span>{t('Carbs')}</span></div>
+        <div><i style={{ background: 'var(--yellow)' }} /><b>{fmtNum(tot.fat)} g</b><span>{t('Fat')}</span></div>
+      </div>
     </div>
 
-    <div className="ntot">
-      <div className="big">{fmtNum(tot.kcal)} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
-      <MacroLine tot={tot} />
+    {/* 2. What we saw. Tap a food to change the portion; the numbers follow. */}
+    <div className="row between" style={{ margin: '14px 0 6px' }}>
+      <div className="eyebrow" style={{ margin: 0 }}>{t(m.items.length === 1 ? '{0} food' : '{0} foods', m.items.length)}</div>
+      <span className="small dim">{t('Tap to adjust')}</span>
     </div>
-
     <div className="list" style={{ marginBottom: 10 }}>
       {m.items.map((it, i) => <ItemRow key={i} item={it} onChange={x => setItem(i, x)} onRemove={() => rmItem(i)} />)}
     </div>
     <Button size="sm" icon="plus" onClick={addItem}>{t('Add food manually')}</Button>
-    {refine && m.items.length > 0 && <div className="ncorr">
-      <div className="small muted row" style={{ gap: 6 }}><Icon name="sparkles" style={{ color: 'var(--violet)', fontSize: 14 }} />{t('Something off? Say so and the numbers get redone.')}</div>
+
+    {/* 3. Talk back to the estimate in one sentence. */}
+    {refine && m.items.length > 0 && <div className="ncorr card" style={{ marginTop: 12 }}>
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} /><b>{t('Something off?')}</b></div>
+      <div className="small muted" style={{ marginBottom: 8 }}>{t('Tell it in your own words and the numbers are redone.')}</div>
       <div className="row" style={{ gap: 8 }}>
         <TextField value={corr} onChange={e => setCorr(e.target.value)} placeholder={t('e.g. “it’s unsweetened Greek yoghurt, about 200 g”')}
           onKeyDown={e => { if (e.key === 'Enter') doRefine() }} disabled={fixing} />
         <Button size="sm" variant="tinted" icon={fixing ? undefined : 'sparkles'} disabled={!corr.trim() || fixing} onClick={doRefine} style={{ flex: 'none' }}>{fixing ? <span className="spin" /> : t('Fix')}</Button>
       </div>
-      {fixNote && <div className="small dim">{fixNote}</div>}
+      {fixNote && <div className="small dim" style={{ marginTop: 6 }}>{fixNote}</div>}
     </div>}
+
+    {/* 4. Where it goes in the day: name, slot, time. */}
+    <div className="eyebrow" style={{ margin: '16px 0 8px' }}>{t('Details')}</div>
+    <TextField value={m.name} onChange={e => setM({ ...m, name: e.target.value })} placeholder={t('Meal name')} style={{ marginBottom: 10 }} />
+    <Segmented className="seg-range" value={m.type} onChange={v => setM({ ...m, type: v })}
+      options={MEAL_TYPES.map(k => ({ value: k, icon: MEAL_TYPE_ICON[k], label: t(MEAL_TYPE_LABEL[k]) }))} />
+    <div className="row" style={{ gap: 8, margin: '10px 0 4px' }}>
+      <span className="small muted">{fmtDate(m.d, true)}</span>
+      <input className="input" type="time" value={m.t} onChange={e => setM({ ...m, t: e.target.value || m.t })} style={{ width: 'auto', marginLeft: 'auto', padding: '6px 10px' }} />
+    </div>
+
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={save}>{saveLabel || t('Save meal')}</Button>
+    <Button variant="primary" icon="check" onClick={save}>{saveLabel || t('Save meal')}</Button>
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" icon="trash" onClick={() => { onDelete(); close() }}>{t('Delete meal')}</Button></>}
-    <div className="small dim" style={{ marginTop: 12, textAlign: 'center' }}>{t('Estimates from a photo are typically within ±20% — tap an item to correct the portion.')}</div>
+    <div className="small dim" style={{ marginTop: 12, textAlign: 'center' }}>{t('Photo estimates are usually within ±20%. Tap a food to fix its portion.')}</div>
   </>
 }
 
@@ -175,17 +193,21 @@ function AnalyzeMeal({ file, text, iso, close }) {
   }, [])
   const none = res && (res.confidence === 'none' || !(res.items || []).length)
   return <>
-    <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{t('Analyse meal')}</h3>
-    {photoUrl && <img src={photoUrl} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, maxHeight: 200, objectFit: 'cover' }} />}
-    {text && !photoUrl && <div className="small muted" style={{ marginBottom: 12, fontStyle: 'italic' }}>“{text}”</div>}
-    {busy && <div className="row small dim" style={{ gap: 8 }}><span className="spin" />{t('Reading the plate — a few seconds…')}</div>}
+    <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 10 }}>
+      {photoUrl && <img src={photoUrl} alt="" style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'cover', flex: 'none' }} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h3 style={{ margin: 0 }}>{busy ? t('Reading your plate…') : res && !none ? (res.name || t('Your meal')) : t('Your meal')}</h3>
+        <div className="small muted">{busy ? t('A few seconds') : text && !photoUrl ? '“' + text + '”' : res && !none ? t('Check the numbers, then save') : ''}</div>
+      </div>
+    </div>
+    {busy && <div className="meal-skel"><div /><div /><div /></div>}
     {err && <><div className="small" style={{ color: 'var(--red)', marginBottom: 12 }}>{err}</div>
       <Button onClick={() => { close(); mealFormSheet(newDraft(iso)) }}>{t('Log it manually instead')}</Button></>}
     {none && <><div className="small dim" style={{ marginBottom: 12 }}>{res.note || t('Couldn’t find any food there — try a closer, well-lit shot, or describe the meal instead.')}</div>
       <Button onClick={() => { close(); describeMealSheet(iso) }}>{t('Describe it instead')}</Button></>}
     {res && !none && <>
+      {res.confidence === 'low' && <div className="row small" style={{ gap: 6, color: 'var(--orange)', marginBottom: 8 }}><Icon name="info" style={{ fontSize: 14 }} />{t('Hard to see the portions — check them before saving.')}</div>}
       {res.note && <div className="small dim" style={{ marginBottom: 6 }}>{res.note}</div>}
-      {res.confidence === 'low' && <div className="small" style={{ color: 'var(--orange)', marginBottom: 8 }}>{t('Low confidence — check the portions before saving.')}</div>}
       <MealForm close={close} saveLabel={t('Save meal')} onSave={saveMeal}
         refine={(correction, previous) => aiAnalyzeMeal({ ...enc, text, lang: getLang(), previous, correction })}
         draft={newDraft(iso, { name: res.name || '', items: (res.items || []).map(cleanItem), ai: true })} />
