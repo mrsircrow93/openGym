@@ -189,6 +189,9 @@ const authPost = (path, body) => post(path, MOBILE ? { ...body, client: 'mobile'
 export const authRegister = (email, password, name, code, lang, ref) => authPost('/api/auth/register', { email, password, name, code: code || '', lang, ref: ref || '' }).then(r => r.user)
 export const fetchReferral = () => api('/api/referral')
 export const authLogin = (email, password) => authPost('/api/auth/login', { email, password }).then(r => r.user)
+// Google ID token (from the web button or the native picker) -> our session. New accounts get the
+// same trial / referral / invite treatment as a password sign-up.
+export const authGoogle = (credential, lang, ref, code) => authPost('/api/auth/google', { credential, lang, ref: ref || '', code: code || '' }).then(r => r.user)
 export const authVerify = token => post('/api/auth/verify', { token })
 export const authResendVerify = () => post('/api/auth/resend-verify')
 export const authForgot = email => post('/api/auth/forgot', { email })

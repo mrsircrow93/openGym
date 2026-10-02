@@ -139,3 +139,27 @@ ALLOWED_ORIGINS=capacitor://localhost,https://localhost
 4. Server + client: `link-email`, `DELETE /api/account` + purge job.
 5. Mobile: `VITE_API_BASE`, secure token storage, sign-in screen; `ALLOWED_ORIGINS`.
 6. Docs: SELF_HOSTING.md gains the email env vars; NETLIFY.md mentions the new routes.
+
+## 10. "Continue with Google" (shipped 2026-10-02)
+
+The client obtains a Google **ID token** (web: Google Identity Services button; store apps: the
+native picker via `@capgo/capacitor-social-login`) and posts it to `POST /api/auth/google`.
+`api/google.js` verifies it with Google's JWKS (RS256 signature, issuer, audience ∈ our client
+ids, expiry, `email_verified`). No client secret, no server-side OAuth exchange, no password.
+
+- Existing account with that email → linked (`googleSub`), email marked verified, normal session.
+- No account → created like a password sign-up: trial, referral code, invite code, language.
+- `pubUser.hasGoogle` tells the UI the account is linked. Deleting the account needs the
+  password only when one exists; Google-only accounts just confirm.
+
+Env on the API host: `GOOGLE_CLIENT_IDS=<web>,<ios>,<android>` (comma-separated; the first one
+is what the web button uses and `GET /api/config` exposes as `googleClientId`). Unset = no button.
+iOS build: `VITE_GOOGLE_IOS_CLIENT_ID=<ios>` in `frontend/.env.local`, plus the reversed id as a
+URL scheme in `ios/App/App/Info.plist` (`CFBundleURLSchemes`). Android: register the SHA-1 of
+the signing keystore on the Android client; the app itself only needs the web id.
+
+Google Cloud setup (once, ~15 min): APIs & Services → OAuth consent screen (External, app name
+VantixGym, support email, logo, privacy/terms links, scopes `email profile openid`, publish) →
+Credentials → Create OAuth client ID three times: **Web** (authorised JavaScript origins
+`https://app.vantixgym.app`; no redirect URI needed for the button), **iOS** (bundle id
+`app.vantixgym.mobile`), **Android** (package `app.vantixgym.mobile` + SHA-1).

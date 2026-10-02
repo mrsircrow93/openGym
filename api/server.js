@@ -12,6 +12,7 @@ import webpush from 'web-push';
 import { hashPassword, verifyPassword, needsRehash, passwordProblem, DUMMY_HASH } from './password.js';
 import { sendEmail, mail, emailConfigured } from './email.js';
 import { inspectUpload, inspectImage } from './upload.js';
+import { verifyGoogleIdToken } from './google.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -69,6 +70,9 @@ const REF_REFEREE_TRIAL_DAYS = Math.max(0, +(process.env.REF_REFEREE_TRIAL_DAYS 
 const REF_REFERRER_DAYS = Math.max(0, +(process.env.REF_REFERRER_DAYS ?? 30) || 0);
 const STRIPE_REFERRAL_COUPON = process.env.STRIPE_REFERRAL_COUPON || '';
 const DELETE_GRACE_DAYS = 30;
+// "Continue with Google": the OAuth client ids this server accepts tokens for — web, iOS and
+// Android, comma-separated. The first one is the web id the login page uses. Unset = no button.
+const GOOGLE_CLIENT_IDS = (process.env.GOOGLE_CLIENT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -286,7 +290,7 @@ function entitlement(user) {
     plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
 }
 const pubUser = user => ({ id: user.id, name: user.name, admin: isAdmin(user), email: user.email || null, emailVerified: !!user.emailVerified,
-  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), billing: entitlement(user), referredBy: !!user.referredBy });
+  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), hasGoogle: !!user.googleSub, billing: entitlement(user), referredBy: !!user.referredBy });
 
 // One-time tokens for email links. Only the sha256 of the token is stored; the raw value is in
 // the link and nowhere else. Single use, short-lived, scoped by kind.
@@ -1020,7 +1024,7 @@ const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true }),
 
   // Public config the login screen needs before anyone is signed in.
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured() }),
+  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured(), googleClientId: GOOGLE_CLIENT_IDS[0] || null }),
 
   'GET /api/me': async (req, res) => {
     const user = readSession(req);
@@ -1182,6 +1186,42 @@ const routes = {
     if (needsRehash(user.pw)) user.pw = hashPassword(password);
     if (user.deletedAt) delete user.deletedAt;
     user.lastLogin = nowISO();
+    saveDb();
+    json(res, 200, withToken(body, user, { user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  // Google ID token -> session. Links to the account with the same email when there is one
+  // (that email was verified by Google, so it counts as confirmed here too); otherwise creates
+  // the account exactly like /api/auth/register would, trial and referral included.
+  'POST /api/auth/google': async (req, res) => {
+    if (!GOOGLE_CLIENT_IDS.length) return json(res, 501, { error: 'Google sign-in is not set up on this server' });
+    const body = await readBody(req);
+    let g;
+    try { g = await verifyGoogleIdToken(body.credential, GOOGLE_CLIENT_IDS); }
+    catch (e) { console.error('google token', e.message); return json(res, 401, { error: 'Google sign-in failed — try again' }); }
+    let user = db.users.find(u => u.googleSub === g.sub) || db.users.find(u => u.email === g.email);
+    if (user && user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    if (INVITE_ONLY && !user) {
+      const code = String(body.code || '').trim().toUpperCase();
+      if (!db.invites.some(i => i.code === code && !i.usedBy && !i.revoked)) return json(res, 403, { error: 'a valid invite code is required' });
+    }
+    if (!user) {
+      if (mailLimited('reg:' + clientIp(req), REG_PER_IP)) return json(res, 429, { error: 'too many accounts from this connection — try again later' });
+      user = { id: crypto.randomBytes(12).toString('base64url'), name: cleanName(g.name) || g.email.split('@')[0].slice(0, 40), email: g.email, emailVerified: true, googleSub: g.sub, created: nowISO() };
+      const referrer = findReferrer(body.ref);
+      if (referrer) { user.referredBy = referrer.id; referrer.referrals = [...(referrer.referrals || []), { id: user.id, at: user.created }]; }
+      if (BILLING_ENABLED && TRIAL_DAYS > 0) user.trialEnds = new Date(Date.now() + (TRIAL_DAYS + (referrer ? REF_REFEREE_TRIAL_DAYS : 0)) * 86400_000).toISOString();
+      if (INVITE_ONLY) { const inv = db.invites.find(i => i.code === String(body.code || '').trim().toUpperCase() && !i.usedBy && !i.revoked); if (inv) { user.invitedBy = inv.code; inv.usedBy = user.id; inv.usedAt = user.created; } }
+      db.users.push(user);
+      if (body.lang === 'en' || body.lang === 'es') { try { atomicWrite(stateFile(user.id), JSON.stringify({ lang: body.lang, _ts: Date.now() })); } catch {} }
+      console.log('google sign-up', user.id);
+    } else {
+      // Existing email account: Google proved ownership of that inbox, so link and mark verified.
+      if (!user.googleSub) user.googleSub = g.sub;
+      if (!user.emailVerified) user.emailVerified = true;
+      if (user.deletedAt) delete user.deletedAt;
+      user.lastLogin = nowISO();
+    }
     saveDb();
     json(res, 200, withToken(body, user, { user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
   },

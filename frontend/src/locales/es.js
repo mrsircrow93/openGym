@@ -1245,4 +1245,6 @@ export default {
   'Confirm your email first (check your inbox and spam) — then the coach and photo features unlock.': 'Confirma tu correo primero (revisa bandeja y spam); después se activan el coach y las funciones con foto.',
   'Uploading photo {0} of {1}…': 'Subiendo foto {0} de {1}…',
   'The upload took too long — check your connection and try again.': 'La subida tardó demasiado: revisa tu conexión e inténtalo de nuevo.',
+  'Continue with Google': 'Continuar con Google',
+  'Google sign-in failed — try again': 'No se pudo entrar con Google: inténtalo de nuevo',
 }

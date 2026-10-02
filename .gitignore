@@ -7,3 +7,5 @@ media/gif/
 .DS_Store
 design/sleek/html/
 precios.txt
+.env.local
+frontend/.env.local

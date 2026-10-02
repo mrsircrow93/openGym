@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authRegister, authForgot } from '../lib/api.js'
+import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authRegister, authForgot, authGoogle } from '../lib/api.js'
+import { renderGoogleButton, nativeGoogleSignIn } from '../lib/google.js'
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
@@ -130,6 +131,25 @@ function EmailLogin({ head, wrap, signInPasskey }) {
   const field = { textAlign: 'left' }
   const { S, update } = useStore()
   const lang = S.lang || 'es'
+  // Google: the web button is Google's own (rendered into gBox); the app uses the native picker.
+  const gBox = useRef(null)
+  const [gBusy, setGBusy] = useState(false)
+  const withGoogle = async credential => {
+    if (busy || gBusy) return
+    setGBusy(true)
+    try { await after(await authGoogle(credential, getLang(), ref.trim(), code.trim())); try { localStorage.removeItem('vx_ref') } catch {} }
+    catch (err) { toast(err.message || t('Google sign-in failed — try again')) }
+    setGBusy(false)
+  }
+  useEffect(() => {
+    if (!cfg.googleClientId || MOBILE || !gBox.current || mode === 'forgot') return
+    renderGoogleButton(gBox.current, cfg.googleClientId, withGoogle, { lang, width: Math.min(360, gBox.current.clientWidth || 320) }).catch(() => {})
+  }, [cfg.googleClientId, mode, lang])
+  const nativeGoogle = async () => {
+    setGBusy(true)
+    try { const tok = await nativeGoogleSignIn(cfg.googleClientId); setGBusy(false); await withGoogle(tok) }
+    catch (err) { setGBusy(false); if (!/cancel/i.test(err.message || '')) toast(err.message || t('Google sign-in failed — try again')) }
+  }
   const setLangPref = l => update(st => { st.lang = l }, false)
   return (
     <div className="narrow" style={wrap}>
@@ -161,8 +181,15 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the')} <a href="#/terms">{t('terms of service')}</a> {t('and the')} <a href="#/privacy">{t('privacy policy')}</a>. {t('No card needed for the trial.')}</div>}
       </form>}
 
+      {cfg.googleClientId && mode !== 'forgot' && <>
+        <div className="dim small" style={{ margin: '18px 0 10px' }}>{t('or')}</div>
+        {MOBILE
+          ? <Button icon="globe" disabled={gBusy} onClick={nativeGoogle}>{gBusy ? t('One moment…') : t('Continue with Google')}</Button>
+          : <div ref={gBox} className="gsi-box" style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />}
+      </>}
       {webauthnOK() && !MOBILE && mode === 'login' && <>
-        <div className="dim small" style={{ margin: '18px 0 8px' }}>{t('or')}</div>
+        {!cfg.googleClientId && <div className="dim small" style={{ margin: '18px 0 8px' }}>{t('or')}</div>}
+        <div style={{ height: 8 }} />
         <Button icon="person" onClick={signInPasskey}>{t('Sign in with {0}', BIO)}</Button>
       </>}
     </div>
