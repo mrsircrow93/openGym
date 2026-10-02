@@ -113,6 +113,11 @@ catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.st
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost');
 webpush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
 
+// Browser push services. Anything else is refused at subscribe time (SSRF guard).
+const PUSH_HOSTS = /^(?:[a-z0-9-]+\.)*(?:push\.apple\.com|googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com|push\.mozilla\.com)$/i;
+function pushEndpointOk(endpoint) {
+  try { const u = new URL(String(endpoint)); return u.protocol === 'https:' && PUSH_HOSTS.test(u.hostname) && String(endpoint).length < 1024; } catch { return false; }
+}
 async function sendPush(userId, payload) {
   const subs = db.subs.filter(s => s.userId === userId);
   if (!subs.length) return;
@@ -262,6 +267,9 @@ const clearCookie = `gymsid=; Path=/; Max-Age=0; HttpOnly;${SECURE} SameSite=Lax
 /* ---------- accounts: public shape, entitlement, tokens, lockout, mail ---------- */
 const nowISO = () => new Date().toISOString();
 const normEmail = e => String(e || '').trim().toLowerCase().slice(0, 254);
+// Display names end up in emails to OTHER people (referral reward) and in the admin table:
+// no control characters, no line breaks, one line of at most 40 chars.
+const cleanName = n => String(n || '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const userLang = user => { const S = readState(user.id); return (S && S.lang) === 'en' ? 'en' : 'es'; };
 const hasPasskey = user => db.creds.some(c => c.userId === user.id);
@@ -319,7 +327,12 @@ function mailLimited(key, n = 3, windowMs = 60 * 60_000) {
   if (arr.length >= n) return true;
   arr.push(Date.now()); mailBursts.set(key, arr); return false;
 }
-const clientIp = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+// nginx sets X-Real-IP from CF-Connecting-IP (or the socket) and X-Forwarded-For by APPENDING
+// to whatever the client sent, so only the former is trustworthy — a client could put any
+// address first in X-Forwarded-For and dodge every per-IP limit.
+const clientIp = req => String(req.headers['x-real-ip'] || '').trim() || req.socket.remoteAddress || '';
+// Sign-ups per IP: 5 an hour. Enough for a family on one connection, not for a script.
+const REG_PER_IP = 5;
 
 async function sendVerifyMail(user) {
   const raw = issueToken(user.id, 'verify', 24 * 60 * 60_000);
@@ -460,12 +473,15 @@ function json(res, code, obj, extraHeaders) {
 // JSON.parse reviver that drops the keys Object.assign / spread treat specially — a body with
 // {"__proto__": {...}} must never end up re-parenting a state object here or on a client.
 const noProto = (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v;
-function readBody(req) {
+// Per-route ceiling: ordinary JSON calls get 1 MB, a whole-profile sync 8 MB, and only the
+// photo / PDF routes the full MAX_BODY — so no endpoint accepts 20 MB it has no use for.
+const BODY_SMALL = 1 * 1024 * 1024, BODY_STATE = 8 * 1024 * 1024;
+function readBody(req, max = BODY_SMALL) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', d => {
       size += d.length;
-      if (size > MAX_BODY) { reject(new Error('body too large')); req.destroy(); return; }
+      if (size > max) { reject(new Error('body too large')); req.destroy(); return; }
       chunks.push(d);
     });
     req.on('end', () => {
@@ -1013,8 +1029,12 @@ const routes = {
   },
 
   'POST /api/register/options': async (req, res) => {
+    // Hosted instance: every new account is email + password (trial, receipts, recovery). The
+    // UI never offers passkey sign-up there; this closes the API path too.
+    if (BILLING_ENABLED) return json(res, 403, { error: 'create your account with email and password' });
     const body = await readBody(req);
-    const name = String(body.name || '').trim().slice(0, 40);
+    if (mailLimited('reg:' + clientIp(req), REG_PER_IP)) return json(res, 429, { error: 'too many accounts from this connection — try again later' });
+    const name = cleanName(body.name);
     if (!name) return json(res, 400, { error: 'name required' });
     const code = String(body.code || '').trim().toUpperCase();
     if (INVITE_ONLY && !db.invites.some(i => i.code === code && !i.usedBy && !i.revoked))
@@ -1032,6 +1052,7 @@ const routes = {
   },
 
   'POST /api/register/verify': async (req, res) => {
+    if (BILLING_ENABLED) return json(res, 403, { error: 'create your account with email and password' });
     const body = await readBody(req);
     const c = takeChallenge(body.cid);
     if (!c || !c.uid) return json(res, 400, { error: 'challenge expired — try again' });
@@ -1124,9 +1145,10 @@ const routes = {
   /* ---------- email + password accounts (docs/ACCOUNTS.md) ---------- */
   'POST /api/auth/register': async (req, res) => {
     const body = await readBody(req);
-    const email = normEmail(body.email), name = String(body.name || '').trim().slice(0, 40), password = String(body.password || '');
+    const email = normEmail(body.email), name = cleanName(body.name), password = String(body.password || '');
     if (!EMAIL_RE.test(email)) return json(res, 400, { error: 'enter a valid email' });
     if (!name) return json(res, 400, { error: 'name required' });
+    if (mailLimited('reg:' + clientIp(req), REG_PER_IP)) return json(res, 429, { error: 'too many accounts from this connection — try again later' });
     const bad = passwordProblem(password);
     if (bad) return json(res, 400, { error: bad === 'too short' ? 'password must be at least 8 characters' : bad === 'too long' ? 'password is too long' : 'that password is too common — pick another' });
     const code = String(body.code || '').trim().toUpperCase();
@@ -1326,7 +1348,7 @@ const routes = {
   'PUT /api/data': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const body = await readBody(req);
+    const body = await readBody(req, BODY_STATE);
     if (!body.state || typeof body.state !== 'object') return json(res, 400, { error: 'state required' });
     delete body.state.active;              // in-progress workouts stay device-local
     atomicWrite(stateFile(user.id), JSON.stringify(body.state));
@@ -1341,6 +1363,10 @@ const routes = {
     const body = await readBody(req);
     const sub = body.subscription;
     if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return json(res, 400, { error: 'invalid subscription' });
+    // The server will POST to this URL on the user's behalf — only real push services, over
+    // https, so nobody can point it at an internal address.
+    if (!pushEndpointOk(sub.endpoint)) return json(res, 400, { error: 'unsupported push service' });
+    sub.keys = { p256dh: String(sub.keys.p256dh).slice(0, 200), auth: String(sub.keys.auth).slice(0, 100) };
     db.subs = db.subs.filter(s => s.endpoint !== sub.endpoint);
     db.subs.push({ userId: user.id, endpoint: sub.endpoint, keys: sub.keys, created: new Date().toISOString() });
     saveDb();
@@ -1574,10 +1600,11 @@ const routes = {
   'POST /api/progress-photos': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY);
     const up = inspectImage(body.image);
     if (!up.ok) return json(res, 400, { error: up.error });
     if (up.mediaType !== 'image/jpeg') return json(res, 400, { error: 'send the photo as JPEG (the app resizes it for you)' });
+    if (up.data.length > 950_000) return json(res, 400, { error: 'photo too large — the app resizes it to 1200 px before upload' });   // ~700 KB decoded
     if (listPhotos(user.id).length >= PHOTO_MAX_PER_USER) return json(res, 409, { error: 'photo limit reached — delete some old check-ins first' });
     if (aiRateLimited('photo:' + user.id, 30, 24 * 3600_000)) return json(res, 429, { error: 'too many photos today' });
     const id = crypto.randomBytes(12).toString('base64url');
@@ -1689,7 +1716,7 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY);
     const up = inspectImage(body.image);
     if (!up.ok) return json(res, 400, { error: up.error });
     const image = up.data, mediaType = up.mediaType;
@@ -1745,7 +1772,7 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY);
     const image = String(body.image || '');
     const text = String(body.text || '').trim().slice(0, 500);
     const lang = String(body.lang || 'en').slice(0, 5);
@@ -1805,7 +1832,7 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY);
     const lang = String(body.lang || 'en').slice(0, 5);
     const up = inspectUpload({ image: String(body.image || ''), pdf: String(body.pdf || '') });
     if (!up.ok) return json(res, 400, { error: up.error });
@@ -1867,7 +1894,7 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY);
     const lang = String(body.lang || 'en').slice(0, 5);
     const up = inspectUpload({ image: String(body.image || ''), pdf: String(body.pdf || '') });
     if (!up.ok) return json(res, 400, { error: up.error });
@@ -1996,6 +2023,8 @@ http.createServer(async (req, res) => {
   if (BILLING_ENABLED && handler && url.pathname.startsWith('/api/ai/')) {
     const u = readSession(req);
     if (u && !entitlement(u).active) return json(res, 402, { error: 'subscription required', code: 'subscription_required' });
+    // A trial that never confirmed its inbox is a disposable address: no paid-for AI until it does.
+    if (u && entitlement(u).status === 'trial' && u.email && !u.emailVerified) return json(res, 403, { error: 'confirm your email to use the coach', code: 'verify_required' });
   }
   if (!handler) return json(res, 404, { error: 'not found' });
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin && !ALLOWED_ORIGINS.has(req.headers.origin)) {

@@ -38,12 +38,15 @@ function Checkin({ close }) {
   }
   const onPick = e => { const f = e.target.files?.[0]; e.target.value = ''; take(pose, f) }
   const count = POSES.filter(p => files[p]).length
+  const [err, setErr] = useState('')
   const save = async () => {
     if (!count) { toast(t('Take at least one photo')); return }
-    setBusy(t('Saving photos…'))
+    setErr('')
     try {
       const photos = {}
-      for (const p of POSES) if (files[p]) photos[p] = await uploadPhoto(files[p])
+      let i = 0
+      for (const p of POSES) if (files[p]) { i++; setBusy(t('Uploading photo {0} of {1}…', i, count)); photos[p] = await uploadPhoto(files[p]) }
+      setBusy(t('Saving…'))
       const n = Math.round((w || 0) * 10) / 10
       const c = newCheckin(todayISO(), n > 0 ? n : null, photos)
       update(s => {
@@ -52,7 +55,7 @@ function Checkin({ close }) {
       })
       close()
       reviewSheet(c.id, { auto: true })
-    } catch (e) { toast(aiErrorMessage(e)); setBusy('') }
+    } catch (e) { setErr(aiErrorMessage(e)); setBusy('') }
   }
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="camera" style={{ color: 'var(--acc)' }} />{t('Monthly photos')}</h3>
@@ -73,6 +76,7 @@ function Checkin({ close }) {
     <h4 className="sec">{t('Today’s weight')}</h4>
     <div className="row cfgrow"><Stepper label={t('Body weight') + ' (' + S.unit + ')'} value={w} step={0.5} onChange={setW} /></div>
     <div style={{ height: 14 }} />
+    {err && <div className="small" style={{ color: 'var(--red)', marginBottom: 8 }}>{err}</div>}
     {busy ? <div className="row small dim" style={{ gap: 8, padding: '8px 0' }}><span className="spin" />{busy}</div>
       : <Button variant="primary" icon="check" disabled={!count} onClick={save}>{count === 3 ? t('Save check-in') : t('Save with {0} of 3 photos', count)}</Button>}
     <div style={{ height: 6 }} /><Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
@@ -138,7 +142,9 @@ function Review({ id, auto, close }) {
       </>}
       {!rv && !busy && <Button size="sm" variant="tinted" icon="sparkles" onClick={ask}>{prev ? t('What changed since last time?') : t('Read my starting point')}</Button>}
     </div>
-    <div style={{ height: 10 }} />
+    <div style={{ height: 12 }} />
+    <Button variant="primary" icon="check" onClick={close}>{t('Done')}</Button>
+    <div style={{ height: 6 }} />
     <Button variant="ghost" className="dim" icon="trash" onClick={remove}>{t('Delete this check-in')}</Button>
   </>
 }

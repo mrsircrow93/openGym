@@ -7,6 +7,7 @@ import { api } from './api.js'
 import { API_BASE, getToken } from './mobile.js'
 import { readUpload } from './upload.js'
 import { uid } from './format.js'
+import { t } from './i18n.js'
 
 export const POSES = ['front', 'side', 'back']
 export const POSE_LABEL = { front: 'Front view', side: 'Side view', back: 'Back view' }
@@ -16,8 +17,13 @@ export const CHECKIN_EVERY_DAYS = 28
 export async function uploadPhoto(file) {
   const up = await readUpload(file, { maxDim: 1200 })
   if (up.kind !== 'image') throw new Error('photo required')
-  const r = await api('/api/progress-photos', { method: 'POST', body: JSON.stringify({ image: up.base64 }) })
-  return r.id
+  const ctl = new AbortController()
+  const tm = setTimeout(() => ctl.abort(), 60_000)
+  try {
+    const r = await api('/api/progress-photos', { method: 'POST', body: JSON.stringify({ image: up.base64 }), signal: ctl.signal })
+    return r.id
+  } catch (e) { if (e.name === 'AbortError') throw new Error(t('The upload took too long — check your connection and try again.')); throw e }
+  finally { clearTimeout(tm) }
 }
 
 // Object URLs for the session: the GET needs the auth header, so an <img src> can't hit the

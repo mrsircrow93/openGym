@@ -94,6 +94,7 @@ export function aiErrorMessage(e) {
   const admin = (() => { try { return !!(JSON.parse(localStorage.getItem('gym_user')) || {}).admin } catch { return false } })()
   if (!hasUserKey() && e && (e.status === 501 || e.status === 502 || e.status === 404)) return t('This isn’t available right now — try again in a bit.') + (admin ? ' (admin: ' + (e.status === 501 ? 'ANTHROPIC_API_KEY not set on the server' : 'AI route failed, status ' + e.status) + ')' : '')
   if (!hasUserKey() && e && e.status === 401) return t('Sign in to use the coach and the photo features.')
+  if (!hasUserKey() && e && e.status === 403) return t('Confirm your email first (check your inbox and spam) — then the coach and photo features unlock.')
   return (e && e.message) || t('Something went wrong — try again')
 }
 // Meal photo and/or typed description -> { name, items: [{ name, portion, grams, kcal, protein,
