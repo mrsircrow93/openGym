@@ -111,10 +111,19 @@ export function materializeImport(parsed, S, maxDays = 7) {
     routines.push({ id: rid, name: clean(r.name, 40) || 'Workout', emoji: GLYPHS.includes(r.glyph) ? r.glyph : DEFAULT_GLYPH, prog: 'linear', ex })
     for (const d of r.days || []) { const k = clampInt(d, 0, 6, -1); if (k >= 0 && !taken.has(k) && taken.size < maxDays) { taken.add(k); week[k] = rid } }
   }
-  // No weekdays on the sheet: lay the sessions out Mon, Wed, Fri… so the week view isn't empty.
-  if (!Object.keys(week).length && routines.length) {
-    const slots = routines.length <= 3 ? [1, 3, 5] : routines.length === 4 ? [1, 2, 4, 5] : [1, 2, 3, 4, 5, 6, 0]
-    routines.forEach((r, i) => { if (slots[i] != null) week[slots[i]] = r.id })
-  }
+  // No weekdays on the sheet: lay the sessions out so the week view isn't empty. One routine
+  // (a full-body plan) runs Mon/Wed/Fri — or as often as the sheet says; several routines
+  // rotate through the week in order. The person can still move days in the preview.
+  if (!Object.keys(week).length && routines.length) Object.assign(week, defaultWeek(routines, parsed && parsed.daysPerWeek))
   return { routines, week, custom, matched, created, dropped: 0 }
+}
+
+const ORDER = [1, 3, 5, 2, 4, 6, 0]   // Mon, Wed, Fri first, then fill in
+export function defaultWeek(routines, daysPerWeek) {
+  const week = {}
+  if (!routines.length) return week
+  const n = Math.min(7, Math.max(routines.length, +daysPerWeek || (routines.length === 1 ? 3 : routines.length === 2 ? 4 : routines.length)))
+  const days = n <= 3 ? ORDER.slice(0, n).sort((a, b) => (a || 7) - (b || 7)) : n === 4 ? [1, 2, 4, 5] : [1, 2, 3, 4, 5, 6, 0].slice(0, n)
+  days.forEach((d, i) => { week[d] = routines[i % routines.length].id })
+  return week
 }

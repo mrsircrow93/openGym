@@ -808,7 +808,7 @@ function importRoutineRequest({ image, mediaType, pdf, lang }) {
       'raise", "lat pulldown", "leg press", "cable triceps pushdown", "push-up", "plank" — pick the most ' +
       'specific common variant the text implies. Reps written as a range ("8-12") -> the top of the range; ' +
       '"AMRAP" or "max" -> 15; time-based holds -> seconds; cardio -> minutes. Rest in seconds. Weekdays: only ' +
-      'when the document names them (0 = Sunday … 6 = Saturday); otherwise leave days empty. Set found=false ' +
+      'when the document names them (0 = Sunday … 6 = Saturday); otherwise leave days empty and report daysPerWeek if the document states a frequency. Set found=false ' +
       'when the document is not a training routine. Write the summary in the language with ISO code "' + lang + '".',
     messages: [{ role: 'user', content }],
     tools: [{
@@ -820,6 +820,7 @@ function importRoutineRequest({ image, mediaType, pdf, lang }) {
           found: { type: 'boolean', description: 'true when the document is a training routine with at least one exercise' },
           title: { type: 'string', description: 'the plan\'s own title if it has one, else a short name like "Upper / Lower"' },
           summary: { type: 'string', description: 'one short line: what the routine is (days, split), or why nothing was found' },
+          daysPerWeek: { type: 'integer', minimum: 1, maximum: 7, description: 'how many sessions a week the document prescribes, only if it says so (e.g. "3 veces por semana", "full body x3")' },
           routines: {
             type: 'array',
             description: 'one entry per training day / session in the order written',

@@ -64,10 +64,14 @@ describe('materializeImport', () => {
     expect(m.week[1]).toBe(m.routines[0].id)
     expect(m.week[4]).toBe(m.routines[1].id)
   })
-  it('lays out Mon/Wed/Fri when the sheet names no days', () => {
+  it('lays out a sensible week when the sheet names no days', () => {
     const noDays = { ...parsed, routines: parsed.routines.map(r => ({ ...r, days: [] })) }
     const w = materializeImport(noDays, S).week
-    expect(Object.keys(w).sort()).toEqual(['1', '3'])
+    expect(Object.keys(w).sort()).toEqual(['1', '2', '4', '5'])   // two routines -> 4 days, alternating
+    const one = { ...noDays, routines: noDays.routines.slice(0, 1) }
+    expect(Object.keys(materializeImport(one, S).week).sort()).toEqual(['1', '3', '5'])   // full body -> Mon/Wed/Fri
+    const twice = { ...one, daysPerWeek: 2 }
+    expect(Object.keys(materializeImport(twice, S).week).sort()).toEqual(['1', '3'])
   })
   it('ignores junk', () => {
     expect(materializeImport({ routines: [{ name: 'x', exercises: [{ name: '' }] }] }, S).routines.length).toBe(0)

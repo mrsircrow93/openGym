@@ -1198,4 +1198,6 @@ export default {
   'Pick from your photos': 'Elegir de tus fotos',
   'A photo or screenshot you already have': 'Una foto o captura que ya tengas',
   'Choose a PDF or file': 'Elegir un PDF o archivo',
+  'Tap the days under each routine to set your week.': 'Toca los días debajo de cada rutina para armar tu semana.',
+  'Another routine is on this day': 'Otra rutina ya está en este día',
 }
