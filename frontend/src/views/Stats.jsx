@@ -17,6 +17,8 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { computeBadges } from '../lib/badges.js'
+import Badge from '../components/Badge.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -195,7 +197,7 @@ export default function Stats() {
   if (showEff) exOpts.push({ value: 'effort', label: t('Effort') })
 
   return <>
-    <div className="hdr"><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
+    <div className="hdr"><div><h1>{t('Progress')}</h1><div className="sub">{t('How your training is going')}</div></div>
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
     <div className="tiles">
@@ -205,13 +207,26 @@ export default function Stats() {
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
     </div>
 
+    {(() => { const bs = computeBadges(S); const earned = bs.filter(b => b.earned).sort((a, b) => (a.earned < b.earned ? 1 : -1)); const next = bs.filter(b => !b.earned).sort((a, b) => b.pct - a.pct)[0]
+      return <button className="card tappable ach-card" onClick={() => nav('/badges')}>
+        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{t('Achievements')}</div>
+            <div className="dim small">{earned.length ? t('{0} earned · latest: {1}', earned.length, earned[0].name) : next ? t('Next: {0}', next.name) : ''}</div>
+            {next && <div className="badge-prog" style={{ marginTop: 6, maxWidth: 220 }}><i style={{ width: Math.round(next.pct * 100) + '%' }} /></div>}
+          </div>
+          <div className="row" style={{ gap: -6 }}>{(earned.length ? earned.slice(0, 3) : next ? [next] : []).map(b => <Badge key={b.id} badge={b} size={44} locked={!b.earned} />)}</div>
+          <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />
+        </div>
+      </button> })()}
+
     <div className="card">
-      <h2>{t('Activity — last 12 months')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('by time trained')}</span></h2>
+      <h2>{t('Days you trained')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('last 12 months')}</span></h2>
       <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
 
     {S.workouts.length > 0 && <MuscleBalance S={S} />}
-    {anyEffort && <EffortCard S={S} />}
+    {anyEffort && <details className="adv"><summary className="small muted">{t('For advanced users: effort per set')}</summary><EffortCard S={S} /></details>}
 
     <div className="cols">
       <div className="card">

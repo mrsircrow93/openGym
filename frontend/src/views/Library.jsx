@@ -24,7 +24,7 @@ export default function Library() {
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
 
   return <>
-    <div className="hdr"><div><h1>{t('Exercises')}</h1><div className="sub">{t('{0} exercises with animations', EXDB.length)}</div></div></div>
+    <div className="hdr"><div><h1>{t('Exercises')}</h1><div className="sub">{t('Search by name, muscle or equipment')}</div></div></div>
     <div className="search" style={{ marginBottom: 10 }}><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search…')} value={q} onChange={e => { setQ(e.target.value); setShown(40) }} /></div>
     <div className="chips" style={{ marginBottom: eqOpts.length > 1 ? 8 : 12 }}>
@@ -37,22 +37,18 @@ export default function Library() {
     </div>}
     <input ref={photoInput} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) identifyExerciseSheet(f) }} />
+    <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+      <button className="tile tappable lib-tile" onClick={() => photoInput.current?.click()}><Icon name="camera" /><span>{t('Which machine is this?')}</span><small>{t('Take a photo and we name it')}</small></button>
+      <button className="tile tappable lib-tile" onClick={() => customExSheet(null, ex => exerciseDetailSheet(ex), q.trim())}><Icon name="plus" /><span>{t('Add my own')}</span><small>{t('An exercise that isn’t listed')}</small></button>
+    </div>
+    <div className="eyebrow" style={{ marginBottom: 8 }}>{f.length === allExercises(S).length ? t('All exercises') : t('{0} results', f.length)}</div>
     <div className="list">
-      <div className="item" onClick={() => photoInput.current?.click()}>
-        <div className="thumb thumb-x"><Icon name="machine" /></div>
-        <div className="grow"><div className="tt">{t('Identify from photo')}</div><div className="ss">{t('point your camera at a machine or move')}</div></div><Icon name="plus" className="chev" />
-      </div>
-      <div className="item" onClick={() => customExSheet(null, ex => exerciseDetailSheet(ex), q.trim())}>
-        <div className="thumb thumb-x"><Icon name="sparkles" /></div>
-        <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
-      </div>
       {f.slice(0, shown).map(e => {
         const best = bestWeightFor(S, e.id)
         return <div key={e.id} className="item" onClick={() => exerciseDetailSheet(e)}>
           <Thumb ex={e} />
-          <div className="grow"><div className="tt capitalize">{e.n}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}</div></div>
-          {best > 0 && <span className="tag acc">{fmtNum(best)}</span>}
-          <Button size="sm" variant="tinted" icon="plus" onClick={ev => { ev.stopPropagation(); addToRoutineSheet(e) }}>{t('Plan')}</Button>
+          <div className="grow"><div className="tt capitalize">{e.n}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}{best > 0 ? ' · ' + t('Best') + ' ' + fmtNum(best) + ' ' + S.unit : ''}</div></div>
+          <Button size="sm" variant="tinted" icon="plus" onClick={ev => { ev.stopPropagation(); addToRoutineSheet(e) }} aria-label={t('Add to a routine')}>{t('Add')}</Button>
         </div>
       })}
       {f.length === 0 && <div className="empty"><div className="ico"><Icon name="magnifier" /></div>{t('No match')}</div>}

@@ -54,7 +54,7 @@ function Elapsed({ start }) {
 }
 
 /* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
-function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onAddWarmup }) {
+function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemoveSet, onStartTimed, onAddWarmup, onRemoveWarmup }) {
   const S = useStore(s => s.S)
   const working = useUI(s => s.work)
   const entry = S.active.entries[entryIdx]
@@ -108,62 +108,61 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
       <button aria-label="Increase" onClick={() => bump(s, i, col, 1)}><Icon name="plus" /></button>
     </div>
   )
+  const restSec = entry.target?.rest > 0 ? entry.target.rest : S.restSec
+  const fmtRest = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0')
   return <>
     <Media ex={ex} key={entry.id} compact={compact} minimizable />
-    <div className="row between" style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'capitalize', lineHeight: 1.2 }}>{ex.n}</div>
-      <div className="row" style={{ gap: 4 }}>
-        {mode === 'reps' && <button className="iconbtn" aria-label={t('Quick log')} onClick={() => aiQuickLogSheet(ex, S.unit, r => {
-          const i = entry.sets.findIndex(s => !s.done)
-          const idx = i === -1 ? entry.sets.length - 1 : i
-          if (r.reps != null) onField(idx, 'r', r.reps)
-          if (r.weight != null) onField(idx, 'w', r.weight)
-        })}><Icon name="sparkles" /></button>}
-        <button className="iconbtn" aria-label={t('Swap exercise')} onClick={() => swapExerciseSheet(entryIdx)}><Icon name="shuffle" /></button>
-        <button className="iconbtn" aria-label={t('Details')} onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /></button>
-      </div>
-    </div>
-    <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-      {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
-      {/* You log the total; this is the split, so the set in front of you is unambiguous
-          without the rep count having to mean two different things (issue #31). */}
-      {!cardio && !timed && isPerSide(cfg) && <span className="tag acc nocap"><Icon name="shuffle" />{t('{0} per side', fmtNum(sideReps(entry.sets.find(s => !s.done)?.r ?? entry.sets[0]?.r)))}</span>}
-      {(ex.tg || ex.bp) && <span className="tag">{t(ex.tg || ex.bp)}</span>}
-      {ex.eq && <span className="tag">{t(ex.eq)}</span>}
-      {best > 0 && <span className="tag nocap">{t('Best:')} {fmtNum(best)} {S.unit}</span>}
+    <div style={{ fontSize: compact ? 18 : 24, fontWeight: 700, letterSpacing: '-.02em', textTransform: 'capitalize', lineHeight: 1.15, marginBottom: 8 }}>{ex.n}</div>
+    <div className="chips" style={{ marginBottom: 10 }}>
+      <button className="chip nocap" onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /> {t('How to')}</button>
+      {!cardio && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="timer" /> {t('Rest')} {fmtRest(restSec)}</span>}
+      {mode === 'reps' && <button className="chip nocap" onClick={() => aiQuickLogSheet(ex, S.unit, r => {
+        const i = entry.sets.findIndex(s => !s.done)
+        const idx = i === -1 ? entry.sets.length - 1 : i
+        if (r.reps != null) onField(idx, 'r', r.reps)
+        if (r.weight != null) onField(idx, 'w', r.weight)
+      })}><Icon name="sparkles" /> {t('Say it')}</button>}
+      <button className="chip nocap" onClick={() => swapExerciseSheet(entryIdx)}><Icon name="shuffle" /> {t('Swap')}</button>
+      {(ex.tg || ex.bp) && <span className="chip" style={{ cursor: 'default' }}>{t(ex.tg || ex.bp)}</span>}
+      {best > 0 && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="trophy" /> {t('Best')} {fmtNum(best)} {S.unit}</span>}
+      {cardio && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="figureRun" /> {t('Cardio')}</span>}
+      {!cardio && !timed && isPerSide(cfg) && <span className="chip nocap" style={{ cursor: 'default' }}>{t('{0} per side', fmtNum(sideReps(entry.sets.find(s => !s.done)?.r ?? entry.sets[0]?.r)))}</span>}
     </div>
     {last && <div className="pill nocap" style={{ marginBottom: 6, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', fontWeight: 500 }}><Icon name="history" style={{ verticalAlign: '-2px', marginRight: 5 }} />{t('Last time')} · {fmtDate(last.d, true)}: {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
     {plan && plan.why && plan.kind !== 'off' && <div className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
       <span>{t(...plan.why)}</span>
     </div>}
-    <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
-      {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}
-      <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
-      {entry.sets.map((s, i) => <div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')} style={s.warmup ? { opacity: 0.92 } : undefined}>
-        <div className="n" style={s.warmup ? { color: 'var(--orange)', fontWeight: 700, fontSize: 12 } : undefined}>{s.warmup ? 'W' : entry.sets.slice(0, i + 1).filter(x => !x.warmup).length}</div>
+    {(() => {
+      const warm = entry.sets.map((s, i) => [s, i]).filter(([s]) => s.warmup)
+      const work = entry.sets.map((s, i) => [s, i]).filter(([s]) => !s.warmup)
+      const head = <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp">{t('No.')}</span><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
+      const row = ([s, i], k) => <div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}>
+        <div className="n" style={s.warmup ? { color: 'var(--orange)' } : undefined}>{s.warmup ? 'C' : k + 1}</div>
         {cell(s, i, col1, 'w')}
         {col2 && cell(s, i, col2, 'r')}
         {col3 && cell(s, i, col3, 'eff')}
-        {/* A timed set is started, not typed: the timer counts the hold down and checks the
-            set off itself. The checkbox stays for anyone who timed it on their own watch. */}
-        {timed && <button className="setgo" aria-label={t('Start set')} disabled={s.done || !!working}
-          onClick={() => onStartTimed(i)}><Icon name="play" /></button>}
+        {timed && <button className="setgo" aria-label={t('Start set')} disabled={s.done || !!working} onClick={() => onStartTimed(i)}><Icon name="play" /></button>}
         <Check checked={s.done} onChange={() => onToggle(i)} />
-      </div>)}
-      <div style={{ height: 12 }} />
-      {/* The one big action mid-set: checks off the next open set. Tapping the row's own check
-          still works; this is the thumb-zone version of it (design/sleek brief, screen 5). */}
-      {(() => { const i = entry.sets.findIndex(s => !s.done); return i >= 0 && !timed
-        ? <Button variant="primary" icon="check" onClick={() => onToggle(i)}>{t('Complete set {0}', entry.sets.slice(0, i + 1).filter(x => !x.warmup).length)}</Button>
-        : null })()}
-      <div style={{ height: 8 }} />
-      <div className="row" style={{ gap: 6 }}>
-        {mode === 'reps' && <Button size="xs" icon="flame" onClick={onAddWarmup}>{t('Warm-up')}</Button>}
-        <Button size="xs" icon="minus" disabled={entry.sets.length <= 1} onClick={onRemoveSet}>{t('Set')}</Button>
-        <Button size="xs" icon="plus" onClick={onAddSet}>{t('Set')}</Button>
       </div>
-    </div>
+      const next = entry.sets.findIndex(s => !s.done)
+      return <div className="card" style={{ marginTop: 6, marginBottom: 0 }}>
+        {warm.length > 0 && <>
+          <div className="row between" style={{ marginBottom: 4 }}><div className="eyebrow" style={{ color: 'var(--orange)' }}>{t('Warm-up')}</div><button className="linkbtn small" onClick={onRemoveWarmup}>{t('Remove')}</button></div>
+          {head}{warm.map(row)}
+          <div style={{ height: 14 }} />
+        </>}
+        <div className="row between" style={{ marginBottom: 4 }}>
+          <div className="eyebrow">{cardio ? t('Cardio') : t('Working sets')}</div>
+          {mode === 'reps' && !warm.length && <button className="linkbtn small" onClick={onAddWarmup}>{t('+ Warm-up')}</button>}
+        </div>
+        {head}{work.map(row)}
+        <button className="addset" onClick={onAddSet}><Icon name="plus" /> {t('Add set')}</button>
+        {entry.sets.length > 1 && <button className="linkbtn small" style={{ display: 'block', margin: '6px auto 0' }} onClick={onRemoveSet}>{t('Remove last set')}</button>}
+        {next >= 0 && !timed && <><div style={{ height: 12 }} />
+          <Button variant="primary" icon="check" onClick={() => onToggle(next)}>{entry.sets[next].warmup ? t('Warm-up done') : t('Complete set {0}', entry.sets.slice(0, next + 1).filter(x => !x.warmup).length)}</Button></>}
+      </div>
+    })()}
   </>
 }
 
@@ -200,6 +199,7 @@ function ActiveWorkout() {
     else e.sets.push({ w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false })
   })
   const removeSet = idx => mutEntry(idx, e => { if (e.sets.length > 1) e.sets.pop() })
+  const removeWarmup = idx => mutEntry(idx, e => { e.sets = e.sets.filter(x => !x.warmup || x.done) })
   // Warm-up sets sit at the front, are logged but excluded from volume/PRs/1RM, and seed at
   // ~half the first working set's weight (rounded to a plate-friendly step) to save typing.
   const addWarmup = idx => mutEntry(idx, e => {
@@ -300,11 +300,11 @@ function ActiveWorkout() {
           {unit.map((idx, k) => <div key={idx} className="ss-ex">
             {k > 0 && <div className="ss-amp">+</div>}
             <ExerciseBlock entryIdx={idx} compact
-              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onAddWarmup={() => addWarmup(idx)} />
+              onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} onAddWarmup={() => addWarmup(idx)} onRemoveWarmup={() => removeWarmup(idx)} />
           </div>)}
         </div>
       ) : (
-        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onAddWarmup={() => addWarmup(cur)} />
+        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} onAddWarmup={() => addWarmup(cur)} onRemoveWarmup={() => removeWarmup(cur)} />
       )}
     </> : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout — add your first exercise.')}</div>}
 

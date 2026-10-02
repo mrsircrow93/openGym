@@ -28,6 +28,8 @@ import Nutrition from './views/Nutrition.jsx'
 import Admin from './views/Admin.jsx'
 import { Verify, Reset, Paywall } from './views/Account.jsx'
 import Legal from './views/Legal.jsx'
+import Badges, { NewBadgesSheet } from './views/Badges.jsx'
+import { newBadges } from './lib/badges.js'
 import { locked } from './lib/entitlements.js'
 import { MOBILE } from './lib/mobile.js'
 import { syncHealth } from './lib/health.js'
@@ -49,6 +51,23 @@ function Shell() {
   const isGuest = useStore(s => s.isGuest())
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useEffect(() => { setNav(navigate) }, [navigate])
+  // Achievements: when the history produces a badge the person hasn't seen, celebrate once.
+  // Checked when the number of workouts, meals or weigh-ins changes, never mid-workout.
+  const openSheet = useUI(s => s.openSheet)
+  useEffect(() => {
+    if (!ready || S.active || !(S.workouts || []).length) return
+    const fresh = newBadges(S)
+    if (!fresh.length) return
+    // First run with history (or an account that predates achievements): count what's already
+    // earned as seen, quietly — it all shows in Progress. Only new ones from now on get a party.
+    if (!S.badgesSeen) { useStore.getState().update(st => { st.badgesSeen = fresh.map(b => b.id) }, false); return }
+    const ids = fresh.map(b => b.id)
+    const tm = setTimeout(() => {
+      useStore.getState().update(st => { st.badgesSeen = [...new Set([...(st.badgesSeen || []), ...ids])] })
+      openSheet(close => <NewBadgesSheet ids={ids} close={close} />, { kind: 'center' })
+    }, 900)
+    return () => clearTimeout(tm)
+  }, [ready, !!S.active, (S.workouts || []).length, (S.meals || []).length, (S.bodyweight || []).length, (S.steps || []).length])
   // Store app: refresh steps/weight from the phone's health store on launch and whenever the
   // app comes back to the foreground (quietly — the Settings card has the interactive path).
   useEffect(() => {
@@ -97,6 +116,7 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/nutrition" element={<Nutrition />} />
+              <Route path="/badges" element={<Badges />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>

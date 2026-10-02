@@ -1100,3 +1100,49 @@ h4.sec{
 .tr-ex-s{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
 .tr-ex-s b{font-size:15px;font-variant-numeric:tabular-nums}
 .tr-ex-s span{font-size:11px;color:var(--label-3)}
+/* ---------------------------------------------------------------- badges -- */
+.badge{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  clip-path:polygon(50% 0%,93% 10%,100% 50%,93% 90%,50% 100%,7% 90%,0% 50%,7% 10%);
+  background:linear-gradient(160deg,var(--b1),var(--b2));color:var(--bi)}
+.badge-in{width:78%;height:78%;clip-path:inherit;background:linear-gradient(160deg,var(--surface-2),var(--bg));display:flex;align-items:center;justify-content:center}
+.badge .icn{filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.badge.t0{--b1:#4a4f4b;--b2:#2a2e2b;--bi:#6d736e}
+.badge.t1{--b1:#d9a066;--b2:#8a5a2b;--bi:#e9b57a}
+.badge.t2{--b1:#e6e9ec;--b2:#8d949c;--bi:#dfe4e8}
+.badge.t3{--b1:#ffd866;--b2:#b8860b;--bi:#ffd866}
+.badge.t4{--b1:#d0ff52;--b2:#6f9a12;--bi:#d0ff52}
+.badge-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.badge-card{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:18px 14px 14px;min-height:250px}
+.badge-card-t{align-self:flex-start;font-size:18px;font-weight:700;letter-spacing:-.015em;margin-bottom:6px}
+.badge-card-n{font-size:15px;font-weight:600;line-height:1.25}
+.badge-prog{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;width:100%;margin-top:6px}
+.badge-prog i{display:block;height:100%;background:var(--acc);border-radius:99px}
+.badge-list{display:flex;flex-direction:column;gap:12px}
+.badge-row{display:flex;gap:12px;align-items:center}
+.badge-row.locked{opacity:.75}
+.ach-card{width:100%;text-align:left}
+/* ---------------------------------------------------------------- workout sets v2 -- */
+.sethead{padding:0 0 8px;font-size:11px}
+.sethead .n-sp{width:34px;text-align:center}
+.sethead .ck-sp{width:36px}
+.setrow{padding:6px 0}
+.setrow+.setrow::before{left:42px}
+.setrow .n{width:34px;height:40px;border-radius:12px;font-size:15px;font-weight:700;background:var(--surface-2)}
+.setrow .stp{border-radius:14px;background:var(--surface-2)}
+.setrow .stp button{width:30px;height:52px;color:var(--label-2)}
+.setrow .stp .num{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.setrow .stp .val input{font-size:22px;font-weight:700}
+.setrow .chk,.setrow .check{width:36px;height:36px}
+.setrow.done .n{background:var(--acc);color:var(--on-acc)}
+.setrow.done{opacity:.5}
+.addset{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:14px;border-radius:16px;
+  border:1.5px dashed var(--label-4);color:var(--label-2);font-weight:600;font-size:15px;background:transparent}
+.addset:active{background:var(--surface-2)}
+.lib-tile{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px}
+.lib-tile .icn{font-size:22px;color:var(--acc);margin-bottom:2px}
+.lib-tile span{font-weight:700;font-size:15px;line-height:1.2}
+.lib-tile small{font-size:12px;color:var(--label-2);line-height:1.3}
+.adv{margin:4px 0 12px}
+.adv summary{cursor:pointer;padding:8px 4px;list-style:none}
+.adv summary::before{content:'›';display:inline-block;margin-right:6px;transition:transform var(--fast);color:var(--label-3)}
+.adv[open] summary::before{transform:rotate(90deg)}
