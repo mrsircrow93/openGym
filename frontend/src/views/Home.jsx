@@ -15,24 +15,11 @@ import { analyzeMealSheet } from '../sheets-nutrition.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
 import { COACHES, coachOf } from '../lib/coach.js'
 import CoachAvatar from '../components/CoachAvatar.jsx'
+import Ring from '../components/Ring.jsx'
 import { stepsSheet } from '../sheets-steps.jsx'
 import { stepsOn, stepGoalOf, stepPct } from '../lib/steps.js'
 import { authResendVerify } from '../lib/api.js'
 import { useUI } from '../store/useUI.js'
-
-// A goal ring: the one shape the redesign uses for "how far along today" (steps, calories).
-export function Ring({ pct, size = 64, stroke = 7, color = 'var(--acc)', children }) {
-  const r = (size - stroke) / 2, c = 2 * Math.PI * r
-  const p = Math.max(0, Math.min(100, pct || 0))
-  return <div style={{ position: 'relative', width: size, height: size, flex: 'none' }}>
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={c} strokeDashoffset={c * (1 - p / 100)} style={{ transition: 'stroke-dashoffset .4s var(--ease)' }} />
-    </svg>
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{children}</div>
-  </div>
-}
 
 // Home = what to do now, then a glance at today. Deep charts & history live in Stats.
 // Layout follows design/sleek/02-inicio.png: greeting, one hero card with the single primary

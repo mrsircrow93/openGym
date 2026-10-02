@@ -13,6 +13,7 @@ import {
 } from './lib/nutrition.js'
 import Icon from './components/Icon.jsx'
 import { Button, Segmented, TextField, TextArea, Stepper } from './components/ui.jsx'
+import Ring from './components/Ring.jsx'
 
 const update = (...a) => useStore.getState().update(...a)
 const ui = () => useUI.getState()
@@ -482,28 +483,49 @@ export function MicroLine({ tot, goal }) {
   </div>
 }
 
-// Shared by Home and the Nutrition view: calories vs goal + the three macro bars.
+// Shared by Home and the Nutrition view: calories vs goal + the three macros. The full version
+// is a ring you can read from across the room plus three tiles; `compact` keeps the bars.
 export function DaySummary({ tot, goal, compact }) {
   const rows = [
-    { k: 'protein', l: t('Protein'), c: 'var(--blue)' },
-    { k: 'carbs', l: t('Carbs'), c: 'var(--orange)' },
-    { k: 'fat', l: t('Fat'), c: 'var(--yellow)' }
+    { k: 'protein', l: t('Protein'), c: 'var(--blue)', hint: t('Muscle') },
+    { k: 'carbs', l: t('Carbs'), c: 'var(--orange)', hint: t('Energy') },
+    { k: 'fat', l: t('Fat'), c: 'var(--yellow)', hint: t('Hormones') }
   ]
   const kp = pctOf(tot.kcal, goal.kcal)
   const over = tot.kcal > goal.kcal * 1.1
-  return <>
+  const left = goal.kcal - tot.kcal
+  if (compact) return <>
     <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
       <div className="big">{fmtNum(tot.kcal)} <span className="muted" style={{ fontSize: '1rem' }}>/ {fmtNum(goal.kcal)} kcal</span></div>
-      <span className="small dim" style={{ marginLeft: 'auto' }}>{tot.kcal >= goal.kcal ? (over ? t('over by {0}', fmtNum(tot.kcal - goal.kcal)) : t('target reached')) : t('{0} left', fmtNum(goal.kcal - tot.kcal))}</span>
+      <span className="small dim" style={{ marginLeft: 'auto' }}>{tot.kcal >= goal.kcal ? (over ? t('over by {0}', fmtNum(tot.kcal - goal.kcal)) : t('target reached')) : t('{0} left', fmtNum(left))}</span>
     </div>
     <div className="wprog" style={{ margin: '8px 0 12px' }}><i style={{ width: kp + '%', background: over ? 'var(--orange)' : 'var(--acc)' }} /></div>
-    <div className={'macros' + (compact ? ' compact' : '')}>
+    <div className="macros compact">
       {rows.map(r => <div key={r.k} className="mrow">
         <span className="ml">{r.l}</span>
         <span className="mv">{fmtNum(tot[r.k])}<span className="dim"> / {fmtNum(goal[r.k])} g</span></span>
         <span className="mb"><i style={{ width: pctOf(tot[r.k], goal[r.k]) + '%', background: r.c }} /></span>
       </div>)}
     </div>
-    {!compact && <MicroLine tot={tot} goal={goal} />}
+  </>
+  return <>
+    <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+      <Ring pct={kp} size={116} stroke={11} color={over ? 'var(--orange)' : 'var(--acc)'}>
+        <div style={{ textAlign: 'center', lineHeight: 1.05 }}><div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>{fmtNum(tot.kcal)}</div><div className="dim" style={{ fontSize: 11, fontWeight: 600 }}>kcal</div></div>
+      </Ring>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.2 }}>{tot.kcal === 0 ? t('Nothing eaten yet') : over ? t('{0} kcal over your goal', fmtNum(tot.kcal - goal.kcal)) : left > 0 ? t('{0} kcal to go', fmtNum(left)) : t('Goal reached')}</div>
+        <div className="dim small" style={{ marginTop: 3 }}>{t('Goal: {0} kcal a day', fmtNum(goal.kcal))}</div>
+        {tot.kcal === 0 && <div className="small" style={{ color: 'var(--acc)', marginTop: 6 }}>{t('Snap your first meal below')}</div>}
+      </div>
+    </div>
+    <div className="macro-tiles">
+      {rows.map(r => { const p = pctOf(tot[r.k], goal[r.k]); return <div key={r.k} className="macro-tile">
+        <Ring pct={p} size={46} stroke={5} color={r.c}><span style={{ fontSize: 11 }}>{p}%</span></Ring>
+        <div className="mt-l">{r.l}</div>
+        <div className="mt-v"><b>{fmtNum(tot[r.k])}</b> / {fmtNum(goal[r.k])} g</div>
+      </div> })}
+    </div>
+    <details className="adv" style={{ margin: '6px 0 0' }}><summary className="small muted">{t('More detail: sugar, fibre and sodium')}</summary><MicroLine tot={tot} goal={goal} /></details>
   </>
 }

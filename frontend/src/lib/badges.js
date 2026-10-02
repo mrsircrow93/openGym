@@ -6,7 +6,7 @@ import { weekKey, isoOf } from './format.js'
 import { workoutVolume } from './history.js'
 
 export const CATS = ['workouts', 'streaks', 'month', 'volume', 'milestones', 'steps']
-export const CAT_NAME = { workouts: 'Workouts', streaks: 'Streaks', month: 'Calendar', volume: 'Volume', milestones: 'Milestones', steps: 'Steps' }
+export const CAT_NAME = { workouts: 'Workouts', streaks: 'Streaks', month: 'Calendar', volume: 'Weight lifted', milestones: 'Milestones', steps: 'Steps' }
 export const CAT_ICON = { workouts: 'target', streaks: 'flame', month: 'calendar', volume: 'kettlebell', milestones: 'trophy', steps: 'footsteps' }
 
 // Thresholds per category. `tier` drives the badge colour (1 bronze … 4 gold).
@@ -58,8 +58,13 @@ export function computeBadges(S) {
   // --- volume: cumulative tonnes
   let cum = 0, cumAt = {}
   for (const w of ws) { cum += (w.vol || workoutVolume(w) || 0) / 1000; for (const [n] of TIERS.volume) if (cum >= n && !cumAt[n]) cumAt[n] = w.d }
+  // Said in the person's unit and compared with something you can picture; a "tonne" means
+  // little to most people, "as much as two cars" does.
+  const lb = S.unit === 'lb'
+  const amount = n => (lb ? Math.round(n * 2204.6 / 1000) * 1000 : n * 1000).toLocaleString() + ' ' + (lb ? 'lb' : 'kg')
+  const LIKE = { 10: t('about two cars'), 50: t('a loaded truck'), 100: t('a blue whale'), 250: t('a passenger plane'), 500: t('three blue whales'), 1000: t('a freight train') }
   for (const [n, tier] of TIERS.volume) push({ id: 'v' + n, cat: 'volume', icon: 'kettlebell', tier, goal: n, value: Math.round(cum * 10) / 10,
-    name: t('{0} tonnes lifted', n), desc: t('Lift {0} tonnes in total across all workouts', n), earned: cumAt[n] || null })
+    name: t('{0} lifted', amount(n)), desc: t('Lift {0} in total across all your workouts — {1}', amount(n), LIKE[n]), earned: cumAt[n] || null })
 
   // --- milestones: one-offs
   const firstPR = ws.find(w => w.prs && w.prs.length)

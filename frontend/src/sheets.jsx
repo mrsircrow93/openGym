@@ -1335,26 +1335,35 @@ function WaterSheet({ close }) {
   const goal = st.waterGoal || 2000
   const pct = Math.min(100, Math.round((today / goal) * 100))
   const reached = today >= goal
+  const glasses = Math.round(goal / 250)
+  const drunk = Math.min(glasses, Math.floor(today / 250))
+  const ADDS = [{ ml: 250, label: t('Glass'), icon: 'droplet' }, { ml: 500, label: t('Bottle'), icon: 'droplet' }, { ml: 1000, label: t('Big bottle'), icon: 'droplet' }]
   return <>
-    <h3 className="row" style={{ gap: 8 }}><Icon name="droplet" style={{ color: 'var(--blue)' }} />{t('Water today')}</h3>
-    <div className="muted small">{t('Today') + ', ' + fmtDate(todayISO(), true)}</div>
-    <div className="row" style={{ gap: 8, alignItems: 'baseline', margin: '10px 0 6px' }}>
-      <div className="big">{fmtWater(today)}</div>
-      <span className="dim small">/ {fmtWater(goal)}{reached ? ' · ' + t('goal reached!') : ''}</span>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="droplet" style={{ color: 'var(--blue)' }} />{t('Water')}</h3>
+    <div className="water-hero">
+      <div className="water-glass"><i style={{ height: pct + '%' }} /><span>{pct}%</span></div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtWater(today)}</div>
+        <div className="dim small" style={{ marginTop: 4 }}>{t('of {0} today', fmtWater(goal))}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginTop: 8, color: reached ? 'var(--acc)' : 'var(--label)' }}>{reached ? t('Goal reached — well done!') : t('{0} to go', fmtWater(goal - today))}</div>
+        <div className="water-dots" aria-hidden="true">{Array.from({ length: Math.min(glasses, 12) }).map((_, i) => <i key={i} className={i < drunk ? 'on' : ''} />)}</div>
+      </div>
     </div>
-    <div className="wprog" style={{ marginBottom: 16 }}><i style={{ width: pct + '%', background: reached ? 'var(--acc)' : 'var(--blue)' }} /></div>
-    <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-      {WATER_ADDS.map(a => <Button key={a.ml} style={{ flex: 1 }} icon="plus" onClick={() => addWater(a.ml)}>{t(a.label)}<br /><span className="dim small">{fmtWater(a.ml)}</span></Button>)}
+    <div className="eyebrow" style={{ margin: '14px 0 8px' }}>{t('I just drank…')}</div>
+    <div className="water-adds">
+      {ADDS.map(a => <button key={a.ml} className="water-add tappable" onClick={() => addWater(a.ml)}><Icon name={a.icon} /><b>{a.label}</b><span>{fmtWater(a.ml)}</span></button>)}
     </div>
-    <div className="row" style={{ gap: 8, marginBottom: 16 }}>
-      <Button style={{ flex: 1 }} icon="minus" disabled={!today} onClick={() => addWater(-250)}>{t('Undo 250 ml')}</Button>
-      <Button style={{ flex: 1 }} variant="ghost" className="dim" disabled={!today} onClick={() => update(s => { s.water = (s.water || []).filter(w => w.d !== todayISO()) })}>{t('Clear today')}</Button>
+    <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      <Button size="sm" icon="minus" disabled={!today} style={{ flex: 1 }} onClick={() => addWater(-250)}>{t('Undo a glass')}</Button>
+      <Button size="sm" variant="ghost" className="dim" disabled={!today} style={{ flex: 1 }} onClick={() => update(s => { s.water = (s.water || []).filter(w => w.d !== todayISO()) })}>{t('Start the day over')}</Button>
     </div>
-    <h4 className="sec">{t('Daily goal')}</h4>
-    <div className="row cfgrow" style={{ marginBottom: 8 }}>
-      <Stepper label={t('Goal (ml)')} value={goal} step={250} decimal={false} onChange={v => update(s => { s.waterGoal = Math.max(250, Math.round(v)) })} />
-    </div>
-    <div className="small dim" style={{ marginBottom: 12 }}>{t('A common target is 30–35 ml per kg of body weight — adjust to what your day needs.')}</div>
+    <details className="adv" style={{ marginTop: 14 }}><summary className="small muted">{t('Change my daily goal')}</summary>
+      <div className="row cfgrow" style={{ margin: '8px 0' }}>
+        <Stepper label={t('Goal (ml)')} value={goal} step={250} decimal={false} onChange={v => update(s => { s.waterGoal = Math.max(250, Math.round(v)) })} />
+      </div>
+      <div className="small dim">{t('Most people do well with 2 to 3 litres a day; more on hot days or hard training.')}</div>
+    </details>
+    <div style={{ height: 12 }} />
     <Button variant="primary" onClick={close}>{t('Done')}</Button>
   </>
 }
