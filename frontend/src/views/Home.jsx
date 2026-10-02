@@ -140,40 +140,6 @@ export default function Home() {
       </div>
     )}
 
-    {hasAnyData && !coach && (
-      <div className="card coach-card">
-        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('Choose your coach')}</div>
-        <div className="dim small" style={{ marginTop: 2 }}>{t('They will read your training and food and answer your questions. You can change later in Settings.')}</div>
-        <div className="coach-pick">
-          {COACHES.map(c => <button key={c.id} className="coach-opt tappable" onClick={() => update(s => { s.coach = c.id })}>
-            <CoachAvatar gender={c.gender} size={72} />
-            <span>{c.name}</span>
-          </button>)}
-        </div>
-      </div>
-    )}
-
-    {hasAnyData && coach && (
-      <div className="card coach-card">
-        <button className="row tappable" style={{ gap: 12, alignItems: 'center', width: '100%', textAlign: 'left' }} onClick={() => coachSheet()}>
-          <span className="coach-avatar"><CoachAvatar gender={coach.gender} size={44} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('{0} is here to help', coach.name)}</div>
-            <div className="dim small">{t('{0} this week', wThisWeek + (plannedPerWeek ? '/' + plannedPerWeek : ''))} · {t('ask anything')}</div>
-          </div>
-          <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />
-        </button>
-        <div className="coach-qs">
-          {COACH_QUESTIONS.map(q => <button key={q} className="coach-q tappable" onClick={() => coachSheet(q)}>
-            <span>{t(q)}</span><Icon name="chevronRight" />
-          </button>)}
-          <button className="coach-q tappable" onClick={() => coachSheet()}>
-            <span>{t('Ask something else')}</span><Icon name="chevronRight" />
-          </button>
-        </div>
-      </div>
-    )}
-
     <div className="tiles">
       <button className="tile tappable" style={{ textAlign: 'left' }} onClick={stepsSheet}>
         <div className="l"><Icon name="footsteps" style={{ color: 'var(--teal)' }} />{t('Steps')}</div>
@@ -254,6 +220,40 @@ export default function Home() {
         <Button size="xs" icon="calendar" onClick={() => calendarSheet()}>{t('Calendar')}</Button>
       </div>
     </div>
+
+    {hasAnyData && !coach && (
+      <div className="card coach-card">
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('Choose your coach')}</div>
+        <div className="dim small" style={{ marginTop: 2 }}>{t('They will read your training and food and answer your questions. You can change later in Settings.')}</div>
+        <div className="coach-pick">
+          {COACHES.map(c => <button key={c.id} className="coach-opt tappable" onClick={() => update(s => { s.coach = c.id })}>
+            <CoachAvatar gender={c.gender} size={72} />
+            <span>{c.name}</span>
+          </button>)}
+        </div>
+      </div>
+    )}
+
+    {hasAnyData && coach && (
+      <div className="card coach-card">
+        <button className="row tappable" style={{ gap: 12, alignItems: 'center', width: '100%', textAlign: 'left' }} onClick={() => coachSheet()}>
+          <span className="coach-avatar"><CoachAvatar gender={coach.gender} size={44} /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.012em' }}>{t('{0} is here to help', coach.name)}</div>
+            <div className="dim small">{t('{0} this week', wThisWeek + (plannedPerWeek ? '/' + plannedPerWeek : ''))} · {t('ask anything')}</div>
+          </div>
+          <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />
+        </button>
+        <div className="coach-qs">
+          {COACH_QUESTIONS.map(q => <button key={q} className="coach-q tappable" onClick={() => coachSheet(q)}>
+            <span>{t(q)}</span><Icon name="chevronRight" />
+          </button>)}
+          <button className="coach-q tappable" onClick={() => coachSheet()}>
+            <span>{t('Ask something else')}</span><Icon name="chevronRight" />
+          </button>
+        </div>
+      </div>
+    )}
 
     <input ref={mealPhoto} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) analyzeMealSheet(f, todayISO()) }} />
