@@ -29,3 +29,40 @@ items as they ship; move things around here rather than in the phase docs.
 
 Rule of thumb: #1–3 this week, #4–9 gets you a web product that charges, #10–12 gets you the
 stores, #13+ is growth. Nothing below #9 blocks charging on the web.
+
+## Status as of 2026-10-02 (end of session)
+
+Shipped since the table above: email auth, Stripe (test mode, full flow), referrals, Google
+sign-in (web + iOS + Android), progress photos with monthly coach note and reminder, routine and
+diet import from photo/PDF (HEIC, PDFs to 12 MB), security pass (docs/SECURITY_REVIEW.md), new
+pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), English marketing site.
+
+### Pending — owner (needs the owner's accounts or decisions)
+
+1. **Stripe live** — after the meeting with the partner. Steps in the chat of 2026-10-02 and in
+   docs/BILLING.md: activate account, business name, product with prices 129 / 599 (6-month) /
+   999 (yearly), customer portal, webhook (6 events) → `whsec_`, live `sk_live_`, optional rescue
+   coupon (17%); load into the server `.env` with the ssh one-liner, then a real purchase test.
+2. Apple Developer account ($99/yr) → unlocks "Continue with Apple", TestFlight, App Store.
+3. Google Play developer account ($25) → store publication; register production signing SHA-1 in
+   Google Cloud (Android OAuth client).
+4. Anthropic spend limit in the console; raise `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15
+   paying users (rule: $1.5 × paying users).
+5. Legal entity name for terms, privacy and Stripe receipts.
+6. Store the backup passphrase (`~/.backup-pass` on the server) in a password manager; S3 bucket
+   + IAM key for off-host backups (docs/BACKUPS.md).
+7. Cloudflare: Bot Fight Mode; delete the stray CNAME `app.vantixgym.app` in the pentaforge zone;
+   optional Google brand verification (Search Console TXT, point consent-screen links to
+   https://vantixgym.app/privacidad.html and /terminos.html).
+8. Lightsail firewall: port 22 only.
+9. Delete local `precios.txt`.
+10. Real testimonials (first name, city/goal, 2–3 sentences, permission) → unhide the section.
+
+### Pending — build (once the items above unlock them)
+
+- Continue with Apple (needs #2). Same shape as Google: ID token verified server-side.
+- In-app purchases via RevenueCat for iOS/Android with the same three plans (needs #2, #3).
+- Store listings: icons, screenshots, copy, signed builds.
+- Receipts/emails with the legal name (#5).
+- Later: prompt caching, in-memory limiters to the DB if a second API container ever appears,
+  passkeys inside the mobile app.
