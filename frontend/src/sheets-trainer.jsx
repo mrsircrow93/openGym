@@ -15,6 +15,8 @@ import {
 } from './lib/trainer.js'
 import { macroGoalOf } from './lib/nutrition.js'
 import { glyphOf } from './lib/glyphs.js'
+import { routineMinutes, routineMuscles, setsLabel } from './lib/routine.js'
+import { Thumb } from './components/Media.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Stepper, TextArea, Row, Check } from './components/ui.jsx'
 
@@ -45,13 +47,16 @@ function Trainer({ close }) {
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)      // { plan, routines, week, dropped, candidates }
   const [applyNutrition, setApplyNutrition] = useState(true)
+  const [openRoutine, setOpenRoutine] = useState(null)
+  const [moreSummary, setMoreSummary] = useState(false)
   const set = patch => setA(x => ({ ...x, ...patch }))
 
   const build = async () => {
     setBusy(true); setErr('')
     try {
       const candidates = trainerCandidates(S, a.equipment)
-      const plan = await aiTrainerPlan(trainerRequestBody(S, a, candidates))
+      const mock = import.meta.env.DEV ? (() => { try { return JSON.parse(localStorage.getItem('vx_mock_plan')) } catch { return null } })() : null
+      const plan = mock || await aiTrainerPlan(trainerRequestBody(S, a, candidates))
       const m = materializePlan(plan, candidates)
       if (!m.routines.length) throw new Error(t('The plan came back empty — try again'))
       setRes({ plan, ...m })
@@ -76,33 +81,65 @@ function Trainer({ close }) {
   /* ---------- result ---------- */
   if (res) {
     const { plan, routines, week, dropped } = res
-    const dayOf = id => Object.keys(week).filter(d => week[d] === id).map(d => t(DAYN[+d]).slice(0, 3)).join(', ')
+    const daysOf = id => Object.keys(week).filter(d => week[d] === id).map(d => t(DAYN[+d]).slice(0, 3))
     const n = plan.nutrition
+    const daysPerWeek = Object.keys(week).length
+    const minutes = routines.length ? Math.round(routines.reduce((acc, r) => acc + routineMinutes(r), 0) / routines.length / 5) * 5 : 0
+    const summary = String(plan.summary || '')
+    const shortSummary = summary.length > 220 && !moreSummary ? summary.slice(0, 200).replace(/\s+\S*$/, '') + '…' : summary
     return <>
-      <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--violet)' }} />{plan.split || t('Your plan')}</h3>
-      <div className="small" style={{ lineHeight: 1.5, marginBottom: 14, whiteSpace: 'pre-wrap' }}>{plan.summary}</div>
-      {routines.map(r => <div key={r.id} className="card" style={{ padding: 12 }}>
-        <div className="row between" style={{ marginBottom: 6 }}>
-          <div className="row" style={{ gap: 8 }}><span className="lrow-i" style={{ width: 30, height: 30, fontSize: 16 }}><Icon name={glyphOf(r.emoji)} /></span><b style={{ fontWeight: 600 }}>{r.name}</b></div>
-          <span className="tag acc">{dayOf(r.id) || t('unscheduled')}</span>
-        </div>
-        {r.ex.map((e, i) => { const x = exOr(e.id); return <div key={i} className="row between small" style={{ padding: '4px 0', gap: 8 }}>
-          <span className="capitalize" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.n}{e.note ? <span className="dim"> · {e.note}</span> : ''}</span>
-          <span className="dim" style={{ flex: 'none' }}>{exLine(e, S.unit)}</span>
+      <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--acc)' }} />{plan.split || t('Your plan')}</h3>
+      <div className="tr-stats">
+        <div><b>{daysPerWeek}</b><span>{t('days a week')}</span></div>
+        <div><b>~{minutes}</b><span>{t('min per session')}</span></div>
+        <div><b>{routines.length}</b><span>{t(routines.length === 1 ? 'routine' : 'routines')}</span></div>
+      </div>
+      {summary && <div className="small muted" style={{ lineHeight: 1.5, margin: '10px 0 4px' }}>{shortSummary}{summary.length > 220 && <button className="linkbtn" style={{ marginLeft: 6 }} onClick={() => setMoreSummary(v => !v)}>{moreSummary ? t('Less') : t('Read more')}</button>}</div>}
+
+      <div className="eyebrow" style={{ margin: '14px 0 8px' }}>{t('Your week')}</div>
+      <div className="tr-week">
+        {[1, 2, 3, 4, 5, 6, 0].map(d => { const r = routines.find(x => x.id === week[d]); return <div key={d} className={'tr-day' + (r ? ' on' : '')}>
+          <span className="tr-day-n">{t(DAYN[d]).slice(0, 1)}</span>
+          <span className="tr-day-i">{r ? <Icon name={glyphOf(r.emoji)} /> : <Icon name="moon" />}</span>
+          <span className="tr-day-t">{r ? r.name : t('Rest')}</span>
         </div> })}
-      </div>)}
+      </div>
+
+      <div className="eyebrow" style={{ margin: '16px 0 8px' }}>{t('Your routines')}</div>
+      {routines.map(r => {
+        const open = openRoutine === r.id
+        const shown = open ? r.ex : r.ex.slice(0, 3)
+        return <div key={r.id} className="card" style={{ padding: 14 }}>
+          <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+            <span className="avatar-l" style={{ fontSize: 22 }}><Icon name={glyphOf(r.emoji)} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.012em' }}>{r.name}</div>
+              <div className="muted small">{[t(r.ex.length === 1 ? '{0} exercise' : '{0} exercises', r.ex.length), '~' + routineMinutes(r) + ' min', routineMuscles(r)].filter(Boolean).join(' · ')}</div>
+              {daysOf(r.id).length > 0 && <div className="row" style={{ gap: 5, marginTop: 6, flexWrap: 'wrap' }}>{daysOf(r.id).map(d => <span key={d} className="pill acc" style={{ padding: '3px 9px', fontSize: 12 }}>{d}</span>)}</div>}
+            </div>
+          </div>
+          <div className="tr-ex">
+            {shown.map((e, i) => { const x = exOr(e.id); return <div key={i} className="tr-ex-row">
+              <Thumb ex={x} />
+              <div className="tr-ex-n capitalize">{x.n}</div>
+              <div className="tr-ex-s"><b>{setsLabel(e)}</b>{e.rest > 0 && <span>{t('rest {0}', Math.floor(e.rest / 60) + ':' + String(e.rest % 60).padStart(2, '0'))}</span>}</div>
+            </div> })}
+          </div>
+          {r.ex.length > 3 && <button className="linkbtn small" style={{ marginTop: 8 }} onClick={() => setOpenRoutine(open ? null : r.id)}>{open ? t('Show fewer') : t('See all {0} exercises', r.ex.length)}</button>}
+        </div>
+      })}
       {plan.cardio && <div className="row small muted" style={{ gap: 6, alignItems: 'flex-start', margin: '4px 0 12px' }}><Icon name="figureRun" style={{ fontSize: 14, flex: 'none', marginTop: 2 }} /><span>{plan.cardio}</span></div>}
       {dropped > 0 && <div className="small dim" style={{ marginBottom: 10 }}>{t('{0} suggested exercise(s) weren’t in your library and were left out.', dropped)}</div>}
-      {n && <div className="sect-b" style={{ marginBottom: 14 }}>
+      {n && <div className="sect-b" style={{ margin: '6px 0 14px' }}>
         <button className="lrow tap" onClick={() => setApplyNutrition(v => !v)}>
-          <Check checked={applyNutrition} onChange={() => {}} />{/* the row toggles; the click bubbles */}
-          <span className="lrow-m"><span className="lrow-t">{t('Set nutrition targets: {0} kcal', fmtNum(n.kcal))}</span>
-            <span className="lrow-s">P {n.protein} g · C {n.carbs} g · F {n.fat} g — {n.why}</span></span>
+          <Check checked={applyNutrition} onChange={() => {}} />
+          <span className="lrow-m"><span className="lrow-t">{t('Also set my food targets')}</span>
+            <span className="lrow-s">{fmtNum(n.kcal)} kcal · {t('Protein')} {n.protein} g · {t('Carbs')} {n.carbs} g · {t('Fat')} {n.fat} g</span></span>
         </button>
       </div>}
-      <Button variant="primary" icon="check" onClick={() => apply(true)}>{S.routines.length ? t('Replace my current plan') : t('Use this plan')}</Button>
+      <Button variant="primary" icon="check" onClick={() => apply(true)}>{S.routines.length ? t('Use this plan instead of mine') : t('Use this plan')}</Button>
       {S.routines.length > 0 && <><div style={{ height: 8 }} /><Button icon="plus" onClick={() => apply(false)}>{t('Add alongside my routines')}</Button></>}
-      <div style={{ height: 8 }} /><Button variant="ghost" icon="shuffle" onClick={() => { setRes(null); build() }}>{t('Generate another')}</Button>
+      <div style={{ height: 8 }} /><Button variant="ghost" icon="shuffle" onClick={() => { setRes(null); build() }}>{t('Show me another option')}</Button>
       <div style={{ height: 4 }} /><Button variant="ghost" className="dim" onClick={() => setRes(null)}>{t('Change my answers')}</Button>
     </>
   }

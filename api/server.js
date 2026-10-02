@@ -819,8 +819,8 @@ function trainerPlanRequest({ profile, candidates }) {
       input_schema: {
         type: 'object',
         properties: {
-          summary: { type: 'string' },
-          split: { type: 'string', description: 'short split name, e.g. "Upper / Lower"' },
+          summary: { type: 'string', description: 'at most 2 short sentences, plain language for someone who has never trained, no jargon (no "split", "volume", "compound"): what the week looks like and what they will get from it' },
+          split: { type: 'string', description: 'short plan name a beginner understands, e.g. "Upper / Lower", "Full body 3 days"' },
           progression: { type: 'string', enum: ['linear', 'double', 'greyskull'] },
           routines: {
             type: 'array',

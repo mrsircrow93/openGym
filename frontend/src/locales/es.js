@@ -891,6 +891,22 @@ export default {
   'Different days, equipment or goal: answer again and the week is rebuilt.': 'Otros días, equipo u objetivo: responde de nuevo y se rearma la semana.',
   'Five quick questions and your week is ready.': 'Cinco preguntas rápidas y tu semana queda lista.',
 
+  /* ---- trainer result ---- */
+  'days a week': 'días a la semana',
+  'min per session': 'min por sesión',
+  'routine': 'rutina',
+  'routines': 'rutinas',
+  'Less': 'Menos',
+  'Read more': 'Leer más',
+  '{0} exercise': '{0} ejercicio',
+  '{0} exercises': '{0} ejercicios',
+  'rest {0}': 'descanso {0}',
+  'Show fewer': 'Ver menos',
+  'See all {0} exercises': 'Ver los {0} ejercicios',
+  'Also set my food targets': 'Fijar también mis metas de comida',
+  'Use this plan instead of mine': 'Usar este plan en lugar del mío',
+  'Show me another option': 'Enséñame otra opción',
+
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',
   'Choose your coach': 'Elige a tu coach',

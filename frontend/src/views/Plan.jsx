@@ -4,35 +4,16 @@ import { DAYN, uid, exCount, fmtDate, todayISO } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { dayAssignSheet, dayOverrideSheet, loadStarterPlan, planToolsSheet, startFlow } from '../sheets.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
-import { effectiveRoutine, modeOf } from '../lib/history.js'
+import { effectiveRoutine } from '../lib/history.js'
+import { routineMinutes, routineMuscles } from '../lib/routine.js'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { DEFAULT_GLYPH, glyphOf } from '../lib/glyphs.js'
-import { exOr, isCardio } from '../lib/exercises.js'
 
 // Plan, written for everyone: what's on today (one big button), the week in plain rows with a
 // visible "Change" on each day, then the routines as cards with words instead of letters —
 // which muscles, how long, when you last did it — and visible buttons instead of swipe
 // gestures. The trainer sits at the bottom as help, not as the first thing you must decide.
-
-// Rough session length: strength sets ~2.5 min each (work + rest), cardio by its minutes.
-export function routineMinutes(r) {
-  let min = 0
-  for (const cfg of r.ex || []) {
-    if (isCardio(cfg.id) || modeOf(cfg) === 'cardio') min += (cfg.sets || 1) * (cfg.min || 20)
-    else min += (cfg.sets || 3) * 2.5
-  }
-  return Math.max(5, Math.round(min / 5) * 5)
-}
-// "Pecho, hombros y brazos" — body parts of the routine, in the person's language.
-export function routineMuscles(r) {
-  const seen = []
-  for (const cfg of r.ex || []) { const bp = exOr(cfg.id).bp; if (bp && !seen.includes(bp)) seen.push(bp) }
-  const names = seen.slice(0, 3).map(bp => t(bp))
-  if (!names.length) return ''
-  const txt = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' ' + t('and') + ' ' + names[names.length - 1]
-  return txt.charAt(0).toUpperCase() + txt.slice(1)
-}
 
 export default function Plan() {
   const nav = useNavigate()
