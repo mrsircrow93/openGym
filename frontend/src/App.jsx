@@ -115,6 +115,7 @@ function Shell() {
               <Route path="/history" element={<History />} />
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/plans" element={<Paywall />} />
               <Route path="/nutrition" element={<Nutrition />} />
               <Route path="/badges" element={<Badges />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />

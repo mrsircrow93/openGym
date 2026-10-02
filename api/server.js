@@ -59,9 +59,24 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const CURRENCY = (process.env.CURRENCY || 'MXN').toUpperCase();
 const PLANS = [
   { id: 'monthly', months: 1, amount: +process.env.PRICE_MONTHLY || 129, price: process.env.STRIPE_PRICE_MONTHLY || '' },
-  { id: 'semester', months: 6, amount: +process.env.PRICE_SEMESTER || 779, price: process.env.STRIPE_PRICE_SEMESTER || '' },
-  { id: 'yearly', months: 12, amount: +process.env.PRICE_YEARLY || 1549, price: process.env.STRIPE_PRICE_YEARLY || '' }
+  { id: 'semester', months: 6, amount: +process.env.PRICE_SEMESTER || 599, price: process.env.STRIPE_PRICE_SEMESTER || '' },
+  { id: 'yearly', months: 12, amount: +process.env.PRICE_YEARLY || 999, price: process.env.STRIPE_PRICE_YEARLY || '' }
 ];
+// Hybrid trial (docs/BILLING.md §Trial): no card to start; whoever adds a card while the trial
+// is still running gets this many extra days before the first charge. Stripe needs trial_end
+// at least 48 h out, so the bonus only applies while that holds.
+const TRIAL_ACTIVATE_BONUS_DAYS = Math.max(0, +(process.env.TRIAL_ACTIVATE_BONUS_DAYS ?? 7) || 0);
+// Optional rescue coupon (Stripe dashboard) for the 48 h after a trial lapses without a plan.
+const STRIPE_RESCUE_COUPON = process.env.STRIPE_RESCUE_COUPON || '';
+const RESCUE_HOURS = 48;
+// When the first charge would land if this user activated now: trial end + bonus, or today.
+function firstChargeAt(user) {
+  const trial = user.trialEnds ? Date.parse(user.trialEnds) : 0;
+  if (trial > Date.now() + 48 * 3600_000 && TRIAL_ACTIVATE_BONUS_DAYS) return new Date(trial + TRIAL_ACTIVATE_BONUS_DAYS * 86400_000).toISOString();
+  if (trial > Date.now()) return new Date(trial).toISOString();
+  return null;
+}
+const rescueUntil = user => { const t = user.trialEnds ? Date.parse(user.trialEnds) : 0; return STRIPE_RESCUE_COUPON && !user.tierUntil && t && Date.now() > t && Date.now() < t + RESCUE_HOURS * 3600_000 ? new Date(t + RESCUE_HOURS * 3600_000).toISOString() : null; };
 const AI_TRIAL_USD_CAP = +process.env.AI_TRIAL_USD_CAP || 1;   // what a free trial may spend on AI
 // Referrals: every account has a share code. A new account that signs up with one gets extra
 // trial days; when that account first pays, the referrer gets days added to their own access.
@@ -374,15 +389,41 @@ setInterval(() => {
     if (u.deletedAt && Date.now() - Date.parse(u.deletedAt) > DELETE_GRACE_DAYS * 86400_000) { purgeUser(u); dirty = true; }
   }
   if (BILLING_ENABLED) for (const u of db.users) {
-    if (!u.email || !u.trialEnds || u.tierUntil || u.trialWarned || u.deletedAt) continue;
-    const left = Date.parse(u.trialEnds) - Date.now();
-    if (left > 0 && left < 2 * 86400_000) {
-      u.trialWarned = true; dirty = true;
-      sendEmail({ to: u.email, ...mail(userLang(u), 'trialEnding', u.name, Math.max(1, Math.ceil(left / 86400_000)), `${ORIGIN}/#/settings`) }).catch(() => {});
-    }
+    if (!u.email || !u.trialEnds || u.tierUntil || u.deletedAt || isAdmin(u)) continue;
+    if (trialTouch(u)) dirty = true;
   }
   if (dirty) saveDb();
-}, 6 * 60 * 60_000).unref();
+}, 60 * 60_000).unref();
+
+// Trial drip (docs/BILLING.md §Trial): one message per stage, keyed on the account so a restart
+// never repeats one. Day 1 only if nothing was logged; day 3 is "what the app did for you";
+// day 5 and 6 warn with the date; day 7 is a push the morning of the charge-or-lapse. Emails go
+// out only to confirmed inboxes; pushes only where a subscription exists.
+function trialTouch(u) {
+  const S = readState(u.id) || {};
+  const lang = userLang(u), es = lang === 'es';
+  const ends = Date.parse(u.trialEnds), left = ends - Date.now(), age = Date.now() - Date.parse(u.created || u.trialEnds);
+  const sent = u.trialMsgs = u.trialMsgs || {};
+  const plans = `${ORIGIN}/#/plans`;
+  const stats = { workouts: (S.workouts || []).length, meals: (S.meals || []).length, bw: (S.bodyweight || []).length, checkins: (S.checkins || []).length };
+  const push = (title, body) => sendPush(u.id, { title, body, tag: 'trial' }).catch(() => {});
+  const email = (kind, ...args) => { if (u.emailVerified) sendEmail({ to: u.email, ...mail(lang, kind, u.name, ...args) }).catch(() => {}); };
+  const day = (ends - Date.now()) / 86400_000;   // days left (fractional)
+  let dirty = false;
+  const mark = k => { sent[k] = nowISO(); dirty = true; };
+  if (!sent.d1 && age > 20 * 3600_000 && age < 3 * 86400_000 && !stats.workouts && !stats.meals) {
+    mark('d1'); email('trialDay1', plans); push(es ? 'Tu coach ya tiene tu plan listo' : 'Your coach has your plan ready', es ? '¿Empezamos hoy? Dos minutos y tu semana queda armada.' : 'Shall we start today? Two minutes and your week is set.');
+  }
+  if (!sent.d3 && age > 3 * 86400_000 && left > 2.5 * 86400_000) { mark('d3'); email('trialDay3', stats, plans); }
+  if (!sent.d5 && left > 0 && left < 2.2 * 86400_000) {
+    mark('d5'); email('trialEnding', Math.max(1, Math.ceil(day)), plans);
+    push(es ? 'Quedan 2 días de tu prueba' : '2 days left on your trial', es ? 'Lo que registraste se queda contigo. Elige tu plan cuando quieras.' : 'Everything you logged stays with you. Pick a plan whenever you like.');
+  }
+  if (!sent.d6 && left > 0 && left < 1.2 * 86400_000) { mark('d6'); email('trialDay6', stats, plans); }
+  if (!sent.d7 && left > 0 && left < 0.5 * 86400_000) { mark('d7'); push(es ? 'Tu prueba termina hoy' : 'Your trial ends today', es ? 'Sin cobro automático: tus datos se conservan. Si quieres seguir, elige un plan en la app.' : 'No automatic charge: your data is kept. To keep going, pick a plan in the app.'); }
+  if (!sent.lapsed && left < 0 && left > -3 * 86400_000) { mark('lapsed'); email('trialLapsed', !!rescueUntil(u), plans); }
+  return dirty;
+}
 
 /* ---------- referrals ---------- */
 const REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O/1/I
@@ -1578,13 +1619,19 @@ const routes = {
   },
 
   /* ---------- billing (docs/BILLING.md) ---------- */
-  'GET /api/billing/plans': async (req, res) => json(res, 200, { enabled: BILLING_ENABLED, payments: !!STRIPE_SECRET_KEY, currency: CURRENCY, trialDays: TRIAL_DAYS,
-    plans: PLANS.map(p => ({ id: p.id, months: p.months, amount: p.amount, perMonth: Math.round(p.amount / p.months), available: !!p.price })) }),
+  'GET /api/billing/plans': async (req, res) => {
+    const monthly = (PLANS.find(p => p.months === 1) || PLANS[0]).amount;
+    const user = readSession(req);
+    json(res, 200, { enabled: BILLING_ENABLED, payments: !!STRIPE_SECRET_KEY, currency: CURRENCY, trialDays: TRIAL_DAYS, bonusDays: TRIAL_ACTIVATE_BONUS_DAYS,
+      firstChargeAt: user ? firstChargeAt(user) : null, rescueUntil: user ? rescueUntil(user) : null,
+      plans: PLANS.map(p => ({ id: p.id, months: p.months, amount: p.amount, perMonth: Math.round(p.amount / p.months), available: !!p.price,
+        savings: Math.max(0, monthly * p.months - p.amount), savingsPct: Math.max(0, Math.round((1 - p.amount / (monthly * p.months)) * 100)) })) });
+  },
 
   'GET /api/billing/status': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { ...entitlement(user), tier: entitlement(user).status, aiCapUsd: entitlement(user).status === 'trial' ? AI_TRIAL_USD_CAP : (AI_MONTHLY_USD_CAP || null) });
+    json(res, 200, { ...entitlement(user), tier: entitlement(user).status, aiCapUsd: entitlement(user).status === 'trial' ? AI_TRIAL_USD_CAP : (AI_MONTHLY_USD_CAP || null), firstChargeAt: firstChargeAt(user), rescueUntil: rescueUntil(user), bonusDays: TRIAL_ACTIVATE_BONUS_DAYS });
   },
 
   'POST /api/billing/checkout': async (req, res) => {
@@ -1596,6 +1643,9 @@ const routes = {
     const body = await readBody(req);
     const plan = PLANS.find(p => p.id === body.plan && p.price);
     if (!plan) return json(res, 400, { error: 'unknown plan' });
+    // Still in trial: the card is taken now, the first charge waits until the (extended) trial
+    // end. Lapsed within the rescue window: the semester plan carries the rescue coupon.
+    const fc = firstChargeAt(user), rescue = !!rescueUntil(user);
     try {
       if (!user.stripeCustomerId) {
         const c = await stripe('POST', '/customers', { email: user.email, name: user.name, metadata: { userId: user.id } });
@@ -1604,8 +1654,10 @@ const routes = {
       const session = await stripe('POST', '/checkout/sessions', {
         mode: 'subscription', customer: user.stripeCustomerId, client_reference_id: user.id,
         line_items: { 0: { price: plan.price, quantity: 1 } },
-        subscription_data: { metadata: { userId: user.id, plan: plan.id } },
-        ...(user.referredBy && !user.referralRewarded && STRIPE_REFERRAL_COUPON ? { discounts: { 0: { coupon: STRIPE_REFERRAL_COUPON } } } : { allow_promotion_codes: 'true' }),
+        subscription_data: { metadata: { userId: user.id, plan: plan.id }, ...(fc ? { trial_end: Math.floor(Date.parse(fc) / 1000) } : {}) },
+        ...(fc ? { payment_method_collection: 'always' } : {}),
+        ...(user.referredBy && !user.referralRewarded && STRIPE_REFERRAL_COUPON ? { discounts: { 0: { coupon: STRIPE_REFERRAL_COUPON } } }
+          : rescue && plan.id === 'semester' ? { discounts: { 0: { coupon: STRIPE_RESCUE_COUPON } } } : { allow_promotion_codes: 'true' }),
         locale: userLang(user),
         success_url: `${ORIGIN}/#/settings?checkout=success`, cancel_url: `${ORIGIN}/#/settings?checkout=cancel`
       });

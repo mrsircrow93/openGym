@@ -110,3 +110,27 @@ Every account has a share code (`GET /api/referral`, Settings → Invite & earn;
 
 The referrer is rewarded once per friend, by email too. `INVITE_ONLY` is now off in production;
 the invite code remains for private instances.
+
+## Trial and pricing model (2026-10-02)
+
+Prices: monthly $129, 6 months $599 ($99/mo, save 23%), yearly $999 ($83/mo, save 35%). The
+plans screen (`views/Account.jsx` Plans) lists yearly first and preselected, shows the per-month
+equivalent large with the monthly price struck through, the saving in pesos and percent, one
+button whose copy depends on status, and the exact first-charge date.
+
+Hybrid trial: no card to start (7 days). Activating a plan while the trial still has 48 h+ left
+sets Stripe `trial_end` to trial end + `TRIAL_ACTIVATE_BONUS_DAYS` (7) with
+`payment_method_collection=always`, so the card is captured now and the first charge lands later.
+`GET /api/billing/plans` and `/status` return `firstChargeAt`, `bonusDays` and `rescueUntil`.
+
+Rescue: set `STRIPE_RESCUE_COUPON` (a Stripe coupon) and for 48 h after a trial lapses the
+6-month plan carries it; the plans screen shows the banner.
+
+Drip (`trialTouch` in server.js, hourly): day 1 if nothing logged (email + push), day 3 "what the
+app did for you" with the account's numbers, day 5 warning (email + push), day 6 week-in-numbers
+with the yearly CTA, day 7 morning push, lapsed email (with the rescue line when active).
+Stages are stored on the user (`trialMsgs`) so a restart never repeats one; emails only to
+confirmed inboxes. Templates: `api/email.js` trialDay1 / trialDay3 / trialDay6 / trialLapsed.
+
+Paywall moments: `#/plans` route (reachable from Settings → Subscription, the Home banner at
+≤ 2 days left, and automatically after a 402 from any `/api/ai/*` call).

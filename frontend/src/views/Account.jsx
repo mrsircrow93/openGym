@@ -73,6 +73,8 @@ export function Reset() {
 export function Plans({ compact }) {
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState('')
+  const [pick, setPick] = useState(null)
+  const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
   useEffect(() => { billingPlans().then(setData).catch(() => setData({ plans: [] })) }, [])
   const buy = async id => {
@@ -83,17 +85,49 @@ export function Plans({ compact }) {
   }
   if (!data) return <div className="small dim">{t('Loading plans…')}</div>
   const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', maximumFractionDigits: 0 }).format(n)
-  // cheapest per month wins; on a tie the longer plan (fewer charges, fewer fees)
-  const best = data.plans.reduce((a, p) => (!a || p.perMonth < a.perMonth || (p.perMonth === a.perMonth && p.months > a.months) ? p : a), null)
-  return <div className="plans">
-    {data.plans.map(p => <button key={p.id} className={'plan-card tappable' + (p === best ? ' best' : '')} disabled={!!busy || !data.payments} onClick={() => buy(p.id)}>
-      {p === best && <span className="plan-tag">{t('Best value')}</span>}
-      <div className="plan-name">{p.months === 1 ? t('Monthly') : p.months === 12 ? t('Yearly') : t('{0} months', p.months)}</div>
-      <div className="plan-price">{fmt(p.amount)}</div>
-      <div className="dim small">{p.months === 1 ? t('per month') : t('{0} per month', fmt(p.perMonth))}</div>
-    </button>)}
-    {!data.payments && <div className="small dim" style={{ gridColumn: '1 / -1' }}>{t('Payments are not open yet — we will email you when they are.')}</div>}
-    {!compact && <div className="small dim" style={{ gridColumn: '1 / -1', lineHeight: 1.5 }}>{t('Prices include tax. Cancel any time from Settings; access runs to the end of the period you paid for.')} <a href="#/terms">{t('terms of service')}</a></div>}
+  const monthly = data.plans.find(p => p.months === 1)
+  // Yearly first and preselected: the cheapest month is the default answer, not a discovery.
+  const ordered = [...data.plans].sort((a, b) => b.months - a.months)
+  const best = ordered[0]
+  const sel = data.plans.find(p => p.id === pick) || best
+  const b = user?.billing || {}
+  const inTrial = b.status === 'trial'
+  const fc = data.firstChargeAt ? new Date(data.firstChargeAt) : null
+  const fcLabel = fc ? fc.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' }) : null
+  const rescue = data.rescueUntil && Date.parse(data.rescueUntil) > Date.now()
+  const periodWord = p => p.months === 1 ? t('every month') : p.months === 12 ? t('every year') : t('every {0} months', p.months)
+  return <div className="pw">
+    {inTrial && data.bonusDays > 0 && fcLabel && <div className="pw-bonus"><Icon name="sparkles" /><span>{t('Activate during your trial and we add {0} more days: nothing is charged until {1}.', data.bonusDays, fcLabel)}</span></div>}
+    {rescue && <div className="pw-bonus" style={{ borderColor: 'var(--orange)' }}><Icon name="flame" style={{ color: 'var(--orange)' }} /><span>{t('Welcome-back price on the 6-month plan for the next 48 hours.')}</span></div>}
+    <div className="pw-plans">
+      {ordered.map(p => { const on = p === sel; const perMo = p.months === 1 ? p.amount : p.perMonth
+        return <button key={p.id} className={'pw-plan' + (on ? ' on' : '') + (!p.available ? ' off' : '')} disabled={!!busy || !data.payments} onClick={() => setPick(p.id)} aria-pressed={on}>
+          {p === best && <span className="plan-tag">{t('Best value')}</span>}
+          {p.months === 6 && <span className="plan-tag alt">{t('Popular')}</span>}
+          <span className="pw-check"><Icon name={on ? 'checkCircle' : 'dot'} /></span>
+          <div className="pw-main">
+            <div className="pw-name">{p.months === 1 ? t('Monthly') : p.months === 12 ? t('Yearly') : t('{0} months', p.months)}</div>
+            <div className="pw-sub">{p.months === 1 ? t('{0} every month', fmt(p.amount)) : t('{0} {1} · one payment', fmt(p.amount), periodWord(p))}</div>
+            {p.savings > 0 && <div className="pw-save">{t('You save {0} ({1}%) vs monthly', fmt(p.savings), p.savingsPct)}</div>}
+          </div>
+          <div className="pw-price">
+            {monthly && p.months > 1 && <s>{fmt(monthly.amount)}</s>}
+            <b>{fmt(perMo)}</b><span>{t('per month')}</span>
+          </div>
+        </button> })}
+    </div>
+    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{t('Payments are not open yet — we will email you when they are.')}</div>}
+    {data.payments && sel && <>
+      <div style={{ height: 12 }} />
+      <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
+        {busy ? t('One moment…') : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : b.status === 'expired' ? t('Continue with {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months)) : t('Choose {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months))}
+      </Button>
+      <div className="small muted" style={{ marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>
+        {inTrial && fcLabel ? t('First charge on {0}: {1} {2}. Cancel any time before from Settings.', fcLabel, fmt(sel.amount), periodWord(sel)) : t('{0} {1}, renews automatically. Cancel any time from Settings.', fmt(sel.amount), periodWord(sel))}
+      </div>
+      <div className="small dim" style={{ marginTop: 6, textAlign: 'center' }}>{t('Secure payment with Stripe · automatic receipt · no lock-in')}</div>
+    </>}
+    {!compact && <div className="small dim" style={{ marginTop: 12, lineHeight: 1.5, textAlign: 'center' }}>{t('Prices include tax. Access runs to the end of the period you paid for.')} <a href="#/terms">{t('terms of service')}</a></div>}
   </div>
 }
 
@@ -105,17 +139,18 @@ export function Paywall() {
   const b = user?.billing || {}
   const resend = async () => { try { await authResendVerify(); toast(t('Sent — check your inbox')) } catch (e) { toast(e.message) } }
   return <div className="narrow" style={{ ...wrap, justifyContent: 'flex-start', paddingTop: 48 }}>
-    <Head icon="crown" title={b.status === 'expired' && b.trialEnds ? t('Your free trial has ended') : t('Choose your plan')}
-      sub={t('Keep your coach, your plans and all your progress. Your data is safe either way.')} />
+    <Head icon="crown" title={b.status === 'expired' && b.trialEnds ? t('Your free trial has ended') : b.status === 'trial' ? t('Keep everything after your trial') : t('Choose your plan')}
+      sub={b.status === 'trial' ? t('Coach, trainer, meal photos, your nutritionist’s plan and monthly progress photos. Pick a plan now and the trial gets longer.') : t('Keep your coach, your plans and all your progress. Your data is safe either way.')} />
     {user && !user.emailVerified && <div className="card small" style={{ textAlign: 'left', marginBottom: 14 }}>
       {t('Confirm your email first — we sent a link to {0}.', user.email)} <button className="linkbtn" onClick={resend}>{t('Send it again')}</button>
     </div>}
     <Plans />
     <div style={{ height: 18 }} />
-    <div className="row" style={{ gap: 8, justifyContent: 'center' }}>
+    <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
       {b.provider && <Button size="sm" onClick={() => billingPortal().then(r => { if (r.url) window.location.href = r.url }).catch(e => toast(e.message))}>{t('Manage subscription')}</Button>}
       <Button size="sm" onClick={() => refreshMe()}>{t('I already paid')}</Button>
-      <Button size="sm" variant="ghost" className="dim" onClick={() => signOut()}>{t('Sign out')}</Button>
+      {b.active ? <Button size="sm" variant="ghost" className="dim" onClick={() => nav('/home')}>{t('Not now')}</Button>
+        : <Button size="sm" variant="ghost" className="dim" onClick={() => signOut()}>{t('Sign out')}</Button>}
     </div>
   </div>
 }

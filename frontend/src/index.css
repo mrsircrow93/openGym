@@ -1232,3 +1232,26 @@ h4.sec{
 .re-link.on{color:var(--acc)}
 .add-dashed{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:14px;border-radius:14px;border:2px dashed var(--sep);background:transparent;color:var(--acc);font-weight:600;font-size:15px}
 .add-dashed:active{background:var(--surface-2)}
+
+/* ---- paywall v2 ---- */
+.pw{text-align:left}
+.pw-bonus{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;border:1.5px solid var(--acc);background:var(--acc-soft);font-size:14px;line-height:1.45;margin-bottom:12px}
+.pw-bonus .icn{color:var(--acc);flex:none;margin-top:2px}
+.pw-plans{display:flex;flex-direction:column;gap:10px}
+.pw-plan{position:relative;display:flex;align-items:center;gap:12px;width:100%;padding:16px 14px;border-radius:18px;background:var(--surface);border:2px solid var(--sep);color:var(--label);text-align:left;transition:border-color .15s,transform .15s}
+.pw-plan.on{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,var(--surface))}
+.pw-plan:not(.on){opacity:.82}
+.pw-plan.off{opacity:.45}
+.pw-plan:active{transform:scale(.99)}
+.pw-check{font-size:22px;color:var(--dim);flex:none}
+.pw-plan.on .pw-check{color:var(--acc)}
+.pw-main{flex:1;min-width:0}
+.pw-name{font-size:17px;font-weight:700;letter-spacing:-.012em}
+.pw-sub{font-size:13px;color:var(--label-2);margin-top:2px}
+.pw-save{font-size:12px;font-weight:600;color:var(--acc);margin-top:4px}
+.pw-price{text-align:right;flex:none}
+.pw-price s{display:block;font-size:12px;color:var(--dim)}
+.pw-price b{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.pw-price span{display:block;font-size:11px;color:var(--label-2)}
+.plan-tag.alt{background:var(--surface-3);color:var(--label)}
+.pw-plan .plan-tag{top:-10px;left:14px}

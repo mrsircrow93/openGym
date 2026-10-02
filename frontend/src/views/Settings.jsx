@@ -89,7 +89,7 @@ export default function Settings() {
         {user.email && !user.emailVerified && <Row icon="bell" iconTint="var(--orange)" title={t('Confirm your email')} subtitle={t('Tap to send the link again.')} accessory="chevron"
           onClick={() => authResendVerify().then(() => toast(t('Sent — check your inbox'))).catch(e => toast(e.message))} />}
         {user.billing?.enabled && <Row icon="crown" iconTint="var(--yellow)" title={t('Subscription')} subtitle={subscriptionLabel(user.billing)} accessory="chevron"
-          onClick={() => useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />)} />}
+          onClick={() => user.billing.status === 'pro' ? useUI.getState().openSheet(close => <SubscriptionSheet user={user} close={close} />) : nav('/plans')} />}
         {!STATIC && <Row icon="star" iconTint="var(--acc)" title={t('Invite & earn')} subtitle={t('Share your code: your friend gets a longer trial, you get free days.')} accessory="chevron"
           onClick={() => useUI.getState().openSheet(close => <ReferralSheet close={close} />)} />}
         <Row icon="key" iconTint="var(--blue)" title={user.hasPassword ? t('Change password') : t('Add email and password')} accessory="chevron"

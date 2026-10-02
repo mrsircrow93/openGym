@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtWater, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
+import { daysLeft } from '../lib/entitlements.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, coachSheet, COACH_QUESTIONS, waterSheet, addWater, waterToday } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
@@ -90,6 +91,14 @@ export default function Home() {
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Icon name="bell" style={{ color: 'var(--orange)', fontSize: 20 }} />
         <div style={{ flex: 1, minWidth: 0 }}><b>{t('Confirm your email')}</b><div className="dim small">{t('We sent a link to {0}. Tap here to send it again.', user.email)}</div></div>
+      </div>
+    </button>}
+
+    {user?.billing?.status === 'trial' && daysLeft(user.billing.trialEnds) <= 2 && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }} onClick={() => nav('/plans')}>
+      <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <Icon name="crown" style={{ color: 'var(--yellow)', fontSize: 20 }} />
+        <div style={{ flex: 1, minWidth: 0 }}><b>{daysLeft(user.billing.trialEnds) <= 1 ? t('Your trial ends today') : t('Your trial ends on {0}', new Date(user.billing.trialEnds).toLocaleDateString(dateLocale(), { weekday: 'long' }))}</b><div className="dim small">{t('No automatic charge. Pick a plan to keep your coach and your progress.')}</div></div>
+        <Icon name="chevronRight" className="dim" />
       </div>
     </button>}
 

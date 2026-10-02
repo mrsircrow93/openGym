@@ -140,3 +140,6 @@ p{margin:0}
 .quote blockquote{margin:0 0 14px;font-size:17px;line-height:1.5}
 .quote figcaption{color:var(--fg-2);font-size:14px}
 @media (max-width:760px){.quotes{grid-template-columns:1fr}}
+
+.plan .note s{color:var(--fg-3);margin-right:4px}
+.plan:not(.best) .tag{background:rgba(255,255,255,.1);color:var(--fg)}
