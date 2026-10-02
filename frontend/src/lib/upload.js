@@ -11,7 +11,7 @@
 import { t } from './i18n.js'
 
 export const UPLOAD_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'
-export const PDF_MAX_BYTES = 3_300_000
+export const PDF_MAX_BYTES = 12_000_000
 export const IMAGE_MAX_BYTES = 40_000_000   // a raw HEIC/JPEG from a phone — we resize it anyway
 
 const asciiAt = (b, from, to) => String.fromCharCode(...b.slice(from, to))
@@ -79,7 +79,7 @@ export async function readUpload(file, { maxDim = 1568 } = {}) {
   const kind = sniff(await head(file))
   if (!kind) throw new Error(t('That file type isn’t supported — use a photo (JPG, PNG, HEIC) or a PDF.'))
   if (kind === 'pdf') {
-    if (file.size > PDF_MAX_BYTES) throw new Error(t('PDF too large — keep it under 3 MB (or photograph the pages).'))
+    if (file.size > PDF_MAX_BYTES) throw new Error(t('PDF too large — keep it under 12 MB (or photograph the pages).'))
     return { kind: 'pdf', base64: await toDataBase64(file) }
   }
   if (file.size > IMAGE_MAX_BYTES) throw new Error(t('That photo is too big to read.'))

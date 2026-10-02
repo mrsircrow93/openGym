@@ -27,7 +27,7 @@ const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
 // internet don't want the same number. Only affects cookies minted from now on — the expiry is
 // baked into each cookie when it's issued, so lowering this never cuts an existing session short.
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
-const MAX_BODY = 5 * 1024 * 1024;
+const MAX_BODY = 20 * 1024 * 1024;   // a 12 MB PDF is ~16 MB as base64 JSON
 // Browsers send Origin on every cross-site request and on same-site POSTs. Any state-changing
 // call whose Origin is present and isn't ours is refused outright — the session cookie is
 // SameSite=Lax already, this is the second lock. Non-browser clients (curl, payment webhooks)

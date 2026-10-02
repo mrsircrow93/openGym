@@ -217,7 +217,7 @@ function ImportRoutine({ close }) {
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
   const [fileName, setFileName] = useState('')
-  const camInput = useRef(null), fileInput = useRef(null)
+  const camInput = useRef(null), photoInput = useRef(null), fileInput = useRef(null)
   const onFile = async f => {
     if (!f) return
     setErr(''); setPhase('busy'); setFileName(f.name)
@@ -235,6 +235,7 @@ function ImportRoutine({ close }) {
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="upload" style={{ color: 'var(--acc)' }} />{t('Bring your own routine')}</h3>
     <input ref={camInput} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={pick(camInput)} />
+    <input ref={photoInput} type="file" accept="image/*" style={{ display: 'none' }} onChange={pick(photoInput)} />
     <input ref={fileInput} type="file" accept={UPLOAD_ACCEPT} style={{ display: 'none' }} onChange={pick(fileInput)} />
     {phase === 'busy' ? <div className="row small dim" style={{ gap: 8, padding: '20px 0' }}><span className="spin" />{t('Reading your routine — 15 to 30 seconds…')}</div> : <>
       <div className="small muted" style={{ lineHeight: 1.5, marginBottom: 14 }}>{t('Got a routine from your coach or gym? Take a photo of the sheet or upload the PDF. We read the days, exercises, sets and reps and set it up for you — you check it before anything is saved.')}</div>
@@ -244,9 +245,14 @@ function ImportRoutine({ close }) {
           <span className="lrow-m"><span className="lrow-t">{t('Take a photo')}</span><span className="lrow-s">{t('Of the printed or handwritten sheet')}</span></span>
           <Icon name="chevronRight" className="lrow-k" />
         </button>
+        <button className="lrow tap" onClick={() => photoInput.current?.click()}>
+          <span className="lrow-i" style={{ '--tint': 'var(--violet)' }}><Icon name="star" /></span>
+          <span className="lrow-m"><span className="lrow-t">{t('Pick from your photos')}</span><span className="lrow-s">{t('A photo or screenshot you already have')}</span></span>
+          <Icon name="chevronRight" className="lrow-k" />
+        </button>
         <button className="lrow tap" onClick={() => fileInput.current?.click()}>
           <span className="lrow-i" style={{ '--tint': 'var(--blue)' }}><Icon name="folder" /></span>
-          <span className="lrow-m"><span className="lrow-t">{t('Choose a file')}</span><span className="lrow-s">{t('PDF, JPG, PNG or HEIC · up to 3 MB for PDFs')}</span></span>
+          <span className="lrow-m"><span className="lrow-t">{t('Choose a PDF or file')}</span><span className="lrow-s">{t('PDF, JPG, PNG or HEIC · PDFs up to 12 MB')}</span></span>
           <Icon name="chevronRight" className="lrow-k" />
         </button>
       </div>

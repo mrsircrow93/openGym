@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { importRoutineSheet } from './sheets-trainer.jsx'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exOr } from './lib/exercises.js'
@@ -703,8 +704,11 @@ function PlanTools({ close }) {
       <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A clean one-page-per-plan printout — no exercise ever splits across a page.')}</div>
     </>}
     {!hasRoutines && <div className="dim small" style={{ margin: '12px 2px 0' }}>{t('Add an exercise to a routine first — an empty plan has nothing to share.')}</div>}
+    <h4 className="sec">{t('Got a routine from your coach or gym?')}</h4>
+    <Button variant="tinted" icon="camera" onClick={() => { close(); importRoutineSheet() }}>{t('Import from a photo or PDF')}</Button>
+    <div className="dim small" style={{ margin: '7px 2px 0', lineHeight: 1.4 }}>{t('A photo of the sheet, a screenshot or the PDF — we read the days, exercises, sets and reps.')}</div>
     <h4 className="sec">{t('Got a plan from a friend?')}</h4>
-    <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Import a plan file')}</Button>
+    <Button variant="ghost" icon="folder" onClick={() => fileRef.current?.click()}>{t('Import a VantixGym plan file (.json)')}</Button>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
   </>
 }

@@ -11,7 +11,7 @@
 
 const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const IMAGE_MAX = 3 * 1024 * 1024;   // decoded bytes; the client resizes to ~1500 px first
-const PDF_MAX = 3.3 * 1024 * 1024;
+const PDF_MAX = 12.5 * 1024 * 1024;   // a coach's PDF full of photos runs 5-10 MB; cost is per page, not per byte
 const PDF_MAX_PAGES = 30;
 
 const SIGS = [
@@ -46,7 +46,7 @@ const PDF_ACTIVE = /\/(JavaScript|JS|Launch|EmbeddedFiles?|OpenAction|AA|RichMed
 
 export function inspectPdf(b64) {
   const buf = decode(b64, PDF_MAX);
-  if (!buf) return { ok: false, error: 'PDF missing, malformed or too large (max 3 MB)' };
+  if (!buf) return { ok: false, error: 'PDF missing, malformed or too large (max 12 MB)' };
   if (buf.toString('latin1', 0, 5) !== '%PDF-') return { ok: false, error: 'not a PDF' };
   const text = buf.toString('latin1');
   if (PDF_ACTIVE.test(text)) return { ok: false, error: 'this PDF contains scripts or attachments — export a plain copy and try again' };
