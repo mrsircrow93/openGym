@@ -19,6 +19,8 @@ const DATE_LOCALES = {
 
 const localePacks = import.meta.glob('../locales/*.js')
 const instrPacks = import.meta.glob('../instr/*.js')
+const namePacks = import.meta.glob('../names/*.js')
+import { applyNames } from './exercises.js'
 
 let lang = 'en'
 let dict = {}
@@ -46,7 +48,8 @@ export async function setLang(l) {
   try {
     dict = l === 'en' ? {} : (await localePacks['../locales/' + l + '.js']()).default
     instr = l === 'en' || !INSTR_LANGS.includes(l) ? null : (await instrPacks['../instr/' + l + '.js']()).default
-  } catch (e) { dict = {}; instr = null }
+    applyNames(namePacks['../names/' + l + '.js'] ? (await namePacks['../names/' + l + '.js']()).default : null)
+  } catch (e) { dict = {}; instr = null; applyNames(null) }
   notify()
 }
 

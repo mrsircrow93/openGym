@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
+import { plateStep, roundPlate } from '../lib/units.js'
 import { useUI } from '../store/useUI.js'
 import { exOr } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
@@ -75,7 +76,7 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   const cfg = { ...(entry.target || {}), id: entry.id }
   const bw = !cardio && isBw(cfg)
   const added = bw && entry.sets.some(s => s.w > 0)
-  const loadCol = { f: 'w', step: 2.5, dec: true, hd: bw ? t('Added ({0})', S.unit) : t('Weight ({0})', S.unit) }
+  const loadCol = { f: 'w', step: plateStep(S.unit), dec: true, hd: bw ? t('Added ({0})', S.unit) : t('Weight ({0})', S.unit) }
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
   const repCol = { f: 'r', step: repStep(cfg), dec: false, hd: t('Reps') }
@@ -204,7 +205,7 @@ function ActiveWorkout() {
   // ~half the first working set's weight (rounded to a plate-friendly step) to save typing.
   const addWarmup = idx => mutEntry(idx, e => {
     const base = e.sets.find(x => !x.warmup)
-    const w = base && base.w > 0 ? Math.max(0, Math.round(base.w * 0.5 / 2.5) * 2.5) : 0
+    const w = base && base.w > 0 ? roundPlate(base.w * 0.5, S.unit) : 0
     const r = base && base.r ? base.r : (e.target?.reps || 10)
     e.sets.unshift({ w, r, warmup: true, done: false })
   })

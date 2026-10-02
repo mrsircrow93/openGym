@@ -22,6 +22,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { aiParseSet, aiCoach, aiIdentifyExercise, aiAlternatives, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
 import { hrSupported, hrConnect, hrDisconnect } from './lib/heartrate.js'
+import ShareSheet from './components/ShareSheet.jsx'
+import { plateStep, roundPlate } from './lib/units.js'
 import { COACHES, coachOf } from './lib/coach.js'
 import CoachAvatar from './components/CoachAvatar.jsx'
 
@@ -291,7 +293,7 @@ function OneRM({ ex }) {
       <span className="dim"> · {t('{0} × {1} on {2}', fmtNum(best.w) + ' ' + st.unit, best.r, fmtDate(best.d, true))}</span>
     </div>}
     <div className="row cfgrow" style={{ marginBottom: 10 }}>
-      <Stepper label={t('Weight ({0})', st.unit)} value={w} step={2.5} onChange={setW} />
+      <Stepper label={t('Weight ({0})', st.unit)} value={w} step={plateStep(st.unit)} onChange={setW} />
       <Stepper label={t('Reps')} value={r} step={1} decimal={false} onChange={setR} />
     </div>
     <div className="row between" style={{ marginBottom: 4 }}>
@@ -445,7 +447,7 @@ function ExercisePicker({ onPick, close }) {
   const all = allExercises(st)
   let base = all.filter(e =>
     (bp === '★' ? usage[e.id] : (!bp || e.bp === bp)) &&
-    (!ql || e.n.toLowerCase().includes(ql) || e.tg.includes(ql) || e.eq.includes(ql) || (e.desc || '').toLowerCase().includes(ql)))
+    (!ql || e.n.toLowerCase().includes(ql) || (e.n_en || '').toLowerCase().includes(ql) || e.tg.includes(ql) || e.eq.includes(ql) || (e.desc || '').toLowerCase().includes(ql)))
   if (bp === '★') base = [...base].sort((a, b) => (usage[b.id] - usage[a.id]) || (a.n < b.n ? -1 : 1))
   const eqOpts = equipmentOf(base)
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
@@ -573,13 +575,13 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       </> : mode === 'time' ? <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />
-        <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />
+        <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={plateStep(st.unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />
       </> : <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Reps')} value={c.reps} step={perSide ? 2 : 1} decimal={false} onChange={v => setC(x => ({ ...x, reps: v }))} />
         {/* On bodyweight work the weight stepper is the click #32 is about, so it is not here
             until there is a belt to describe — see the added-weight row below. */}
-        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={plateStep(st.unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </>}
     </div>
     {mode === 'time' && !bw && <div className="small dim" style={{ marginBottom: 18 }}>
@@ -613,7 +615,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
         reps, with its explanation underneath. */}
     {bw && <>
       <div className="row cfgrow" style={{ marginBottom: 8 }}>
-        <Stepper label={t('Added ({0})', st.unit)} value={c.weight || 0} step={2.5}
+        <Stepper label={t('Added ({0})', st.unit)} value={c.weight || 0} step={plateStep(st.unit)}
           onChange={v => setC(x => ({ ...x, weight: v }))} />
       </div>
       <div className="small dim" style={{ marginBottom: 18 }}>
@@ -789,7 +791,7 @@ export const dayAssignSheet = day => ui().openSheet(close => <DayAssign day={day
 function WorkoutDetail({ w, close }) {
   const st = useStore(s => s.S)
   return <>
-    <h3>{w.name}</h3>
+    <div className="row between" style={{ alignItems: 'center', marginBottom: 4 }}><h3 style={{ margin: 0 }}>{w.name}</h3><Button size="sm" variant="tinted" icon="upload" onClick={() => shareWorkoutSheet(w, w.prs || [])}>{t('Share')}</Button></div>
     <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
@@ -962,9 +964,12 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={() => { close(); nav('/home') }}>{t('Nice!')}</Button>
+    <Button variant="primary" icon="upload" onClick={() => shareWorkoutSheet(w, prs)}>{t('Share my workout')}</Button>
+    <div style={{ height: 8 }} />
+    <Button onClick={() => { close(); nav('/home') }}>{t('Nice!')}</Button>
   </div>
 }
+export const shareWorkoutSheet = (w, prs = []) => ui().openSheet(close => <ShareSheet workout={w} prs={prs} close={close} />)
 export function finishWorkout() {
   const A = S().active
   if (!A) return
@@ -1043,7 +1048,7 @@ function AiQuickLog({ ex, unit, close, onApply }) {
       <div className="row cfgrow" style={{ marginBottom: 18 }}>
         <Stepper label={t('Sets')} value={result.sets || 1} step={1} decimal={false} onChange={v => setResult(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Reps')} value={result.reps || 0} step={1} decimal={false} onChange={v => setResult(x => ({ ...x, reps: v }))} />
-        <Stepper label={t('Weight ({0})', unit)} value={result.weight || 0} step={2.5} onChange={v => setResult(x => ({ ...x, weight: v }))} />
+        <Stepper label={t('Weight ({0})', unit)} value={result.weight || 0} step={plateStep(unit)} onChange={v => setResult(x => ({ ...x, weight: v }))} />
       </div>
       {!result.confident && <div className="small dim" style={{ marginBottom: 12 }}>{t('Not fully sure about this one — check the numbers before applying.')}</div>}
       <Button variant="primary" onClick={() => { close(); onApply(result) }}>{t('Apply to next set')}</Button>

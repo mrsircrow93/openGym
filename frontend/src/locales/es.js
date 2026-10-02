@@ -253,7 +253,7 @@ export default {
   'Weight unit': 'Unidad de peso',
   'Rest timer': 'Temporizador de descanso',
   'Sounds': 'Sonidos',
-  'Note: switching units only changes the label — logged numbers are not converted.': 'Nota: cambiar la unidad solo cambia la etiqueta — los números registrados no se convierten.',
+  'Switching units converts everything you logged, so 100 kg becomes 220 lb.': 'Cambiar de unidad convierte todo lo registrado: 100 kg pasan a ser 220 lb.',
   'Data': 'Datos',
   'Export backup (JSON)': 'Exportar copia (JSON)',
   'Import backup': 'Importar copia',
@@ -979,6 +979,24 @@ export default {
   'Days you trained': 'Días que entrenaste',
   'last 12 months': 'últimos 12 meses',
   'For advanced users: effort per set': 'Para avanzados: esfuerzo por serie',
+
+  /* ---- share card & units ---- */
+  'Share your workout': 'Comparte tu entrenamiento',
+  'A story-sized image with your numbers. Post it, send it, or save it.': 'Una imagen tamaño historia con tus números. Publícala, envíala o guárdala.',
+  'VantixGym look': 'Estilo VantixGym',
+  'My photo': 'Mi foto',
+  'Add my photo': 'Poner mi foto',
+  'Transparent sticker': 'Sticker transparente',
+  'Change photo': 'Cambiar foto',
+  'Image saved': 'Imagen guardada',
+  'Share my workout': 'Compartir mi entrenamiento',
+  'Workout': 'Entrenamiento',
+  'New personal record': 'Nuevo récord personal',
+  '{0} personal records': '{0} récords personales',
+  'Switch to {0}?': '¿Cambiar a {0}?',
+  'Your logged weights, routines and body weight will be converted from {0} to {1} so the numbers keep meaning the same thing.': 'Tus pesos registrados, rutinas y peso corporal se convertirán de {0} a {1} para que los números sigan significando lo mismo.',
+  'Convert to {0}': 'Convertir a {0}',
+  'Converted to {0}': 'Convertido a {0}',
 
   /* ---- AI coach ---- */
   '{0} is here to help': '{0} está aquí para ayudarte',

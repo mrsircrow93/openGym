@@ -12,6 +12,7 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { COACHES } from '../lib/coach.js'
+import { convertProfile } from '../lib/units.js'
 import { getAIKey, setAIKey, getAIModel, setAIModel, hasUserKey, AI_MODELS, testAIKey } from '../lib/ai.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { healthSupported, healthAvailable, installHealthConnect, requestHealth, syncHealth, IS_IOS_SHELL } from '../lib/health.js'
@@ -120,7 +121,7 @@ export default function Settings() {
     {!user && !DEMO && !MOBILE && !STATIC && <p className="sect-f" style={{ marginTop: -18, marginBottom: 22 }}>{t('Guest mode — data lives only in this browser.')}</p>}
 
     {/* ---------- general ---------- */}
-    <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>
+    <Section title={t('General')} footer={t('Switching units converts everything you logged, so 100 kg becomes 220 lb.')}>
       <SelectRow
         icon="globe" iconTint="var(--blue)" title={t('Language')}
         value={S.lang || 'en'} onChange={v => update(s => { s.lang = v })}
@@ -135,7 +136,11 @@ export default function Settings() {
       <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
-          value={S.unit} onChange={v => update(s => { s.unit = v })} />
+          value={S.unit} onChange={v => { if (v === S.unit) return
+            const has = S.workouts.length || S.bodyweight.length || S.routines.some(r => r.ex.some(e => e.weight))
+            if (!has) return update(s => { s.unit = v })
+            confirmSheet({ title: t('Switch to {0}?', v), message: t('Your logged weights, routines and body weight will be converted from {0} to {1} so the numbers keep meaning the same thing.', S.unit, v),
+              confirmText: t('Convert to {0}', v), onConfirm: () => { update(s => { convertProfile(s, s.unit, v) }); toast(t('Converted to {0}', v)) } }) }} />
       </Row>
     </Section>
 
