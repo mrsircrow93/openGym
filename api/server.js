@@ -1624,7 +1624,7 @@ const routes = {
     const user = readSession(req);
     json(res, 200, { enabled: BILLING_ENABLED, payments: !!STRIPE_SECRET_KEY, currency: CURRENCY, trialDays: TRIAL_DAYS, bonusDays: TRIAL_ACTIVATE_BONUS_DAYS,
       firstChargeAt: user ? firstChargeAt(user) : null, rescueUntil: user ? rescueUntil(user) : null,
-      plans: PLANS.map(p => ({ id: p.id, months: p.months, amount: p.amount, perMonth: Math.round(p.amount / p.months), available: !!p.price,
+      plans: PLANS.map(p => ({ id: p.id, months: p.months, amount: p.amount, perMonth: Math.floor(p.amount / p.months), available: !!p.price,
         savings: Math.max(0, monthly * p.months - p.amount), savingsPct: Math.max(0, Math.round((1 - p.amount / (monthly * p.months)) * 100)) })) });
   },
 
