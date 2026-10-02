@@ -24,6 +24,15 @@ describe('matchImported', () => {
     expect(matchImported({ name: 'Press de banca', name_en: 'barbell bench press' })).toBe('0025')
     expect(matchImported({ name: 'Sentadilla', name_en: 'squat' })).toBe('0043')
   })
+  it('knows the everyday names the model is asked for', () => {
+    expect(matchImported({ name_en: 'dumbbell incline press' })).toBe('0314')
+    expect(matchImported({ name_en: 'cable fly' })).toBe('0227')
+    expect(matchImported({ name_en: 'parallel bar dips' })).toBe('0251')
+    expect(matchImported({ name_en: 'single-arm dumbbell row' })).toBe('0292')
+    expect(matchImported({ name_en: 'Lat Pulldown' })).toBe('2330')
+    expect(matchImported({ name_en: 'barbell overhead press' })).toBe('0091')
+    expect(matchImported({ name_en: 'Push-ups' })).toBe('0662')
+  })
   it('returns null rather than guessing', () => {
     expect(matchImported({ name: 'xyz', name_en: 'mystery machine press' })).toBe(null)
   })
