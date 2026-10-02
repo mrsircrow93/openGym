@@ -33,7 +33,7 @@ let nativeReady = null
 export async function nativeGoogleSignIn(webClientId) {
   if (!MOBILE) throw new Error('native sign-in only in the app')
   const { SocialLogin } = await import('@capgo/capacitor-social-login')
-  if (!nativeReady) nativeReady = SocialLogin.initialize({ google: { webClientId, iOSClientId: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || undefined, mode: 'online' } })
+  if (!nativeReady) nativeReady = SocialLogin.initialize({ google: { webClientId, iOSClientId: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || undefined, iOSServerClientId: webClientId, mode: 'online' } })
   await nativeReady
   const r = await SocialLogin.login({ provider: 'google', options: { scopes: ['email', 'profile'] } })
   const tok = r && r.result && r.result.idToken
