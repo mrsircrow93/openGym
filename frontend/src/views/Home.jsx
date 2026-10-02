@@ -121,7 +121,7 @@ export default function Home() {
         <div className="muted small" style={{ marginBottom: 12 }}>{t('Answer five quick questions and your trainer builds a week around your goal — or load a ready-made Push / Pull / Legs plan.')}</div>
         <Button variant="primary" icon="sparkles" onClick={trainerSheet}>{t('Build my plan with the trainer')}</Button>
         <div className="row" style={{ gap: 8, marginTop: 8 }}>
-          <Button style={{ flex: 1 }} onClick={loadStarterPlan}>{t('Starter plan (PPL)')}</Button>
+          <Button style={{ flex: 1 }} onClick={loadStarterPlan}>{t('Example gym plan (barbell)')}</Button>
           <Button style={{ flex: 1 }} onClick={() => nav('/plan')}>{t('Build my own')}</Button>
         </div>
       </div>

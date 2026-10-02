@@ -121,7 +121,7 @@ function Trainer({ close }) {
           <div className="tr-ex">
             {shown.map((e, i) => { const x = exOr(e.id); return <div key={i} className="tr-ex-row">
               <Thumb ex={x} />
-              <div className="tr-ex-n capitalize">{x.n}</div>
+              <div className="tr-ex-n capitalize">{x.n}<span className="dim small" style={{ display: 'block', fontWeight: 400, textTransform: 'none' }}>{t(x.eq || '')}</span></div>
               <div className="tr-ex-s"><b>{setsLabel(e)}</b>{e.rest > 0 && <span>{t('rest {0}', Math.floor(e.rest / 60) + ':' + String(e.rest % 60).padStart(2, '0'))}</span>}</div>
             </div> })}
           </div>
@@ -129,7 +129,7 @@ function Trainer({ close }) {
         </div>
       })}
       {plan.cardio && <div className="row small muted" style={{ gap: 6, alignItems: 'flex-start', margin: '4px 0 12px' }}><Icon name="figureRun" style={{ fontSize: 14, flex: 'none', marginTop: 2 }} /><span>{plan.cardio}</span></div>}
-      {dropped > 0 && <div className="small dim" style={{ marginBottom: 10 }}>{t('{0} suggested exercise(s) weren’t in your library and were left out.', dropped)}</div>}
+      {dropped > 0 && <div className="small" style={{ color: 'var(--orange)', marginBottom: 10 }}>{t('{0} suggestion(s) didn’t match your equipment and were left out — tap “Show me another option” if a routine looks thin.', dropped)}</div>}
       {n && <div className="sect-b" style={{ margin: '6px 0 14px' }}>
         <button className="lrow tap" onClick={() => setApplyNutrition(v => !v)}>
           <Check checked={applyNutrition} onChange={() => {}} />
