@@ -22,8 +22,9 @@ export const DEF = {
   // Personal trainer: last questionnaire answers + a note of the plan it produced, so re-running
   // starts from what you said last time.
   trainer: null,
-  // Progress photos: metadata only (lib/progress-photos.js) — the images live in object storage.
-  progressPhotos: [],
+  // Progress photos: metadata only (lib/progress-photos.js) — the images live on the server.
+  // `progressPhotos` is the old, never-used slot; `checkins` is the real one.
+  progressPhotos: [], checkins: [],
   // Step counter: one row per day { d, n, src: 'manual' | 'health' } + a daily goal (lib/steps.js).
   steps: [], stepGoal: 8000,
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so

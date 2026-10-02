@@ -19,6 +19,7 @@ import {
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { computeBadges } from '../lib/badges.js'
 import Badge from '../components/Badge.jsx'
+import { CheckinCard } from '../sheets-checkin.jsx'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -219,6 +220,8 @@ export default function Stats() {
           <Icon name="chevronRight" style={{ color: 'var(--label-3)' }} />
         </div>
       </button> })()}
+
+    <CheckinCard S={S} />
 
     <div className="card">
       <h2>{t('Days you trained')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('last 12 months')}</span></h2>

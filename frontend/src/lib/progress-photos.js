@@ -1,44 +1,70 @@
-// Progress photos — client contract. The images themselves never go in the profile state (it's
-// one JSON blob synced whole); only metadata does. Storage is a backend concern, and until an
-// object store is wired up (docs/PROGRESS_PHOTOS.md) every call here rejects with NOT_CONFIGURED
-// so the UI can show a "coming soon" instead of failing oddly.
-//
-// Metadata row in S.progressPhotos: { id, d: 'YYYY-MM-DD', pose: 'front'|'side'|'back'|'other',
-//   w: bodyweight that day or null, note, remoteId, width, height, thumb: tiny base64 (≤ 4 KB) }
-import { api, fileToResizedBase64 } from './api.js'
+// Progress photos: a check-in is a front / side / back set taken the same day, ideally once a
+// month. The images live on the server (api: /api/progress-photos, private per account); the
+// profile state keeps only metadata, so sync stays small:
+//   S.checkins: [{ id, d: 'YYYY-MM-DD', t, w: bodyweight or null, photos: { front, side, back }: ids,
+//                  review: { headline, summary, observations, tips, comparable, mood, at } | null }]
+import { api } from './api.js'
+import { API_BASE, getToken } from './mobile.js'
+import { readUpload } from './upload.js'
+import { uid } from './format.js'
 
-export const POSES = ['front', 'side', 'back', 'other']
-export const POSE_LABEL = { front: 'Front', side: 'Side', back: 'Back', other: 'Other' }
+export const POSES = ['front', 'side', 'back']
+export const POSE_LABEL = { front: 'Front view', side: 'Side view', back: 'Back view' }
+export const CHECKIN_EVERY_DAYS = 28
 
-export class NotConfigured extends Error { constructor() { super('progress photos need a backend with object storage'); this.code = 'NOT_CONFIGURED' } }
-
-// Tiny inline thumbnail so the timeline renders offline and before the full image loads.
-export async function makeThumb(file) {
-  const { base64 } = await fileToResizedBase64(file, 96, 0.6)
-  return base64
-}
-
-// 1) ask the server for a signed upload URL, 2) PUT the resized image there, 3) return the
-// remote id to store in metadata. The server never proxies the bytes.
+// Resize on the device (1200 px long edge is plenty for a comparison and ~150 KB), then post.
 export async function uploadPhoto(file) {
-  const { base64, mediaType } = await fileToResizedBase64(file, 1600, 0.85)
-  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-  let grant
-  try { grant = await api('/api/progress-photos/upload-url', { method: 'POST', body: JSON.stringify({ mediaType, size: bytes.length }) }) }
-  catch (e) { if (e.status === 501) throw new NotConfigured(); throw e }
-  const put = await fetch(grant.url, { method: 'PUT', headers: { 'content-type': mediaType }, body: bytes })
-  if (!put.ok) throw new Error('upload failed (' + put.status + ')')
-  return { remoteId: grant.id, width: grant.width || null, height: grant.height || null }
+  const up = await readUpload(file, { maxDim: 1200 })
+  if (up.kind !== 'image') throw new Error('photo required')
+  const r = await api('/api/progress-photos', { method: 'POST', body: JSON.stringify({ image: up.base64 }) })
+  return r.id
 }
 
-export async function photoUrl(remoteId) {
-  try { return (await api('/api/progress-photos?id=' + encodeURIComponent(remoteId))).url }
-  catch (e) { if (e.status === 501) throw new NotConfigured(); throw e }
+// Object URLs for the session: the GET needs the auth header, so an <img src> can't hit the
+// API directly. Cached per id — a check-in screen asks for the same six photos repeatedly.
+const urls = new Map()
+export async function photoUrl(id) {
+  if (!id) return null
+  if (urls.has(id)) return urls.get(id)
+  const p = (async () => {
+    const headers = {}
+    const tok = getToken()
+    if (tok) headers.Authorization = 'Bearer ' + tok
+    const r = await fetch(API_BASE + '/api/progress-photos?id=' + encodeURIComponent(id), { headers })
+    if (!r.ok) throw new Error('photo ' + r.status)
+    return URL.createObjectURL(await r.blob())
+  })()
+  urls.set(id, p)
+  p.catch(() => urls.delete(id))
+  return p
 }
 
-export async function deletePhoto(remoteId) {
-  try { await api('/api/progress-photos?id=' + encodeURIComponent(remoteId), { method: 'DELETE' }) }
-  catch (e) { if (e.status === 501) throw new NotConfigured(); throw e }
+export async function deletePhoto(id) {
+  if (!id) return
+  try { await api('/api/progress-photos?id=' + encodeURIComponent(id), { method: 'DELETE' }) } catch { /* already gone */ }
+  urls.delete(id)
 }
 
-export const isConfigured = async () => { try { await api('/api/progress-photos?id=probe'); return true } catch (e) { return e.status !== 501 } }
+export const checkinsOf = S => [...(S.checkins || [])].sort((a, b) => (a.d < b.d ? -1 : 1))
+export const lastCheckin = S => { const c = checkinsOf(S); return c[c.length - 1] || null }
+// The check-in to compare against: the latest one before `c`.
+export const previousCheckin = (S, c) => { const all = checkinsOf(S).filter(x => x.id !== c.id && x.d <= c.d); return all[all.length - 1] || null }
+export const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso + 'T12:00:00').getTime()) / 86400000) : null
+// Time for the monthly photos? True with no check-in at all, or when the last one is 4+ weeks old.
+export const checkinDue = S => { const l = lastCheckin(S); return !l || daysSince(l.d) >= CHECKIN_EVERY_DAYS }
+
+export const newCheckin = (d, w, photos) => ({ id: uid(), d, t: Date.now(), w: w || null, photos, review: null })
+
+// Facts the review prompt gets alongside the photos — all derived here so the server trusts
+// nothing it can't bound.
+export function reviewFacts(S, c) {
+  const prev = previousCheckin(S, c)
+  const between = prev ? S.workouts.filter(w => w.d > prev.d && w.d <= c.d).length : S.workouts.filter(w => w.d <= c.d).length
+  return {
+    current: c.photos, previous: prev ? prev.photos : null,
+    weightNow: c.w, weightBefore: prev ? prev.w : null, unit: S.unit || 'kg',
+    daysBetween: prev ? Math.max(0, daysSince(prev.d) - daysSince(c.d)) : 0, workoutsBetween: between,
+    goal: (S.trainer && S.trainer.answers && S.trainer.answers.goal) || '', sex: S.body === 'female' ? 'female' : 'male',
+    checkinNumber: checkinsOf(S).findIndex(x => x.id === c.id) + 1, lang: S.lang || 'en'
+  }
+}

@@ -13,6 +13,7 @@ import { exOr } from '../lib/exercises.js'
 import { macroGoalOf, dayTotals, mealsOn, pctOf } from '../lib/nutrition.js'
 import { analyzeMealSheet } from '../sheets-nutrition.jsx'
 import { trainerSheet } from '../sheets-trainer.jsx'
+import { CheckinCard } from '../sheets-checkin.jsx'
 import { COACHES, coachOf } from '../lib/coach.js'
 import CoachAvatar from '../components/CoachAvatar.jsx'
 import Ring from '../components/Ring.jsx'
@@ -194,6 +195,8 @@ export default function Home() {
         <div className="chart" style={{ marginTop: 8 }}><LineChart points={bwPoints} h={120} unit={S.unit} goal={S.targetW} /></div>
       </> : <div className="muted small">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
     </div>
+
+    <CheckinCard S={S} compact />
 
     <div className="card">
       <div className="row between" style={{ marginBottom: 8 }}>

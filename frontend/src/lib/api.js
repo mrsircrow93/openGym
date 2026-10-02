@@ -117,6 +117,10 @@ export async function aiImportRoutine({ image, mediaType, pdf, lang }) {
   if (hasUserKey()) return directImportRoutine({ image, mediaType, pdf, lang })
   return api('/api/ai/import-routine', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, pdf: pdf || '', lang }) })
 }
+// Monthly check-in review: photo ids (this and the previous check-in) + facts -> { headline,
+// summary, observations, tips, comparable, mood }. Server-only: the photos are read from the
+// account's own storage, so there is no bring-your-own-key path for this one.
+export const aiProgressReview = body => api('/api/ai/progress-review', { method: 'POST', body: JSON.stringify(body) })
 // PDF as base64, no resizing possible — capped so the body stays under nginx's 6 MB.
 export function fileToBase64(file, maxBytes = 3_300_000) {
   return new Promise((resolve, reject) => {

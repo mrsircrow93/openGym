@@ -45,7 +45,7 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-2025100
 // features are fine on Haiku. Either override falls back to ANTHROPIC_MODEL when unset.
 const ANTHROPIC_MODEL_VISION = process.env.ANTHROPIC_MODEL_VISION || ANTHROPIC_MODEL;
 const ANTHROPIC_MODEL_TEXT = process.env.ANTHROPIC_MODEL_TEXT || ANTHROPIC_MODEL;
-const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan', 'import-routine']);
+const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan', 'import-routine', 'progress-review']);
 const modelFor = feature => (VISION_FEATURES.has(feature) ? ANTHROPIC_MODEL_VISION : ANTHROPIC_MODEL_TEXT);
 const MODELS_IN_USE = { vision: ANTHROPIC_MODEL_VISION, text: ANTHROPIC_MODEL_TEXT };
 // Billing (docs/BILLING.md). Off by default so a self-hosted instance stays free; when on, a new
@@ -92,6 +92,15 @@ function atomicWrite(file, content) {
   fs.renameSync(tmp, file);
 }
 const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+// Progress photos live on disk next to the state files: /data/photos/<uid>/<id>.jpg. Private
+// by construction — the directory is only reachable through the authenticated routes below,
+// ids are random, and the whole folder goes with the account when it is purged. The nightly
+// encrypted backup (scripts/backup.sh) covers /data, photos included.
+const safeId = v => String(v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+const photoDir = uid => path.join(DATA, 'photos', safeId(uid));
+const photoFile = (uid, id) => path.join(photoDir(uid), safeId(id) + '.jpg');
+const PHOTO_MAX_PER_USER = 400;   // ~3 poses × 12 months × 10 years; keeps a runaway client from filling the disk
+function listPhotos(uid) { try { return fs.readdirSync(photoDir(uid)).filter(f => f.endsWith('.jpg')).map(f => f.slice(0, -4)); } catch { return []; } }
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
@@ -321,6 +330,7 @@ async function sendVerifyMail(user) {
 // Daily housekeeping: purge accounts deleted 30+ days ago, and warn trials that end in 2 days.
 function purgeUser(u) {
   try { fs.unlinkSync(stateFile(u.id)); } catch {}
+  try { fs.rmSync(photoDir(u.id), { recursive: true, force: true }); } catch {}
   db.creds = db.creds.filter(c => c.userId !== u.id);
   db.subs = db.subs.filter(s => s.userId !== u.id);
   db.tokens = db.tokens.filter(t => t.userId !== u.id);
@@ -789,6 +799,55 @@ function planTargetsRequest({ image, mediaType, pdf, lang }) {
       }
     }],
     tool_choice: { type: 'tool', name: 'set_targets' }
+  };
+}
+
+// Check-in photos (now vs before) + facts -> encouraging, specific review. Server-only: the
+// photos never leave the server except to the model, so there is no bring-your-own-key mirror.
+function progressReviewRequest({ curImgs, prevImgs, facts, lang }) {
+  const content = [];
+  const POSE = { front: 'FRONT', side: 'SIDE', back: 'BACK' };
+  if (prevImgs.length) {
+    content.push({ type: 'text', text: 'BEFORE — previous check-in, ' + facts.daysBetween + ' days ago' + (facts.weightBefore ? ', ' + facts.weightBefore + ' ' + facts.unit : '') + ':' });
+    for (const p of prevImgs) { content.push({ type: 'text', text: POSE[p.pose] + ' (before)' }); content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.data } }); }
+  }
+  content.push({ type: 'text', text: 'NOW — this check-in' + (facts.weightNow ? ', ' + facts.weightNow + ' ' + facts.unit : '') + ':' });
+  for (const p of curImgs) { content.push({ type: 'text', text: POSE[p.pose] + ' (now)' }); content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.data } }); }
+  content.push({ type: 'text', text: 'FACTS ' + JSON.stringify(facts) + '\n' + (prevImgs.length
+    ? 'Compare NOW with BEFORE pose by pose and write the check-in review.'
+    : 'This is the first check-in, so there is nothing to compare yet: describe the starting point kindly and set up what to look for next month.') });
+  return {
+    max_tokens: 900,
+    system: 'You are a warm, experienced personal coach writing a monthly check-in note for one client of a ' +
+      'fitness app, based on their progress photos (front, side, back) and a few facts (weight, days between ' +
+      'check-ins, workouts done, goal). Your job is to keep them motivated with honest, specific observations.\n' +
+      'Rules:\n' +
+      '- Compare like with like: the same pose before and after. Mention only what is visibly different and plausible ' +
+      'for the time elapsed (posture, shoulder and back width, waist line, arm and leg definition, how clothes sit, how they carry themselves). ' +
+      'Never invent change; when photos are not comparable (different lighting, distance, clothing, pose), say so gently and suggest how to shoot next time (same spot, same light, same clothes, same distance, relaxed).\n' +
+      '- Numbers only from FACTS (weight, workouts, days). Never estimate body-fat percentage, measurements or weight from the photos.\n' +
+      '- Tone: kind, concrete, adult. No body shaming, no comments on attractiveness, no moralising about food. Do not diagnose, do not give medical or eating-disorder-adjacent advice. If weight moved against the goal, frame it as information, pair it with what the training and photos show, and give one practical next step.\n' +
+      '- Celebrate consistency (workouts done) as much as visible change — most change is slow and that is normal; say so when relevant.\n' +
+      '- Plain language a 60-year-old beginner understands; no jargon. ' +
+      'Write everything in the language with ISO code "' + lang + '", addressing the person as "tú" (informal) when the language has that distinction. Headline ≤ 8 words. Summary 60-110 words. 2-4 observations, each ≤ 20 words. 1-2 tips, each ≤ 18 words.',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'checkin_review',
+      description: 'The written check-in review',
+      input_schema: {
+        type: 'object',
+        properties: {
+          headline: { type: 'string', description: 'short, warm, specific — e.g. "Hombros más anchos, misma báscula"' },
+          summary: { type: 'string', description: 'the note itself, 60-110 words, plain prose' },
+          observations: { type: 'array', items: { type: 'object', properties: { pose: { type: 'string', enum: ['front', 'side', 'back', 'overall'] }, text: { type: 'string' } }, required: ['pose', 'text'] }, description: 'what changed (or what the starting point shows), one per entry' },
+          tips: { type: 'array', items: { type: 'string' }, description: '1-2 practical next steps, including photo tips if the shots were hard to compare' },
+          comparable: { type: 'boolean', description: 'false when the sets could not be compared fairly' },
+          mood: { type: 'string', enum: ['celebrate', 'steady', 'encourage'], description: 'celebrate = clear visible progress; steady = little change, good consistency; encourage = slipped, needs a kind push' }
+        },
+        required: ['headline', 'summary', 'observations', 'tips', 'comparable', 'mood']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'checkin_review' }
   };
 }
 
@@ -1508,9 +1567,41 @@ const routes = {
   /* ---------- progress photos (scaffold — see docs/PROGRESS_PHOTOS.md) ---------- */
   // Contract only. The real implementation needs object storage; the JSON state file is the
   // wrong place for images. Metadata (date, pose, weight that day) stays in the profile state.
-  'POST /api/progress-photos/upload-url': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
-  'GET /api/progress-photos': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
-  'DELETE /api/progress-photos': async (req, res) => json(res, 501, { error: 'progress photos need object storage — not configured' }),
+  // ---- progress photos: front / side / back, a check-in a month (docs/PROGRESS_PHOTOS.md) ----
+  // The client resizes to 1200 px and sends JPEG base64; the bytes are checked by signature,
+  // written once, and only ever read back by their owner. Metadata (date, pose, weight) lives
+  // in the synced profile state, so the files here are opaque blobs keyed by id.
+  'POST /api/progress-photos': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const up = inspectImage(body.image);
+    if (!up.ok) return json(res, 400, { error: up.error });
+    if (up.mediaType !== 'image/jpeg') return json(res, 400, { error: 'send the photo as JPEG (the app resizes it for you)' });
+    if (listPhotos(user.id).length >= PHOTO_MAX_PER_USER) return json(res, 409, { error: 'photo limit reached — delete some old check-ins first' });
+    if (aiRateLimited('photo:' + user.id, 30, 24 * 3600_000)) return json(res, 429, { error: 'too many photos today' });
+    const id = crypto.randomBytes(12).toString('base64url');
+    fs.mkdirSync(photoDir(user.id), { recursive: true });
+    fs.writeFileSync(photoFile(user.id, id), Buffer.from(up.data, 'base64'), { mode: 0o600 });
+    json(res, 200, { ok: true, id });
+  },
+  'GET /api/progress-photos': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const id = safeId(new URL(req.url, 'http://x').searchParams.get('id'));
+    const f = photoFile(user.id, id);
+    if (!id || !fs.existsSync(f)) return json(res, 404, { error: 'no such photo' });
+    const buf = fs.readFileSync(f);
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': buf.length, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', 'content-disposition': 'inline' });
+    res.end(buf);
+  },
+  'DELETE /api/progress-photos': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const id = safeId(new URL(req.url, 'http://x').searchParams.get('id'));
+    try { if (id) fs.unlinkSync(photoFile(user.id, id)); } catch {}
+    json(res, 200, { ok: true });
+  },
 
   'POST /api/ai/parse-set': async (req, res) => {
     const user = readSession(req);
@@ -1731,6 +1822,40 @@ const routes = {
       // past the signature check and fails here — that is the person's file, not our outage.
       if (/PDF specified was not valid|Could not process (image|pdf)/i.test(e.message || '')) return json(res, 400, { error: 'that file could not be read — export the PDF again, or photograph the pages' });
       console.error('ai/import-plan', e); json(res, 502, { error: 'AI request failed' });
+    }
+  },
+
+  // Monthly check-in review: this month's front/side/back next to the previous set (or alone,
+  // the first time), plus the weight and training facts the client sends. Returns a warm,
+  // specific, non-judgemental read-out. Photos are loaded from disk by id — nothing is uploaded
+  // twice — and the review text is stored by the client in the profile, not here.
+  'POST /api/ai/progress-review': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
+    const body = await readBody(req);
+    const lang = String(body.lang || 'en').slice(0, 5);
+    const pick = o => ({ front: safeId(o && o.front), side: safeId(o && o.side), back: safeId(o && o.back) });
+    const cur = pick(body.current), prev = pick(body.previous);
+    const load = id => { if (!id) return null; try { return fs.readFileSync(photoFile(user.id, id)).toString('base64'); } catch { return null; } };
+    const curImgs = Object.entries(cur).map(([pose, id]) => ({ pose, data: load(id) })).filter(x => x.data);
+    const prevImgs = Object.entries(prev).map(([pose, id]) => ({ pose, data: load(id) })).filter(x => x.data);
+    if (!curImgs.length) return json(res, 400, { error: 'no photos in this check-in' });
+    const facts = {
+      weightNow: +body.weightNow || null, weightBefore: +body.weightBefore || null, unit: body.unit === 'lb' ? 'lb' : 'kg',
+      daysBetween: Math.max(0, Math.min(3650, +body.daysBetween || 0)), workoutsBetween: Math.max(0, Math.min(500, +body.workoutsBetween || 0)),
+      goal: String(body.goal || '').slice(0, 30), sex: body.sex === 'female' ? 'female' : 'male', checkinNumber: Math.max(1, Math.min(500, +body.checkinNumber || 1))
+    };
+    if (aiRateLimited('review:' + user.id, 6, 30 * 24 * 3600_000)) return json(res, 429, { error: 'you can ask for a new review again in a few days' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
+    try {
+      const r = await callAnthropic(progressReviewRequest({ curImgs, prevImgs, facts, lang }), { uid: user.id, feature: 'progress-review' });
+      const call = (r.content || []).find(b => b.type === 'tool_use');
+      if (!call) return json(res, 502, { error: 'no structured reply from model' });
+      json(res, 200, { ok: true, ...call.input });
+    } catch (e) {
+      if (/Could not process image/i.test(e.message || '')) return json(res, 400, { error: 'one of the photos could not be read — retake it and try again' });
+      console.error('ai/progress-review', e); json(res, 502, { error: 'AI request failed' });
     }
   },
 
