@@ -143,3 +143,14 @@ p{margin:0}
 
 .plan .note s{color:var(--fg-3);margin-right:4px}
 .plan:not(.best) .tag{background:rgba(255,255,255,.1);color:var(--fg)}
+
+/* pricing v2 */
+.plan .price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:6px 0 0}
+.plan .price .was{font-size:18px;color:var(--fg-3);text-decoration:line-through;font-weight:600}
+.plan .equiv{color:var(--fg-2);font-size:14px;margin:0}
+.plan .save{display:inline-block;align-self:flex-start;background:rgba(208,255,82,.14);color:var(--acc);font-weight:700;font-size:13px;padding:5px 10px;border-radius:999px;margin:2px 0 6px}
+.plan.pop{border-color:rgba(255,255,255,.28)}
+.plan.best{transform:scale(1.04);box-shadow:0 30px 70px -40px rgba(208,255,82,.45)}
+.plan.best .price .n{color:var(--acc)}
+.plan .btn{margin-top:auto}
+@media (max-width:760px){.plan.best{transform:none;order:-1}}
