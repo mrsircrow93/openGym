@@ -1,7 +1,8 @@
 // Backend + WebAuthn helpers (ported from the vanilla app).
 import { t } from './i18n.js'
 import { MOBILE, API_BASE, getToken, setToken } from './mobile.js'
-import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan, directRecipes } from './ai.js'
+import { hasUserKey, directParseSet, directCoach, directIdentify, directAlternatives, directAnalyzeMeal, directTrainerPlan, directImportPlan, directImportRoutine, directRecipes } from './ai.js'
+import { sniff, fileToJpeg } from './upload.js'
 export const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
 export const IS_ANDROID = /Android/.test(navigator.userAgent)
 export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint or face unlock' : 'your fingerprint, face or PIN'
@@ -110,6 +111,12 @@ export async function aiImportPlan({ image, mediaType, pdf, lang }) {
   if (hasUserKey()) return directImportPlan({ image, mediaType, pdf, lang })
   return api('/api/ai/import-plan', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, pdf: pdf || '', lang }) })
 }
+// Routine photo or PDF -> { found, title, summary, routines: [{ name, glyph, days, exercises }], notes }.
+// Matched against the library in lib/import-routine.js before anything is saved; the file is never stored.
+export async function aiImportRoutine({ image, mediaType, pdf, lang }) {
+  if (hasUserKey()) return directImportRoutine({ image, mediaType, pdf, lang })
+  return api('/api/ai/import-routine', { method: 'POST', body: JSON.stringify({ image: image || '', mediaType, pdf: pdf || '', lang }) })
+}
 // PDF as base64, no resizing possible — capped so the body stays under nginx's 6 MB.
 export function fileToBase64(file, maxBytes = 3_300_000) {
   return new Promise((resolve, reject) => {
@@ -128,7 +135,12 @@ export async function aiTrainerPlan(body) {
 }
 // Downscales client-side before it ever leaves the device — a full-res phone photo is
 // 3-8 MB and costs real API tokens for no accuracy gain past ~1024px on the long edge.
-export function fileToResizedBase64(file, maxDim = 1024, quality = 0.82) {
+const readHead = file => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(new Uint8Array(r.result)); r.onerror = () => reject(new Error('could not read file')); r.readAsArrayBuffer(file.slice(0, 16)) })
+export async function fileToResizedBase64(file, maxDim = 1024, quality = 0.82) {
+  // HEIC (the iPhone default) only decodes natively in WebKit — route it through the shared
+  // reader, which falls back to the on-demand WebAssembly decoder on Chrome and Android.
+  const kind = sniff(await readHead(file))
+  if (kind === 'heic') { const r = await fileToJpeg(file, kind, maxDim, quality); return { base64: r.base64, mediaType: r.mediaType } }
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)

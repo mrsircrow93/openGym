@@ -401,6 +401,83 @@ function trainerPlanRequest({ profile, candidates }) {
   }
 }
 
+// Mirrors importRoutineRequest() in api/server.js: a routine photo or PDF -> days + exercises.
+export async function directImportRoutine({ image, mediaType, pdf, lang }) {
+  const mt = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg'
+  const r = await callDirect(importRoutineReq({ image, mediaType: mt, pdf, lang }))
+  const call = (r.content || []).find(b => b.type === 'tool_use')
+  if (!call) throw new Error('no structured reply from model')
+  return { ok: true, ...call.input }
+}
+function importRoutineReq({ image, mediaType, pdf, lang }) {
+  const content = []
+  if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } })
+  else content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } })
+  content.push({ type: 'text', text: 'Read this training routine and transcribe it: every training day with its exercises, sets, reps, rest and notes, exactly as written.' })
+  return {
+    max_tokens: 6000,
+    system: 'You are a strength coach transcribing a training routine written for one person (a photo of a ' +
+      'printed or handwritten sheet, a screenshot, or a PDF) into a fitness app. Transcribe faithfully: keep ' +
+      'the plan\'s own day names, exercise order, sets, reps, rest and notes; never add exercises that are ' +
+      'not there and never invent numbers. For each exercise also give name_en: the standard English name ' +
+      'the way an exercise database writes it, equipment first, e.g. "barbell bench press", "dumbbell lateral ' +
+      'raise", "lat pulldown", "leg press", "cable triceps pushdown", "push-up", "plank" — pick the most ' +
+      'specific common variant the text implies. Reps written as a range ("8-12") -> the top of the range; ' +
+      '"AMRAP" or "max" -> 15; time-based holds -> seconds; cardio -> minutes. Rest in seconds. Weekdays: only ' +
+      'when the document names them (0 = Sunday … 6 = Saturday); otherwise leave days empty. Set found=false ' +
+      'when the document is not a training routine. Write the summary in the language with ISO code "' + lang + '".',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'routine_import',
+      description: 'The routine transcribed from the document',
+      input_schema: {
+        type: 'object',
+        properties: {
+          found: { type: 'boolean', description: 'true when the document is a training routine with at least one exercise' },
+          title: { type: 'string', description: 'the plan\'s own title if it has one, else a short name like "Upper / Lower"' },
+          summary: { type: 'string', description: 'one short line: what the routine is (days, split), or why nothing was found' },
+          routines: {
+            type: 'array',
+            description: 'one entry per training day / session in the order written',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'session name as written, e.g. "Día 1 — Pecho y tríceps"' },
+                glyph: { type: 'string', enum: ['figureStrength', 'arm', 'abs', 'legs', 'pullup', 'dumbbell', 'barbell', 'kettlebell', 'plate', 'machine', 'figureRun', 'bike', 'swim', 'boxing', 'timer'] },
+                days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: 'weekdays only if the document states them' },
+                exercises: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string', description: 'exercise name exactly as written' },
+                      name_en: { type: 'string', description: 'canonical English database name, equipment first' },
+                      muscle: { type: 'string', enum: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'quads', 'hamstrings', 'glutes', 'calves', 'abs', 'cardio', 'full body', 'other'] },
+                      sets: { type: 'integer' },
+                      reps: { type: 'integer', description: 'top of the rep range' },
+                      seconds: { type: 'integer', description: 'for timed holds only' },
+                      minutes: { type: 'integer', description: 'for cardio only' },
+                      rest: { type: 'integer', description: 'seconds between sets, if stated' },
+                      weight: { type: 'string', description: 'load exactly as written, if any, e.g. "40 kg", "70%"' },
+                      note: { type: 'string', description: 'tempo, cue or instruction as written, ≤ 15 words' }
+                    },
+                    required: ['name', 'name_en', 'muscle']
+                  }
+                }
+              },
+              required: ['name', 'glyph', 'exercises']
+            }
+          },
+          notes: { type: 'array', items: { type: 'string' }, description: 'general instructions on the sheet (warm-up, progression, cardio, rest days), one per entry' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+        },
+        required: ['found', 'summary', 'routines', 'confidence']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'routine_import' }
+  }
+}
+
 // Mirrors planTargetsRequest() in api/server.js: meal-plan photo or PDF -> daily targets.
 export async function directImportPlan({ image, mediaType, pdf, lang }) {
   const mt = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mediaType) ? mediaType : 'image/jpeg'

@@ -6,7 +6,8 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtDate, fmtNum, todayISO, uid, MONTHS_LONG } from './lib/format.js'
 import { t, getLang } from './lib/i18n.js'
-import { aiAnalyzeMeal, aiImportPlan, aiRecipes, fileToResizedBase64, fileToBase64, aiErrorMessage } from './lib/api.js'
+import { aiAnalyzeMeal, aiImportPlan, aiRecipes, fileToResizedBase64, aiErrorMessage } from './lib/api.js'
+import { readUpload, UPLOAD_ACCEPT } from './lib/upload.js'
 import {
   MEAL_TYPES, MEAL_TYPE_LABEL, MEAL_TYPE_ICON, macroGoalOf, cleanItem, scaleItem, totalsOf,
   guessMealType, nowHHMM, kcalByDay, pctOf, MICROS, MICRO_UNIT, MICRO_IS_CEILING
@@ -346,9 +347,8 @@ function ImportPlan({ file, onApply }) {
     started.current = true
     ;(async () => {
       try {
-        let r
-        if (file.type === 'application/pdf') r = await aiImportPlan({ pdf: await fileToBase64(file), lang: getLang() })
-        else { const { base64, mediaType } = await fileToResizedBase64(file, 1568); r = await aiImportPlan({ image: base64, mediaType, lang: getLang() }) }
+        const up = await readUpload(file, { maxDim: 1568 })
+        const r = await aiImportPlan(up.kind === 'pdf' ? { pdf: up.base64, lang: getLang() } : { image: up.base64, mediaType: up.mediaType, lang: getLang() })
         setRes(r)
       } catch (e) { setErr(aiErrorMessage(e)) }
       setBusy(false)
@@ -389,7 +389,7 @@ function MacroGoal({ close }) {
   const [planFile, setPlanFile] = useState(null)
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="target" style={{ color: 'var(--yellow)' }} />{t('Daily targets')}</h3>
-    <input ref={planInput} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+    <input ref={planInput} type="file" accept={UPLOAD_ACCEPT} style={{ display: 'none' }}
       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPlanFile(f) }} />
     {!planFile && <div style={{ marginBottom: 12 }}>
       <Button size="sm" icon="upload" style={{ color: 'var(--violet)' }} onClick={() => planInput.current?.click()}>{t('Import from a diet plan (photo or PDF)')}</Button>

@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore.js'
 import { DAYN, uid, exCount, fmtDate, todayISO } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { dayAssignSheet, dayOverrideSheet, loadStarterPlan, planToolsSheet, startFlow } from '../sheets.jsx'
-import { trainerSheet } from '../sheets-trainer.jsx'
+import { trainerSheet, importRoutineSheet } from '../sheets-trainer.jsx'
 import { effectiveRoutine } from '../lib/history.js'
 import { routineMinutes, routineMuscles } from '../lib/routine.js'
 import Icon from '../components/Icon.jsx'
@@ -112,6 +112,16 @@ export default function Plan() {
           <div className="dim small">{S.trainer ? t('Different days, equipment or goal: answer again and the week is rebuilt.') : t('Five quick questions and your week is ready.')}</div>
         </div>
         <Button size="sm" variant="tinted" onClick={trainerSheet}>{S.trainer ? t('Change') : t('Start')}</Button>
+      </div>
+    </div>
+    <div className="card" style={{ marginTop: 10 }}>
+      <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+        <span className="lrow-i" style={{ '--tint': 'var(--blue)', width: 40, height: 40, borderRadius: 12 }}><Icon name="upload" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{t('Already have a routine?')}</div>
+          <div className="dim small">{t('Photo or PDF from your coach — we set it up for you.')}</div>
+        </div>
+        <Button size="sm" variant="tinted" onClick={importRoutineSheet}>{t('Import')}</Button>
       </div>
     </div>
   </>

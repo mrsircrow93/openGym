@@ -136,7 +136,7 @@ function buildIndex() {
   if (INDEX) return INDEX
   INDEX = { exact: new Map(), all: [] }
   EXDB.forEach(e => {
-    const w = wordsOf(e.n)
+    const w = wordsOf(e.n_en || e.n)
     const k = w.slice().sort().join(' ')
     if (!INDEX.exact.has(k)) INDEX.exact.set(k, e.id)
     INDEX.all.push({ id: e.id, set: new Set(w), n: w.length })

@@ -1,14 +1,16 @@
 // Personal trainer: a five-step questionnaire, then a plan preview you can apply as-is, add to what
 // you have, or regenerate. Plan maths + validation live in lib/trainer.js.
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtNum, DAYN, uid } from './lib/format.js'
-import { t } from './lib/i18n.js'
+import { t, getLang } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
-import { exOr } from './lib/exercises.js'
+import { exOr, registerCustom } from './lib/exercises.js'
 import { lastBW, exLine } from './lib/history.js'
-import { aiTrainerPlan, aiErrorMessage } from './lib/api.js'
+import { aiTrainerPlan, aiImportRoutine, aiErrorMessage } from './lib/api.js'
+import { readUpload, UPLOAD_ACCEPT } from './lib/upload.js'
+import { materializeImport } from './lib/import-routine.js'
 import {
   GOALS, GOAL_LABEL, GOAL_ICON, LEVELS, LEVEL_LABEL, LEVEL_DESC, EQUIP, EQUIP_LABEL, EQUIP_ICON,
   SESSION_LENGTHS, FOCUS, DEFAULT_ANSWERS, trainerCandidates, materializePlan, trainerRequestBody
@@ -38,14 +40,16 @@ function Choice({ options, value, onChange, label, desc, icon, multi }) {
   </div>
 }
 
-function Trainer({ close }) {
+// `imported` = { res, again }: the result view is reused for a routine read from a photo / PDF
+// (see ImportRoutine below) — same preview, same apply buttons, no questionnaire behind it.
+function Trainer({ close, imported }) {
   const S = useStore.getState().S
   const prev = (S.trainer && S.trainer.answers) || {}
   const [a, setA] = useState({ ...DEFAULT_ANSWERS, weight: lastBW(S)?.w || null, targetW: S.targetW || null, ...prev })
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [res, setRes] = useState(null)      // { plan, routines, week, dropped, candidates }
+  const [res, setRes] = useState(imported ? imported.res : null)      // { plan, routines, week, dropped, custom? }
   const [applyNutrition, setApplyNutrition] = useState(true)
   const [openRoutine, setOpenRoutine] = useState(null)
   const [moreSummary, setMoreSummary] = useState(false)
@@ -65,13 +69,14 @@ function Trainer({ close }) {
   }
 
   const apply = replace => {
-    const { plan, routines, week } = res
+    const { plan, routines, week, custom } = res
     update(s => {
       if (replace) { s.routines = []; s.week = {}; s.dayPlan = {} }
+      if (custom && custom.length) { s.customEx = [...(s.customEx || []), ...custom]; registerCustom(s.customEx) }
       s.routines.push(...routines)
       for (const d in week) s.week[d] = week[d]
       if (applyNutrition && plan.nutrition) s.macroGoal = { ...macroGoalOf(s), kcal: plan.nutrition.kcal, protein: plan.nutrition.protein, carbs: plan.nutrition.carbs, fat: plan.nutrition.fat }
-      s.trainer = { answers: a, at: Date.now(), split: plan.split, summary: plan.summary }
+      if (!imported) s.trainer = { answers: a, at: Date.now(), split: plan.split, summary: plan.summary }
     })
     close()
     toast(t('Plan ready — see your week'))
@@ -80,7 +85,7 @@ function Trainer({ close }) {
 
   /* ---------- result ---------- */
   if (res) {
-    const { plan, routines, week, dropped } = res
+    const { plan, routines, week, dropped, created = 0 } = res
     const daysOf = id => Object.keys(week).filter(d => week[d] === id).map(d => t(DAYN[+d]).slice(0, 3))
     const n = plan.nutrition
     const daysPerWeek = Object.keys(week).length
@@ -88,7 +93,8 @@ function Trainer({ close }) {
     const summary = String(plan.summary || '')
     const shortSummary = summary.length > 220 && !moreSummary ? summary.slice(0, 200).replace(/\s+\S*$/, '') + '…' : summary
     return <>
-      <h3 className="row" style={{ gap: 8 }}><Icon name="sparkles" style={{ color: 'var(--acc)' }} />{plan.split || t('Your plan')}</h3>
+      <h3 className="row" style={{ gap: 8 }}><Icon name={imported ? 'upload' : 'sparkles'} style={{ color: 'var(--acc)' }} />{plan.split || plan.title || t('Your plan')}</h3>
+      {imported && <div className="small muted" style={{ marginTop: -4, marginBottom: 6 }}>{t('Read from {0}', imported.fileName)}{plan.confidence === 'low' ? ' · ' + t('Check it before saving — the file was hard to read.') : ''}</div>}
       <div className="tr-stats">
         <div><b>{daysPerWeek}</b><span>{t('days a week')}</span></div>
         <div><b>~{minutes}</b><span>{t('min per session')}</span></div>
@@ -129,6 +135,8 @@ function Trainer({ close }) {
         </div>
       })}
       {plan.cardio && <div className="row small muted" style={{ gap: 6, alignItems: 'flex-start', margin: '4px 0 12px' }}><Icon name="figureRun" style={{ fontSize: 14, flex: 'none', marginTop: 2 }} /><span>{plan.cardio}</span></div>}
+      {created > 0 && <div className="row small muted" style={{ gap: 6, alignItems: 'flex-start', margin: '4px 0 12px' }}><Icon name="info" style={{ fontSize: 14, flex: 'none', marginTop: 2 }} /><span>{t(created === 1 ? '{0} exercise wasn’t in our library, so it was added as your own — you can edit it later.' : '{0} exercises weren’t in our library, so they were added as your own — you can edit them later.', created)}</span></div>}
+      {imported && Array.isArray(plan.notes) && plan.notes.length > 0 && <div className="small muted" style={{ margin: '0 0 12px', lineHeight: 1.5 }}>{plan.notes.slice(0, 6).map((x, i) => <div key={i}>• {x}</div>)}</div>}
       {dropped > 0 && <div className="small" style={{ color: 'var(--orange)', marginBottom: 10 }}>{t('{0} suggestion(s) didn’t match your equipment and were left out — tap “Show me another option” if a routine looks thin.', dropped)}</div>}
       {n && <div className="sect-b" style={{ margin: '6px 0 14px' }}>
         <button className="lrow tap" onClick={() => setApplyNutrition(v => !v)}>
@@ -139,8 +147,10 @@ function Trainer({ close }) {
       </div>}
       <Button variant="primary" icon="check" onClick={() => apply(true)}>{S.routines.length ? t('Use this plan instead of mine') : t('Use this plan')}</Button>
       {S.routines.length > 0 && <><div style={{ height: 8 }} /><Button icon="plus" onClick={() => apply(false)}>{t('Add alongside my routines')}</Button></>}
-      <div style={{ height: 8 }} /><Button variant="ghost" icon="shuffle" onClick={() => { setRes(null); build() }}>{t('Show me another option')}</Button>
-      <div style={{ height: 4 }} /><Button variant="ghost" className="dim" onClick={() => setRes(null)}>{t('Change my answers')}</Button>
+      {imported
+        ? <><div style={{ height: 8 }} /><Button variant="ghost" icon="upload" onClick={imported.again}>{t('Pick another file')}</Button></>
+        : <><div style={{ height: 8 }} /><Button variant="ghost" icon="shuffle" onClick={() => { setRes(null); build() }}>{t('Show me another option')}</Button>
+          <div style={{ height: 4 }} /><Button variant="ghost" className="dim" onClick={() => setRes(null)}>{t('Change my answers')}</Button></>}
     </>
   }
 
@@ -198,3 +208,51 @@ function Trainer({ close }) {
   </>
 }
 export const trainerSheet = () => ui().openSheet(close => <Trainer close={close} />)
+
+/* ---------- import a routine you already have (photo or PDF) ---------- */
+// Pick -> read -> the trainer's result view. The file is read on the device (resized, HEIC
+// converted), checked by signature on the server and never stored anywhere.
+function ImportRoutine({ close }) {
+  const [phase, setPhase] = useState('pick')   // pick | busy | result
+  const [err, setErr] = useState('')
+  const [res, setRes] = useState(null)
+  const [fileName, setFileName] = useState('')
+  const camInput = useRef(null), fileInput = useRef(null)
+  const onFile = async f => {
+    if (!f) return
+    setErr(''); setPhase('busy'); setFileName(f.name)
+    try {
+      const up = await readUpload(f, { maxDim: 1568 })
+      const parsed = await aiImportRoutine(up.kind === 'pdf' ? { pdf: up.base64, lang: getLang() } : { image: up.base64, mediaType: up.mediaType, lang: getLang() })
+      if (!parsed.found || !(parsed.routines || []).length) throw new Error(t('Couldn’t find a routine in that file.') + (parsed.summary ? ' ' + parsed.summary : ''))
+      const m = materializeImport(parsed, useStore.getState().S)
+      if (!m.routines.length) throw new Error(t('Couldn’t find a routine in that file.'))
+      setRes({ plan: parsed, ...m }); setPhase('result')
+    } catch (e) { setErr(aiErrorMessage(e)); setPhase('pick') }
+  }
+  const pick = ref => e => { const f = e.target.files?.[0]; e.target.value = ''; onFile(f) }
+  if (phase === 'result') return <Trainer close={close} imported={{ res, fileName, again: () => { setRes(null); setPhase('pick') } }} />
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name="upload" style={{ color: 'var(--acc)' }} />{t('Bring your own routine')}</h3>
+    <input ref={camInput} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={pick(camInput)} />
+    <input ref={fileInput} type="file" accept={UPLOAD_ACCEPT} style={{ display: 'none' }} onChange={pick(fileInput)} />
+    {phase === 'busy' ? <div className="row small dim" style={{ gap: 8, padding: '20px 0' }}><span className="spin" />{t('Reading your routine — 15 to 30 seconds…')}</div> : <>
+      <div className="small muted" style={{ lineHeight: 1.5, marginBottom: 14 }}>{t('Got a routine from your coach or gym? Take a photo of the sheet or upload the PDF. We read the days, exercises, sets and reps and set it up for you — you check it before anything is saved.')}</div>
+      <div className="sect-b" style={{ marginBottom: 12 }}>
+        <button className="lrow tap" onClick={() => camInput.current?.click()}>
+          <span className="lrow-i" style={{ '--tint': 'var(--acc)' }}><Icon name="camera" /></span>
+          <span className="lrow-m"><span className="lrow-t">{t('Take a photo')}</span><span className="lrow-s">{t('Of the printed or handwritten sheet')}</span></span>
+          <Icon name="chevronRight" className="lrow-k" />
+        </button>
+        <button className="lrow tap" onClick={() => fileInput.current?.click()}>
+          <span className="lrow-i" style={{ '--tint': 'var(--blue)' }}><Icon name="folder" /></span>
+          <span className="lrow-m"><span className="lrow-t">{t('Choose a file')}</span><span className="lrow-s">{t('PDF, JPG, PNG or HEIC · up to 3 MB for PDFs')}</span></span>
+          <Icon name="chevronRight" className="lrow-k" />
+        </button>
+      </div>
+      <div className="small dim" style={{ lineHeight: 1.5 }}>{t('Your file is read once and never stored.')}</div>
+    </>}
+    {err && <div className="small" style={{ color: 'var(--red)', marginTop: 10 }}>{err}</div>}
+  </>
+}
+export const importRoutineSheet = () => ui().openSheet(close => <ImportRoutine close={close} />)

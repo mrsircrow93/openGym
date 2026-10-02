@@ -11,6 +11,7 @@ import {
 import webpush from 'web-push';
 import { hashPassword, verifyPassword, needsRehash, passwordProblem, DUMMY_HASH } from './password.js';
 import { sendEmail, mail, emailConfigured } from './email.js';
+import { inspectUpload, inspectImage } from './upload.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -44,7 +45,7 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-2025100
 // features are fine on Haiku. Either override falls back to ANTHROPIC_MODEL when unset.
 const ANTHROPIC_MODEL_VISION = process.env.ANTHROPIC_MODEL_VISION || ANTHROPIC_MODEL;
 const ANTHROPIC_MODEL_TEXT = process.env.ANTHROPIC_MODEL_TEXT || ANTHROPIC_MODEL;
-const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan']);
+const VISION_FEATURES = new Set(['analyze-meal', 'identify-exercise', 'import-plan', 'import-routine']);
 const modelFor = feature => (VISION_FEATURES.has(feature) ? ANTHROPIC_MODEL_VISION : ANTHROPIC_MODEL_TEXT);
 const MODELS_IN_USE = { vision: ANTHROPIC_MODEL_VISION, text: ANTHROPIC_MODEL_TEXT };
 // Billing (docs/BILLING.md). Off by default so a self-hosted instance stays free; when on, a new
@@ -791,6 +792,76 @@ function planTargetsRequest({ image, mediaType, pdf, lang }) {
   };
 }
 
+// Someone's existing routine (photo / PDF) -> days with exercises. Mirrored in frontend/src/lib/ai.js.
+function importRoutineRequest({ image, mediaType, pdf, lang }) {
+  const content = []
+  if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } })
+  else content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } })
+  content.push({ type: 'text', text: 'Read this training routine and transcribe it: every training day with its exercises, sets, reps, rest and notes, exactly as written.' })
+  return {
+    max_tokens: 6000,
+    system: 'You are a strength coach transcribing a training routine written for one person (a photo of a ' +
+      'printed or handwritten sheet, a screenshot, or a PDF) into a fitness app. Transcribe faithfully: keep ' +
+      'the plan\'s own day names, exercise order, sets, reps, rest and notes; never add exercises that are ' +
+      'not there and never invent numbers. For each exercise also give name_en: the standard English name ' +
+      'the way an exercise database writes it, equipment first, e.g. "barbell bench press", "dumbbell lateral ' +
+      'raise", "lat pulldown", "leg press", "cable triceps pushdown", "push-up", "plank" — pick the most ' +
+      'specific common variant the text implies. Reps written as a range ("8-12") -> the top of the range; ' +
+      '"AMRAP" or "max" -> 15; time-based holds -> seconds; cardio -> minutes. Rest in seconds. Weekdays: only ' +
+      'when the document names them (0 = Sunday … 6 = Saturday); otherwise leave days empty. Set found=false ' +
+      'when the document is not a training routine. Write the summary in the language with ISO code "' + lang + '".',
+    messages: [{ role: 'user', content }],
+    tools: [{
+      name: 'routine_import',
+      description: 'The routine transcribed from the document',
+      input_schema: {
+        type: 'object',
+        properties: {
+          found: { type: 'boolean', description: 'true when the document is a training routine with at least one exercise' },
+          title: { type: 'string', description: 'the plan\'s own title if it has one, else a short name like "Upper / Lower"' },
+          summary: { type: 'string', description: 'one short line: what the routine is (days, split), or why nothing was found' },
+          routines: {
+            type: 'array',
+            description: 'one entry per training day / session in the order written',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'session name as written, e.g. "Día 1 — Pecho y tríceps"' },
+                glyph: { type: 'string', enum: ['figureStrength', 'arm', 'abs', 'legs', 'pullup', 'dumbbell', 'barbell', 'kettlebell', 'plate', 'machine', 'figureRun', 'bike', 'swim', 'boxing', 'timer'] },
+                days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: 'weekdays only if the document states them' },
+                exercises: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string', description: 'exercise name exactly as written' },
+                      name_en: { type: 'string', description: 'canonical English database name, equipment first' },
+                      muscle: { type: 'string', enum: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'quads', 'hamstrings', 'glutes', 'calves', 'abs', 'cardio', 'full body', 'other'] },
+                      sets: { type: 'integer' },
+                      reps: { type: 'integer', description: 'top of the rep range' },
+                      seconds: { type: 'integer', description: 'for timed holds only' },
+                      minutes: { type: 'integer', description: 'for cardio only' },
+                      rest: { type: 'integer', description: 'seconds between sets, if stated' },
+                      weight: { type: 'string', description: 'load exactly as written, if any, e.g. "40 kg", "70%"' },
+                      note: { type: 'string', description: 'tempo, cue or instruction as written, ≤ 15 words' }
+                    },
+                    required: ['name', 'name_en', 'muscle']
+                  }
+                }
+              },
+              required: ['name', 'glyph', 'exercises']
+            }
+          },
+          notes: { type: 'array', items: { type: 'string' }, description: 'general instructions on the sheet (warm-up, progression, cardio, rest days), one per entry' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
+        },
+        required: ['found', 'summary', 'routines', 'confidence']
+      }
+    }],
+    tool_choice: { type: 'tool', name: 'routine_import' }
+  }
+}
+
 // AI trainer: questionnaire + exercise shortlist -> weekly plan. Mirrored in frontend/src/lib/ai.js.
 function trainerPlanRequest({ profile, candidates }) {
   const p = profile;
@@ -1527,9 +1598,9 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
     const body = await readBody(req);
-    const image = String(body.image || '');
-    const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
-    if (!image || image.length > 4_000_000) return json(res, 400, { error: 'image required (send it resized client-side)' });
+    const up = inspectImage(body.image);
+    if (!up.ok) return json(res, 400, { error: up.error });
+    const image = up.data, mediaType = up.mediaType;
     if (aiRateLimited(user.id, 10, 60 * 60_000)) return json(res, 429, { error: 'too many photos — try again in a bit' });
     if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
@@ -1593,8 +1664,8 @@ const routes = {
       name: String(i.name || '').slice(0, 80), portion: String(i.portion || '').slice(0, 80), grams: +i.grams || 0,
       kcal: +i.kcal || 0, protein: +i.protein || 0, carbs: +i.carbs || 0, fat: +i.fat || 0,
       sugar: +i.sugar || 0, fiber: +i.fiber || 0, sodium: +i.sodium || 0 })) : null;
-    const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
-    if (image.length > 4_000_000) return json(res, 400, { error: 'image too large (send it resized client-side)' });
+    let mediaType = 'image/jpeg';
+    if (image) { const up = inspectImage(image); if (!up.ok) return json(res, 400, { error: up.error }); mediaType = up.mediaType; }
     if (!image && !text && !previous) return json(res, 400, { error: 'photo or description required' });
     if (aiRateLimited(user.id, 15, 60 * 60_000)) return json(res, 429, { error: 'too many meals analysed — try again in a bit' });
     if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
@@ -1643,12 +1714,10 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
     const body = await readBody(req);
-    const image = String(body.image || '');
-    const pdf = String(body.pdf || '');
     const lang = String(body.lang || 'en').slice(0, 5);
-    const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
-    if (!image && !pdf) return json(res, 400, { error: 'photo or PDF required' });
-    if (image.length > 4_000_000 || pdf.length > 4_500_000) return json(res, 400, { error: 'file too large (max ~3 MB PDF)' });
+    const up = inspectUpload({ image: String(body.image || ''), pdf: String(body.pdf || '') });
+    if (!up.ok) return json(res, 400, { error: up.error });
+    const image = up.kind === 'image' ? up.data : '', pdf = up.kind === 'pdf' ? up.data : '', mediaType = up.mediaType;
     if (aiRateLimited(user.id, 10, 60 * 60_000)) return json(res, 429, { error: 'too many plans imported — try again in a bit' });
     if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
@@ -1657,6 +1726,29 @@ const routes = {
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
     } catch (e) { console.error('ai/import-plan', e); json(res, 502, { error: 'AI request failed' }); }
+  },
+
+  // A routine someone already has (a coach's PDF, a photo of a gym card or a screenshot) ->
+  // structured days + exercises. Names come back as written AND as a canonical English name,
+  // which the client matches against the library (lib/import-routine.js); whatever has no
+  // match becomes a custom exercise, so nothing on the sheet is lost.
+  'POST /api/ai/import-routine': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!ANTHROPIC_API_KEY) return json(res, 501, { error: 'AI not configured on this server' });
+    const body = await readBody(req);
+    const lang = String(body.lang || 'en').slice(0, 5);
+    const up = inspectUpload({ image: String(body.image || ''), pdf: String(body.pdf || '') });
+    if (!up.ok) return json(res, 400, { error: up.error });
+    const image = up.kind === 'image' ? up.data : '', pdf = up.kind === 'pdf' ? up.data : '', mediaType = up.mediaType;
+    if (aiRateLimited(user.id, 10, 60 * 60_000)) return json(res, 429, { error: 'too many routines imported — try again in a bit' });
+    if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
+    try {
+      const r = await callAnthropic(importRoutineRequest({ image, mediaType, pdf, lang }), { uid: user.id, feature: 'import-routine' });
+      const call = (r.content || []).find(b => b.type === 'tool_use');
+      if (!call) return json(res, 502, { error: 'no structured reply from model' });
+      json(res, 200, { ok: true, ...call.input });
+    } catch (e) { console.error('ai/import-routine', e); json(res, 502, { error: 'AI request failed' }); }
   },
 
   // Questionnaire -> weekly plan. The client sends the exercise shortlist (lib/trainer.js) so the
