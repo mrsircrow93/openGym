@@ -33,6 +33,14 @@ describe('inspectPdf', () => {
     expect(inspectPdf(b64('%PDF-1.4\n1 0 obj << /Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >> >> endobj')).ok).toBe(false)
     expect(inspectPdf(b64('%PDF-1.4\n<< /Type /Filespec /EF << /F 5 0 R >> >> /EmbeddedFiles')).ok).toBe(false)
   })
+  it('does not mistake binary image data inside streams for scripts', () => {
+    const noise = Buffer.alloc(300_000)
+    for (let i = 0; i < noise.length; i++) noise[i] = (i * 7919 + 13) % 256
+    const body = Buffer.concat([Buffer.from('%PDF-1.5\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n3 0 obj << /Type /Page >> endobj\n4 0 obj << /Length 300000 >> stream\n'), noise, Buffer.from('/JS /AA /Launch\nendstream endobj\n%%EOF')])
+    expect(inspectPdf(b64(body)).ok).toBe(true)
+    // ...but a marker in a dictionary still trips it
+    expect(inspectPdf(b64('%PDF-1.5\n1 0 obj << /Type /Catalog /AA << /O 5 0 R >> >> endobj')).ok).toBe(false)
+  })
   it('rejects non-PDFs and renamed images', () => {
     expect(inspectPdf(jpeg).ok).toBe(false)
     expect(inspectPdf(b64('hello world this is text, not a pdf')).ok).toBe(false)

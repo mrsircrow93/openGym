@@ -39,16 +39,18 @@ export function inspectImage(b64) {
   return { ok: true, kind: 'image', mediaType: sig.mediaType, data: b64 };
 }
 
-// Active-content markers. Matched on the raw bytes (PDF syntax is ASCII); object streams
-// could hide them, but a nutrition or training plan has no business containing any of
-// these, so a hit simply rejects the file.
-const PDF_ACTIVE = /\/(JavaScript|JS|Launch|EmbeddedFiles?|OpenAction|AA|RichMedia|XFA|SubmitForm|ImportData)\b/;
+// Active-content markers. Matched on the object dictionaries only: the bytes between
+// `stream` and `endstream` are compressed images and fonts, where "/JS" shows up by chance
+// every few megabytes. Object streams could hide a marker from this check, but a nutrition
+// or training plan has no business containing any of these, so a hit simply rejects the file.
+const PDF_ACTIVE = /\/(JavaScript|JS|Launch|EmbeddedFiles?|OpenAction|AA|RichMedia|XFA|SubmitForm|ImportData)(?=[\s/<\[(>]|$)/;
+const PDF_STREAM = /stream\r?\n[\s\S]*?endstream/g;
 
 export function inspectPdf(b64) {
   const buf = decode(b64, PDF_MAX);
   if (!buf) return { ok: false, error: 'PDF missing, malformed or too large (max 12 MB)' };
   if (buf.toString('latin1', 0, 5) !== '%PDF-') return { ok: false, error: 'not a PDF' };
-  const text = buf.toString('latin1');
+  const text = buf.toString('latin1').replace(PDF_STREAM, ' stream endstream ');
   if (PDF_ACTIVE.test(text)) return { ok: false, error: 'this PDF contains scripts or attachments — export a plain copy and try again' };
   const pages = (text.match(/\/Type\s*\/Page[^s]/g) || []).length;
   if (pages > PDF_MAX_PAGES) return { ok: false, error: 'PDF too long (max ' + PDF_MAX_PAGES + ' pages)' };
