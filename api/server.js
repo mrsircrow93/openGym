@@ -1725,7 +1725,12 @@ const routes = {
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
-    } catch (e) { console.error('ai/import-plan', e); json(res, 502, { error: 'AI request failed' }); }
+    } catch (e) {
+      // The model's own PDF parser is the last word: a damaged or password-protected PDF gets
+      // past the signature check and fails here — that is the person's file, not our outage.
+      if (/PDF specified was not valid|Could not process (image|pdf)/i.test(e.message || '')) return json(res, 400, { error: 'that file could not be read — export the PDF again, or photograph the pages' });
+      console.error('ai/import-plan', e); json(res, 502, { error: 'AI request failed' });
+    }
   },
 
   // A routine someone already has (a coach's PDF, a photo of a gym card or a screenshot) ->
@@ -1748,7 +1753,12 @@ const routes = {
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
-    } catch (e) { console.error('ai/import-routine', e); json(res, 502, { error: 'AI request failed' }); }
+    } catch (e) {
+      // The model's own PDF parser is the last word: a damaged or password-protected PDF gets
+      // past the signature check and fails here — that is the person's file, not our outage.
+      if (/PDF specified was not valid|Could not process (image|pdf)/i.test(e.message || '')) return json(res, 400, { error: 'that file could not be read — export the PDF again, or photograph the pages' });
+      console.error('ai/import-routine', e); json(res, 502, { error: 'AI request failed' });
+    }
   },
 
   // Questionnaire -> weekly plan. The client sends the exercise shortlist (lib/trainer.js) so the
