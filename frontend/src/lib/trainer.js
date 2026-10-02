@@ -29,6 +29,18 @@ const EQ_SETS = {
   bodyweight: ['body weight']
 }
 
+// "Body weight" in the dataset still includes moves that need a gym fixture — dip bars, a
+// pull-up bar, a GHD, a bench, rings. At home or with no equipment those are out.
+const FIXTURE_RE = /\b(dips?|pull[- ]?ups?|chin[- ]?ups?|hanging|glute[- ]?ham|muscle[- ]?ups?|rings?|parallel|bench|incline|decline|rope|sled|lever|machine|smith|cable|rack|ghd|rows?|inverted|australian|box|step[- ]?ups?|trx|suspension|roman chair|hyperextension|back extension|captain|preacher|pulldown|assisted|wall walk|handstand)\b/i
+const HOME_BENCH_RE = /\b(bench|incline|decline|preacher|machine|cable|rack|smith|lever)\b/i
+// At home or with nothing at all, a "body weight" move that needs a fixture is out; at home,
+// dumbbell moves that need a bench or a rack are out too (floor and standing variants stay).
+export const needsFixture = (ex, equipment) => {
+  const n = (ex.n_en || ex.n || '')
+  if (ex.eq === 'body weight') return FIXTURE_RE.test(n)
+  return equipment === 'home' && HOME_BENCH_RE.test(n)
+}
+
 // Shortlist for the model. The whole library (1 300+) is too much to send and too much for
 // the model to weigh, so: keep what the equipment allows, then take a round-robin per target
 // muscle across equipment types, so every muscle has both free-weight and machine options and
@@ -40,6 +52,7 @@ export function trainerCandidates(S, equipment, cap = 420) {
   const byTg = {}
   for (const e of all) {
     if (custom.some(c => c.id === e.id) || !allowed.has(e.eq)) continue
+    if (equipment !== 'gym' && needsFixture(e, equipment)) continue
     const k = e.tg || e.bp
     ;(byTg[k] = byTg[k] || {})[e.eq] = (byTg[k][e.eq] || []).concat([{ id: e.id, n: e.n, tg: k, eq: e.eq }])
   }
@@ -66,7 +79,7 @@ const clampInt = (v, lo, hi, d) => { const n = Math.round(+v); return Number.isF
 
 // Model answer -> { routines, week, dropped } with every id checked against the shortlist.
 // Anything the model invented is dropped (and counted, so the UI can say so).
-export function materializePlan(plan, candidates) {
+export function materializePlan(plan, candidates, maxDays = 7) {
   const valid = new Set(candidates.map(c => c.id))
   const routines = [], week = {}, taken = new Set()
   let dropped = 0
@@ -88,7 +101,7 @@ export function materializePlan(plan, candidates) {
     if (!ex.length) continue
     const id = uid()
     routines.push({ id, name: String(r.name || 'Workout').slice(0, 40), emoji: GLYPHS.includes(r.glyph) ? r.glyph : DEFAULT_GLYPH, prog: PROGRESSIONS.includes(plan.progression) ? plan.progression : 'linear', ex })
-    for (const d of r.days || []) { const k = clampInt(d, 0, 6, -1); if (k >= 0 && !taken.has(k)) { taken.add(k); week[k] = id } }
+    for (const d of r.days || []) { const k = clampInt(d, 0, 6, -1); if (k >= 0 && !taken.has(k) && taken.size < maxDays) { taken.add(k); week[k] = id } }
   }
   return { routines, week, dropped }
 }

@@ -801,6 +801,7 @@ function trainerPlanRequest({ profile, candidates }) {
       'for one person. You will get their profile and a list of available exercises, one per line as ' +
       'id|name|target muscle|equipment. Use ONLY ids from that list — never invent one.\n' +
       'Apply current sports-science consensus:\n' +
+      '- Schedule EXACTLY daysPerWeek training days in total across all routines (a routine used twice a week counts twice); never more.\n' +
       '- Split by availability: 2-3 days → full body; 4 days → upper/lower; 5-6 days → push/pull/legs or upper/lower/full. Each muscle trained ~2× per week.\n' +
       '- Weekly volume per major muscle: beginners ~8-12 hard sets, intermediates 12-18, advanced 15-22.\n' +
       '- Strength goal: main compound lifts 3-6 reps, 3-5 sets, 2-4 min rest; accessories 6-12. Muscle goal: 6-12 reps on compounds, 10-20 on isolation, 1.5-3 min rest, sets 1-3 reps from failure. Fat loss: keep resistance training (it preserves muscle in a deficit), moderate reps, plus 2-4 cardio sessions. Endurance: zone-2 cardio, intervals once a week, full-body strength 2× to keep tissue robust. General health: 2-3 full-body sessions + cardio, all major patterns (squat, hinge, push, pull, carry).\n' +

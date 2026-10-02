@@ -57,7 +57,7 @@ function Trainer({ close }) {
       const candidates = trainerCandidates(S, a.equipment)
       const mock = import.meta.env.DEV ? (() => { try { return JSON.parse(localStorage.getItem('vx_mock_plan')) } catch { return null } })() : null
       const plan = mock || await aiTrainerPlan(trainerRequestBody(S, a, candidates))
-      const m = materializePlan(plan, candidates)
+      const m = materializePlan(plan, candidates, a.days)
       if (!m.routines.length) throw new Error(t('The plan came back empty — try again'))
       setRes({ plan, ...m })
     } catch (e) { setErr(aiErrorMessage(e)) }
