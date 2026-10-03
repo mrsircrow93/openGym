@@ -171,7 +171,7 @@ const newDraft = (iso, patch = {}) => {
 
 /* ============================ AI: analyse a meal ============================ */
 
-function AnalyzeMeal({ file, text, iso, close }) {
+function AnalyzeMeal({ file, text, iso, type, close }) {
   const [busy, setBusy] = useState(true)
   const [err, setErr] = useState('')
   const [res, setRes] = useState(null)
@@ -212,16 +212,16 @@ function AnalyzeMeal({ file, text, iso, close }) {
       {res.note && <div className="small dim" style={{ marginBottom: 6 }}>{res.note}</div>}
       <MealForm close={close} saveLabel={t('Save meal')} onSave={saveMeal}
         refine={(correction, previous) => aiAnalyzeMeal({ ...enc, text, lang: getLang(), previous, correction })}
-        draft={newDraft(iso, { name: res.name || '', items: (res.items || []).map(cleanItem), ai: true })} />
+        draft={newDraft(iso, { name: res.name || '', items: (res.items || []).map(cleanItem), ai: true, ...(type ? { type } : {}) })} />
     </>}
   </>
 }
-export const analyzeMealSheet = (file, iso, text) => ui().openSheet(close => <AnalyzeMeal file={file} text={text} iso={iso} close={close} />)
+export const analyzeMealSheet = (file, iso, text, type) => ui().openSheet(close => <AnalyzeMeal file={file} text={text} iso={iso} type={type} close={close} />)
 
 // Text path: no camera at hand, or leftovers with a known recipe. A couple of lines is plenty.
-function DescribeMeal({ iso, close }) {
+function DescribeMeal({ iso, type, close }) {
   const [txt, setTxt] = useState('')
-  const go = () => { const v = txt.trim(); if (!v) return; close(); analyzeMealSheet(null, iso, v) }
+  const go = () => { const v = txt.trim(); if (!v) return; close(); analyzeMealSheet(null, iso, v, type) }
   return <>
     <h3>{t('Describe your meal')}</h3>
     <div className="small muted" style={{ marginBottom: 10 }}>{t('Quantities help: “2 scrambled eggs, 1 slice of toast with butter, a black coffee”.')}</div>
@@ -230,7 +230,7 @@ function DescribeMeal({ iso, close }) {
     <Button variant="primary" icon="sparkles" disabled={!txt.trim()} onClick={go}>{t('Estimate it')}</Button>
   </>
 }
-export const describeMealSheet = iso => ui().openSheet(close => <DescribeMeal iso={iso} close={close} />)
+export const describeMealSheet = (iso, type) => ui().openSheet(close => <DescribeMeal iso={iso} type={type} close={close} />)
 
 /* ============================ edit / manual ============================ */
 
@@ -243,7 +243,23 @@ function MealFormSheet({ meal, close }) {
   </>
 }
 export const mealFormSheet = meal => ui().openSheet(close => <MealFormSheet meal={meal} close={close} />)
-export const manualMealSheet = iso => mealFormSheet(newDraft(iso))
+export const manualMealSheet = (iso, type) => mealFormSheet(newDraft(iso, type ? { type } : {}))
+
+// "+" on a meal slot: pick how to log breakfast / lunch / dinner / snack for that day.
+function AddMeal({ iso, type, close }) {
+  const camRef = useRef(null)
+  return <>
+    <h3 className="row" style={{ gap: 8 }}><Icon name={MEAL_TYPE_ICON[type] || 'flame'} style={{ color: 'var(--orange)' }} />{t('Log {0}', t(MEAL_TYPE_LABEL[type] || 'Snack').toLowerCase())}</h3>
+    <input ref={camRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { close(); analyzeMealSheet(f, iso, undefined, type) } }} />
+    <div className="sect-b" style={{ marginBottom: 12 }}>
+      <button className="lrow tap" onClick={() => camRef.current?.click()}><span className="lrow-i" style={{ '--tint': 'var(--acc)' }}><Icon name="camera" /></span><span className="lrow-m"><span className="lrow-t">{t('Take a photo')}</span><span className="lrow-s">{t('We read the foods and portions; you check before saving')}</span></span><Icon name="chevronRight" className="lrow-k" /></button>
+      <button className="lrow tap" onClick={() => { close(); describeMealSheet(iso, type) }}><span className="lrow-i" style={{ '--tint': 'var(--violet)' }}><Icon name="pencil" /></span><span className="lrow-m"><span className="lrow-t">{t('Describe it')}</span><span className="lrow-s">{t('A sentence is enough')}</span></span><Icon name="chevronRight" className="lrow-k" /></button>
+      <button className="lrow tap" onClick={() => { close(); manualMealSheet(iso, type) }}><span className="lrow-i" style={{ '--tint': 'var(--blue)' }}><Icon name="plus" /></span><span className="lrow-m"><span className="lrow-t">{t('Manual')}</span><span className="lrow-s">{t('Type the foods and numbers yourself')}</span></span><Icon name="chevronRight" className="lrow-k" /></button>
+    </div>
+  </>
+}
+export const addMealSheet = (iso, type) => ui().openSheet(close => <AddMeal iso={iso} type={type} close={close} />)
 
 /* ============================ diet plan (from a nutritionist) ============================ */
 

@@ -4,12 +4,13 @@ import { useStore } from '../store/useStore.js'
 import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { lastBW } from '../lib/history.js'
-import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL } from '../lib/nutrition.js'
-import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
+import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL, MEAL_TYPES } from '../lib/nutrition.js'
+import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, addMealSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
 import { goalWizardSheet } from '../sheets-goal.jsx'
 import { reviewDue, toKg } from '../lib/nutrition-goal.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
+import Ring from '../components/Ring.jsx'
 import { Button } from '../components/ui.jsx'
 
 // Meal log for one day at a time: pick the day on the week strip (or the calendar), see how
@@ -122,21 +123,39 @@ export default function Nutrition() {
       </div>
     </div>}
 
-    <h4 className="sec">{meals.length ? t(meals.length === 1 ? '{0} meal' : '{0} meals', meals.length) : t('Meals')}</h4>
-    {meals.length ? <div className="list" style={{ display: 'flex', flexDirection: 'column', marginBottom: 16 }}>
-      {meals.map(m => { const mt = totalsOf(m.items); return <div key={m.id} className="item" onClick={() => mealFormSheet(m)}>
-        <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 18, background: 'var(--orange)' }}><Icon name={MEAL_TYPE_ICON[m.type] || 'flame'} /></span>
-        <div className="grow">
-          <div className="tt">{m.name}</div>
-          <div className="ss">{[m.t, t(MEAL_TYPE_LABEL[m.type] || 'Snack'), (m.items || []).map(i => i.name).slice(0, 3).join(', ') + ((m.items || []).length > 3 ? '…' : '')].filter(Boolean).join(' · ')}</div>
-        </div>
-        <div style={{ textAlign: 'right', flex: 'none' }}>
-          <div className="tt">{fmtNum(mt.kcal)} <span className="dim small">kcal</span></div>
-          <MacroLine tot={mt} dim />
-        </div>
-        <Icon name="chevronRight" className="chev" />
-      </div> })}
-    </div> : <div className="empty" style={{ padding: '24px 20px' }}><div className="ico"><Icon name="utensils" /></div>{isToday ? t('Nothing logged yet today — snap your next meal.') : t('Nothing logged on {0}.', fmtDate(iso, true))}</div>}
+    <div className="card">
+      <div className="row between" style={{ marginBottom: 10 }}>
+        <div className="eyebrow">{t('Meals')}</div>
+        <span className="small dim">{meals.length ? t(meals.length === 1 ? '{0} logged' : '{0} logged', meals.length) : (isToday ? t('Nothing yet') : '')}</span>
+      </div>
+      <div className="slots">
+        {MEAL_TYPES.map(k => { const ms = meals.filter(m => m.type === k); const kc = ms.reduce((a, m) => a + totalsOf(m.items).kcal, 0); const share = { breakfast: .25, lunch: .35, dinner: .3, snack: .1 }[k]
+          return <button key={k} className="slot" onClick={() => ms.length ? mealFormSheet(ms[ms.length - 1]) : addMealSheet(iso, k)}>
+            <Ring pct={goal.kcal ? kc / (goal.kcal * share) * 100 : 0} size={60} stroke={6} color="var(--orange)">
+              {ms.length ? <Icon name={MEAL_TYPE_ICON[k]} style={{ fontSize: 20, color: 'var(--orange)' }} /> : <span className="slot-plus"><Icon name="plus" /></span>}
+            </Ring>
+            <span className="slot-n">{t(MEAL_TYPE_LABEL[k])}</span>
+            <span className="slot-k">{ms.length ? fmtNum(Math.round(kc)) + ' kcal' : t('Add')}</span>
+          </button> })}
+      </div>
+      {meals.length > 0 && <div className="list" style={{ display: 'flex', flexDirection: 'column', marginTop: 12 }}>
+        {MEAL_TYPES.filter(k => meals.some(m => m.type === k)).map(k => <div key={k}>
+          <div className="row between" style={{ margin: '6px 2px 4px' }}><span className="small muted" style={{ fontWeight: 600 }}>{t(MEAL_TYPE_LABEL[k])}</span><button className="linkbtn small" onClick={() => addMealSheet(iso, k)}>{t('+ Add more')}</button></div>
+          {meals.filter(m => m.type === k).map(m => { const mt = totalsOf(m.items); return <div key={m.id} className="item" onClick={() => mealFormSheet(m)}>
+            <div className="grow">
+              <div className="tt">{m.name}</div>
+              <div className="ss">{[m.t, (m.items || []).map(i => i.name).slice(0, 3).join(', ') + ((m.items || []).length > 3 ? '…' : '')].filter(Boolean).join(' · ')}</div>
+            </div>
+            <div style={{ textAlign: 'right', flex: 'none' }}>
+              <div className="tt">{fmtNum(mt.kcal)} <span className="dim small">kcal</span></div>
+              <MacroLine tot={mt} dim />
+            </div>
+            <Icon name="chevronRight" className="chev" />
+          </div> })}
+        </div>)}
+      </div>}
+      {!meals.length && <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{isToday ? t('Tap a meal to log it — photo, a sentence or by hand.') : t('Nothing logged on {0}.', fmtDate(iso, true))}</div>}
+    </div>
 
     {avg && <div className="card">
       <h2>{avg.days === 1 ? t('Only one day logged so far') : t('Last {0} logged days · daily average', avg.days)}</h2>

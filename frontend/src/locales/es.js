@@ -1363,4 +1363,12 @@ export default {
   'Lose fat, maintain or gain muscle — worked out from your body and activity, with safe limits.': 'Perder grasa, mantener o ganar músculo: calculado con tu cuerpo y tu actividad, con límites seguros.',
   'Time to review your calorie goal': 'Es momento de revisar tu objetivo de calorías',
   'Four weeks passed or your weight moved — what you burn has changed too. Takes a minute.': 'Pasaron cuatro semanas o tu peso cambió: lo que gastas también cambió. Toma un minuto.',
+  'Log {0}': 'Registrar {0}',
+  'We read the foods and portions; you check before saving': 'Leemos los alimentos y porciones; tú revisas antes de guardar',
+  'A sentence is enough': 'Con una frase basta',
+  'Type the foods and numbers yourself': 'Escribe tú los alimentos y los números',
+  '{0} logged': '{0} registradas',
+  'Nothing yet': 'Aún nada',
+  '+ Add more': '+ Agregar otra',
+  'Tap a meal to log it — photo, a sentence or by hand.': 'Toca una comida para registrarla: con foto, una frase o a mano.',
 }
