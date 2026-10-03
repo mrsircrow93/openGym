@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authRegister, authForgot, authGoogle } from '../lib/api.js'
+import { webauthnOK, passkeyLogin, passkeyRegister, api, BIO, authLogin, authRegister, authForgot, authGoogle, authApple } from '../lib/api.js'
+import { appleSignIn, appleAvailable } from '../lib/apple.js'
 import { renderGoogleButton, nativeGoogleSignIn } from '../lib/google.js'
 import { hasData } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
@@ -145,6 +146,15 @@ function EmailLogin({ head, wrap, signInPasskey }) {
     if (!cfg.googleClientId || MOBILE || !gBox.current || mode === 'forgot') return
     renderGoogleButton(gBox.current, cfg.googleClientId, withGoogle, { lang, width: Math.min(360, gBox.current.clientWidth || 320) }).catch(() => {})
   }, [cfg.googleClientId, mode, lang])
+  const withApple = async () => {
+    if (busy || gBusy) return
+    setGBusy(true)
+    try {
+      const { identityToken, name } = await appleSignIn(cfg.appleClientId)
+      await after(await authApple(identityToken, name, getLang(), ref.trim(), code.trim())); try { localStorage.removeItem('vx_ref') } catch {}
+    } catch (err) { if (!/cancel|popup_closed|1001/i.test(String(err && (err.error || err.message)))) toast(err.message || t('Apple sign-in failed — try again')) }
+    setGBusy(false)
+  }
   const nativeGoogle = async () => {
     setGBusy(true)
     try { const tok = await nativeGoogleSignIn(cfg.googleClientId); setGBusy(false); await withGoogle(tok) }
@@ -181,11 +191,18 @@ function EmailLogin({ head, wrap, signInPasskey }) {
         {mode === 'register' && <div className="dim small" style={{ lineHeight: 1.5 }}>{t('By creating an account you accept the')} <a href="#/terms">{t('terms of service')}</a> {t('and the')} <a href="#/privacy">{t('privacy policy')}</a>. {t('No card needed for the trial.')}</div>}
       </form>}
 
-      {cfg.googleClientId && mode !== 'forgot' && <>
+      {(cfg.googleClientId || (cfg.appleClientId && appleAvailable())) && mode !== 'forgot' && <>
         <div className="dim small" style={{ margin: '18px 0 10px' }}>{t('or')}</div>
-        {MOBILE
+        {cfg.appleClientId && appleAvailable() && <>
+          <button type="button" className="apple-btn" disabled={gBusy} onClick={withApple}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M16.37 12.73c-.03-2.6 2.13-3.86 2.23-3.92-1.21-1.77-3.1-2.01-3.77-2.04-1.6-.16-3.13.95-3.94.95-.82 0-2.07-.93-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.15-.47 7.82 1.3 10.38.87 1.25 1.9 2.66 3.25 2.61 1.3-.05 1.8-.84 3.37-.84s2.02.84 3.4.81c1.4-.02 2.29-1.27 3.15-2.53 1-1.45 1.4-2.86 1.43-2.93-.03-.01-2.74-1.05-2.76-4.17zM13.78 5.07c.72-.87 1.2-2.08 1.07-3.28-1.03.04-2.29.69-3.03 1.56-.66.77-1.25 2-1.09 3.18 1.15.09 2.33-.59 3.05-1.46z"/></svg>
+            <span>{gBusy ? t('One moment…') : t('Continue with Apple')}</span>
+          </button>
+          <div style={{ height: 8 }} />
+        </>}
+        {cfg.googleClientId && (MOBILE
           ? <Button icon="globe" disabled={gBusy} onClick={nativeGoogle}>{gBusy ? t('One moment…') : t('Continue with Google')}</Button>
-          : <div ref={gBox} className="gsi-box" style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />}
+          : <div ref={gBox} className="gsi-box" style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />)}
       </>}
       {webauthnOK() && !MOBILE && mode === 'login' && <>
         {!cfg.googleClientId && <div className="dim small" style={{ margin: '18px 0 8px' }}>{t('or')}</div>}

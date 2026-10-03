@@ -193,6 +193,7 @@ export const fetchReferral = () => api('/api/referral')
 export const authLogin = (email, password) => authPost('/api/auth/login', { email, password }).then(r => r.user)
 // Google ID token (from the web button or the native picker) -> our session. New accounts get the
 // same trial / referral / invite treatment as a password sign-up.
+export const authApple = (identityToken, name, lang, ref, code) => authPost('/api/auth/apple', { identityToken, name: name || '', lang, ref: ref || '', code: code || '' }).then(r => r.user)
 export const authGoogle = (credential, lang, ref, code) => authPost('/api/auth/google', { credential, lang, ref: ref || '', code: code || '' }).then(r => r.user)
 export const authVerify = token => post('/api/auth/verify', { token })
 export const authResendVerify = () => post('/api/auth/resend-verify')

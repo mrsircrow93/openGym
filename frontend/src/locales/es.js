@@ -1297,4 +1297,6 @@ export default {
   'Your trial ends on {0}': 'Tu prueba termina el {0}',
   'No automatic charge. Pick a plan to keep your coach and your progress.': 'Sin cobro automático. Elige un plan para conservar a tu coach y tu progreso.',
   'This is part of the plan — pick one to keep going.': 'Esto es parte del plan: elige uno para seguir.',
+  'Continue with Apple': 'Continuar con Apple',
+  'Apple sign-in failed — try again': 'No se pudo entrar con Apple: inténtalo de nuevo',
 }

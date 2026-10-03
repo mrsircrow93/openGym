@@ -1255,3 +1255,8 @@ h4.sec{
 .pw-price span{display:block;font-size:11px;color:var(--label-2)}
 .plan-tag.alt{background:var(--surface-3);color:var(--label)}
 .pw-plan .plan-tag{top:-10px;left:14px}
+
+/* Apple sign-in button (Apple HIG: black, white logo + label, 44px min height) */
+.apple-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:360px;margin:0 auto;min-height:44px;padding:11px 16px;border-radius:999px;border:1px solid #000;background:#000;color:#fff;font-weight:600;font-size:15px;letter-spacing:-.01em}
+:root[data-theme="dark"] .apple-btn,:root:not([data-theme="light"]) .apple-btn{background:#fff;color:#000;border-color:#fff}
+.apple-btn:disabled{opacity:.6}

@@ -13,6 +13,7 @@ import { hashPassword, verifyPassword, needsRehash, passwordProblem, DUMMY_HASH 
 import { sendEmail, mail, emailConfigured } from './email.js';
 import { inspectUpload, inspectImage } from './upload.js';
 import { verifyGoogleIdToken } from './google.js';
+import { verifyAppleIdToken } from './apple.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -88,6 +89,9 @@ const DELETE_GRACE_DAYS = 30;
 // "Continue with Google": the OAuth client ids this server accepts tokens for — web, iOS and
 // Android, comma-separated. The first one is the web id the login page uses. Unset = no button.
 const GOOGLE_CLIENT_IDS = (process.env.GOOGLE_CLIENT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+// "Continue with Apple": accepted audiences — the web Services ID first (the login page uses it),
+// then the iOS bundle id (native sheet). Unset = no button.
+const APPLE_CLIENT_IDS = (process.env.APPLE_CLIENT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -318,7 +322,7 @@ function entitlement(user) {
     plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
 }
 const pubUser = user => ({ id: user.id, name: user.name, admin: isAdmin(user), email: user.email || null, emailVerified: !!user.emailVerified,
-  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), hasGoogle: !!user.googleSub, billing: entitlement(user), referredBy: !!user.referredBy });
+  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), hasGoogle: !!user.googleSub, hasApple: !!user.appleSub, billing: entitlement(user), referredBy: !!user.referredBy });
 
 // One-time tokens for email links. Only the sha256 of the token is stored; the raw value is in
 // the link and nowhere else. Single use, short-lived, scoped by kind.
@@ -1078,7 +1082,7 @@ const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true }),
 
   // Public config the login screen needs before anyone is signed in.
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured(), googleClientId: GOOGLE_CLIENT_IDS[0] || null }),
+  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured(), googleClientId: GOOGLE_CLIENT_IDS[0] || null, appleClientId: APPLE_CLIENT_IDS[0] || null }),
 
   'GET /api/me': async (req, res) => {
     const user = readSession(req);
@@ -1273,6 +1277,42 @@ const routes = {
       // Existing email account: Google proved ownership of that inbox, so link and mark verified.
       if (!user.googleSub) user.googleSub = g.sub;
       if (!user.emailVerified) user.emailVerified = true;
+      if (user.deletedAt) delete user.deletedAt;
+      user.lastLogin = nowISO();
+    }
+    saveDb();
+    json(res, 200, withToken(body, user, { user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  // Apple identity token -> session. Same linking rules as Google: an existing account with
+  // that email is linked (Apple attests the address, relay ones included); otherwise a new
+  // account with trial, referral and invite handling. Apple's relay address works for our
+  // mails as long as the sending domain is registered with Apple (Sign in with Apple → Email
+  // Sources), which docs/ACCOUNTS.md §11 covers.
+  'POST /api/auth/apple': async (req, res) => {
+    if (!APPLE_CLIENT_IDS.length) return json(res, 501, { error: 'Apple sign-in is not set up on this server' });
+    const body = await readBody(req);
+    let a;
+    try { a = await verifyAppleIdToken(body.identityToken, APPLE_CLIENT_IDS); }
+    catch (e) { console.error('apple token', e.message); return json(res, 401, { error: 'Apple sign-in failed — try again' }); }
+    let user = db.users.find(u => u.appleSub === a.sub) || db.users.find(u => u.email === a.email);
+    if (user && user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    const code = String(body.code || '').trim().toUpperCase();
+    if (INVITE_ONLY && !user && !db.invites.some(i => i.code === code && !i.usedBy && !i.revoked)) return json(res, 403, { error: 'a valid invite code is required' });
+    if (!user) {
+      if (mailLimited('reg:' + clientIp(req), REG_PER_IP)) return json(res, 429, { error: 'too many accounts from this connection — try again later' });
+      const name = cleanName(body.name) || a.email.split('@')[0].slice(0, 40);
+      user = { id: crypto.randomBytes(12).toString('base64url'), name, email: a.email, emailVerified: a.emailVerified, appleSub: a.sub, created: nowISO() };
+      const referrer = findReferrer(body.ref);
+      if (referrer) { user.referredBy = referrer.id; referrer.referrals = [...(referrer.referrals || []), { id: user.id, at: user.created }]; }
+      if (BILLING_ENABLED && TRIAL_DAYS > 0) user.trialEnds = new Date(Date.now() + (TRIAL_DAYS + (referrer ? REF_REFEREE_TRIAL_DAYS : 0)) * 86400_000).toISOString();
+      if (INVITE_ONLY) { const inv = db.invites.find(i => i.code === code && !i.usedBy && !i.revoked); if (inv) { user.invitedBy = inv.code; inv.usedBy = user.id; inv.usedAt = user.created; } }
+      db.users.push(user);
+      if (body.lang === 'en' || body.lang === 'es') { try { atomicWrite(stateFile(user.id), JSON.stringify({ lang: body.lang, _ts: Date.now() })); } catch {} }
+      console.log('apple sign-up', user.id);
+    } else {
+      if (!user.appleSub) user.appleSub = a.sub;
+      if (!user.emailVerified && a.emailVerified) user.emailVerified = true;
       if (user.deletedAt) delete user.deletedAt;
       user.lastLogin = nowISO();
     }

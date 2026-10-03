@@ -163,3 +163,26 @@ VantixGym, support email, logo, privacy/terms links, scopes `email profile openi
 Credentials → Create OAuth client ID three times: **Web** (authorised JavaScript origins
 `https://app.vantixgym.app`; no redirect URI needed for the button), **iOS** (bundle id
 `app.vantixgym.mobile`), **Android** (package `app.vantixgym.mobile` + SHA-1).
+
+## 11. "Continue with Apple" (shipped 2026-10-02)
+
+Same shape as Google (§10): the client obtains Apple's identity token (web: Apple JS SDK in
+popup mode; iOS app: native sheet via `@capgo/capacitor-social-login`) and posts it to
+`POST /api/auth/apple` with the name Apple returns on the first sign-in. `api/apple.js` verifies
+RS256 against https://appleid.apple.com/auth/keys, issuer, audience ∈ `APPLE_CLIENT_IDS`, expiry.
+Links by `appleSub`, then by email (relay addresses included); otherwise creates the account like
+a password sign-up. `pubUser.hasApple`.
+
+Env: `APPLE_CLIENT_IDS=<services id>,app.vantixgym.mobile` — the first is the web Services ID
+that `GET /api/config` exposes as `appleClientId`. Unset = no button. The button shows on the web
+and in the iOS app (Apple requires it on iOS when Google is offered); Android is not wired.
+
+Apple Developer setup (once): Certificates, IDs & Profiles →
+1. **Identifiers → App IDs → app.vantixgym.mobile**: capability "Sign in with Apple" (Xcode adds
+   it through the entitlement with automatic signing; tick it by hand if the build complains).
+2. **Identifiers → Services IDs → +**: identifier e.g. `app.vantixgym.web`, enable Sign in with
+   Apple → Configure: primary App ID = app.vantixgym.mobile, domains `app.vantixgym.app`, return
+   URLs `https://app.vantixgym.app/` (popup mode still needs one registered).
+3. **Services → Sign in with Apple for Email Communication → Email Sources**: add the domain
+   `vantixgym.app` and `soporte@vantixgym.app` / `no-reply@vantixgym.app`, so mails to relay
+   addresses are delivered (SPF/DKIM already in place).
