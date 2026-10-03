@@ -607,6 +607,7 @@ function coachContext(S) {
     steps: { today: stepRow ? stepRow.n : 0, goal: Math.max(500, +S.stepGoal || 8000) },
     water: { goalMl: S.waterGoal || 2000 },
     dietPlan: S.dietPlan ? { summary: S.dietPlan.summary || '', meals: (S.dietPlan.meals || []).map(m => ({ name: m.name, time: m.time || '', options: (m.options || []).map(o => o.title) })), rules: S.dietPlan.rules || [] } : null,
+    calorieGoal: S.nutriGoal ? { goal: S.nutriGoal.goal, pace: S.nutriGoal.pace, kcal: S.nutriGoal.kcal, expectedWeeklyKg: S.nutriGoal.weeklyKg, targetKg: S.nutriGoal.targetKg || null, setOn: new Date(S.nutriGoal.at).toISOString().slice(0, 10) } : null,
     nutrition, routines, recentWorkouts: recent
   };
 }

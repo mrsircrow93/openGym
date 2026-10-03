@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
+import { lastBW } from '../lib/history.js'
 import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL } from '../lib/nutrition.js'
 import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
+import { goalWizardSheet } from '../sheets-goal.jsx'
+import { reviewDue, toKg } from '../lib/nutrition-goal.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -63,6 +66,13 @@ export default function Nutrition() {
       <div className="week">{strip}</div>
     </div>
 
+    {S.nutriGoal && reviewDue(S.nutriGoal, lastBW(S) ? toKg(lastBW(S).w, S.unit || 'kg') : null) && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }} onClick={goalWizardSheet}>
+      <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <Icon name="target" style={{ color: 'var(--yellow)', fontSize: 20 }} />
+        <div style={{ flex: 1, minWidth: 0 }}><b>{t('Time to review your calorie goal')}</b><div className="dim small">{t('Four weeks passed or your weight moved — what you burn has changed too. Takes a minute.')}</div></div>
+        <Icon name="chevronRight" className="dim" />
+      </div>
+    </button>}
     <div className="card">
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Daily intake')}</h2>

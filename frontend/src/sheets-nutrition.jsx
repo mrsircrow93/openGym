@@ -15,6 +15,8 @@ import {
 import Icon from './components/Icon.jsx'
 import { Button, Segmented, TextField, TextArea, Stepper } from './components/ui.jsx'
 import Ring from './components/Ring.jsx'
+import { goalWizardSheet, DISCLAIMER } from './sheets-goal.jsx'
+import { GOAL_LABEL } from './lib/nutrition-goal.js'
 
 const update = (...a) => useStore.getState().update(...a)
 const ui = () => useUI.getState()
@@ -411,6 +413,17 @@ function MacroGoal({ close }) {
   const [planFile, setPlanFile] = useState(null)
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="target" style={{ color: 'var(--yellow)' }} />{t('Daily targets')}</h3>
+    <button className="card tappable" style={{ width: '100%', textAlign: 'left', marginBottom: 12, padding: 14 }} onClick={() => { close(); goalWizardSheet() }}>
+      <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+        <span className="lrow-i" style={{ '--tint': 'var(--yellow)', color: '#000', width: 40, height: 40, borderRadius: 12 }}><Icon name="bolt" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{S.nutriGoal ? t('Recalculate my calories') : t('How many calories do I need?')}</div>
+          <div className="dim small">{S.nutriGoal ? t('{0}: {1} kcal · set {2}', t(GOAL_LABEL[S.nutriGoal.goal] || 'Lose fat'), fmtNum(S.nutriGoal.kcal), fmtDate(new Date(S.nutriGoal.at).toISOString().slice(0, 10), true)) : t('Lose fat, maintain or gain muscle — worked out from your body and activity, with safe limits.')}</div>
+        </div>
+        <Icon name="chevronRight" className="dim" />
+      </div>
+    </button>
+    {S.nutriGoal && <div className="small dim" style={{ lineHeight: 1.5, marginBottom: 12 }}><Icon name="shield" style={{ fontSize: 12, marginRight: 5, color: 'var(--yellow)' }} />{t(DISCLAIMER)}</div>}
     <input ref={planInput} type="file" accept={UPLOAD_ACCEPT} style={{ display: 'none' }}
       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPlanFile(f) }} />
     {!planFile && <div style={{ marginBottom: 12 }}>
