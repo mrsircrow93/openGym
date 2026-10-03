@@ -132,3 +132,31 @@ that would simply install. Your free options:
 - The app requests notification permission only when the workout-day reminder is switched
   on, and (on Android) declares `SCHEDULE_EXACT_ALARM` so the reminder fires to the minute
   where the user allows it.
+
+## iOS: TestFlight / App Store uploads (set up 2026-10-03)
+
+- Team: 9MHBG78XX8 (paid Individual, "Daniel Oliva"). App record in App Store Connect: id 6818728682,
+  bundle `app.vantixgym.mobile`, SKU `vantixgym-ios`.
+- App Store Connect API key `53WU743787` (issuer `34bc7206-5570-4422-99a3-c9e53888cd29`, role App
+  Manager) lives at `~/.appstoreconnect/private_keys/AuthKey_53WU743787.p8` on the owner's Mac.
+  Never commit or paste it. It is also what RevenueCat will use.
+- Distribution certificate "Apple Distribution: Daniel Oliva" (API id 68W3JGYJC8, expires
+  2027-10-03) is in the login keychain; the App Store profile "VantixGym App Store" (T5AS33D9CG)
+  is installed in `~/Library/MobileDevice/Provisioning Profiles`. Both were created through the
+  API with a local CSR because App Manager keys cannot use Xcode cloud signing.
+- Upload a build (bump `CURRENT_PROJECT_VERSION` or let `manageAppVersionAndBuildNumber` do it):
+
+```sh
+cd frontend && npm run build:mobile && npx cap sync ios && cd ios/App
+K=~/.appstoreconnect/private_keys/AuthKey_53WU743787.p8; A=/tmp/VantixGym.xcarchive
+xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath $A -allowProvisioningUpdates -authenticationKeyPath $K -authenticationKeyID 53WU743787 \
+  -authenticationKeyIssuerID 34bc7206-5570-4422-99a3-c9e53888cd29 archive
+xcodebuild -exportArchive -archivePath $A -exportOptionsPlist ExportOptions.plist -exportPath /tmp/export \
+  -allowProvisioningUpdates -authenticationKeyPath $K -authenticationKeyID 53WU743787 \
+  -authenticationKeyIssuerID 34bc7206-5570-4422-99a3-c9e53888cd29
+```
+
+`ExportOptions.plist` (kept in `frontend/ios/App/`): method app-store-connect, destination upload,
+manual signing, certificate "Apple Distribution", profile "VantixGym App Store".
+`ITSAppUsesNonExemptEncryption=false` in Info.plist (HTTPS only) skips the export-compliance prompt.
