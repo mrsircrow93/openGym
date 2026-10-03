@@ -43,7 +43,7 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
    docs/BILLING.md: activate account, business name, product with prices 129 / 599 (6-month) /
    999 (yearly), customer portal, webhook (6 events) → `whsec_`, live `sk_live_`, optional rescue
    coupon (17%); load into the server `.env` with the ssh one-liner, then a real purchase test.
-2. ✅ 2026-10-02 Apple Developer Program paid (order W1869246579), activation email pending → then "Continue with Apple", TestFlight, App Store.
+2. ✅ 2026-10-03 Apple: program active, "Continue with Apple" live (Services ID app.vantixgym.web, Email Sources verified), build 2.0.0 (20) on TestFlight (internal group "Equipo VantixGym", app id 6818728682). Account is Individual → developer name shows the owner; convert to Organization (D-U-N-S) once the company exists.
 3. ✅ 2026-10-02 Google Play Console account created (personal, vantixgym@gmail.com); identity
    verification pending. Personal accounts need a closed test with 12 testers for 14 days before
    production. Register production signing SHA-1 in Google Cloud (Android OAuth client).
