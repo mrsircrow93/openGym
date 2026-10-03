@@ -126,7 +126,7 @@ function Trainer({ close, imported }) {
                   return <button key={d} className={'chip nocap' + (mine ? ' on' : '')} style={{ padding: '4px 10px', fontSize: 12, opacity: other ? .45 : 1 }}
                     title={other ? t('Another routine is on this day') : ''}
                     onClick={() => setRes(x => { const w = { ...x.week }; if (mine) delete w[d]; else w[d] = r.id; return { ...x, week: w } })}>{t(DAYN[d]).slice(0, 3)}</button> })}
-              </div>}
+              </div>
             </div>
           </div>
           <div className="tr-ex">
