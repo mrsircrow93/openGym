@@ -162,6 +162,9 @@ export default function Settings() {
       <Row icon="bell" iconTint="var(--pink)" title={t('Sounds')}>
         <Switch checked={!!S.sound} onChange={v => update(s => { s.sound = v })} />
       </Row>
+      <Row icon="trophy" iconTint="var(--yellow)" title={t('Celebrations')} subtitle={t('Confetti when you reach a goal or earn an achievement')}>
+        <Switch checked={S.celebrations !== false} onChange={v => update(s => { s.celebrations = v })} />
+      </Row>
       {/* Two names for the same judgement, so the column asks in the scale you already think in.
           The (i) sits before the control — you read it on the way to the choice, not after it. */}
       <Row icon="target" iconTint="var(--purple)" title={t('Effort per set')}>

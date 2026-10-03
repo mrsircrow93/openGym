@@ -27,6 +27,8 @@ export const DEF = {
   progressPhotos: [], checkins: [],
   // Monthly "take your photos" nudge (local notification on mobile, web push otherwise).
   photoReminder: true,
+  // Goal / achievement celebrations (confetti sheets). Off = still recorded, just not shown.
+  celebrations: true,
   // Calorie goal assistant (lib/nutrition-goal.js): inputs + result, so it can be reviewed later.
   nutriGoal: null, heightCm: null,
   // Step counter: one row per day { d, n, src: 'manual' | 'health' } + a daily goal (lib/steps.js).

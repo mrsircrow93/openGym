@@ -1396,4 +1396,6 @@ export default {
   'Left': 'Izquierda',
   'Centre': 'Centro',
   'Right': 'Derecha',
+  'Celebrations': 'Celebraciones',
+  'Confetti when you reach a goal or earn an achievement': 'Confeti al lograr una meta o ganar un logro',
 }

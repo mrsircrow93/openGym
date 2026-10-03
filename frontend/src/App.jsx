@@ -62,7 +62,7 @@ function Shell() {
     if (!fresh.length) return
     // First run with history (or an account that predates achievements): count what's already
     // earned as seen, quietly — it all shows in Progress. Only new ones from now on get a party.
-    if (!S.badgesSeen) { useStore.getState().update(st => { st.badgesSeen = fresh.map(b => b.id) }, false); return }
+    if (!S.badgesSeen || S.celebrations === false) { useStore.getState().update(st => { st.badgesSeen = [...new Set([...(st.badgesSeen || []), ...fresh.map(b => b.id)])] }, false); return }
     const ids = fresh.map(b => b.id)
     const tm = setTimeout(() => {
       useStore.getState().update(st => { st.badgesSeen = [...new Set([...(st.badgesSeen || []), ...ids])] })
@@ -80,7 +80,8 @@ function Shell() {
     if (!ready || S.active) return
     const fresh = freshGoals(S)
     if (!fresh.length) return
-    if (!S.goalsSeen) { useStore.getState().update(st => markGoalsSeen(st, fresh), false); return }
+    // Off in Settings: still mark them seen, so turning it back on doesn't replay the day.
+    if (!S.goalsSeen || S.celebrations === false) { useStore.getState().update(st => markGoalsSeen(st, fresh), false); return }
     const tm = setTimeout(() => {
       useStore.getState().update(st => markGoalsSeen(st, fresh))
       openSheet(close => <GoalCelebration goals={fresh} close={close} />, { kind: 'center' })
