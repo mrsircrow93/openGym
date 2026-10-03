@@ -1274,3 +1274,6 @@ h4.sec{
 .slot-plus{width:28px;height:28px;border-radius:999px;background:var(--label);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:14px}
 .slot-n{font-size:13px;font-weight:600;margin-top:2px}
 .slot-k{font-size:11px;color:var(--label-2)}
+
+.share-ctl{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;margin-top:10px}
+.share-ctl .chip{padding:5px 10px;font-size:12px}

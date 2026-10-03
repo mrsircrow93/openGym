@@ -26,7 +26,9 @@ function topLift(w, unit) {
   return { name, line: `${fmtNum(best.w)} ${unit} × ${best.r || 1}` }
 }
 
-export async function renderShareCard({ workout: w, unit, style = 'brand', photo = null, prs = [] }) {
+// `size` scales the stats block (lg = full, md = 3/4, sm = just over half); `pos` places it
+// top / center / bottom and `align` left / center / right, so it can sit in a corner of a photo.
+export async function renderShareCard({ workout: w, unit, style = 'brand', photo = null, prs = [], size = 'lg', pos = 'center', align = 'center' }) {
   const c = document.createElement('canvas'); c.width = W; c.height = H
   const ctx = c.getContext('2d')
   try { await document.fonts.load(`800 100px ${FONT}`); await document.fonts.load(`600 40px ${FONT}`) } catch { /* system font */ }
@@ -51,6 +53,13 @@ export async function renderShareCard({ workout: w, unit, style = 'brand', photo
   const big = (txt, y, size = 112, color = '#fff') => { ctx.font = `800 ${size}px ${FONT}`; ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.fillText(txt, W / 2, y) }
 
   shadow(style !== 'brand')
+  // ---- stats block placement: draw in a scaled, translated space
+  const k = size === 'sm' ? 0.55 : size === 'md' ? 0.75 : 1
+  // In the unscaled layout the block spans y ≈ 470 (above the title) to ≈ 1450 (last row / PR
+  // line) and is centred on x = W/2 with a visual width of about 700 px.
+  const ty = pos === 'top' ? 120 - 470 * k : pos === 'bottom' ? (H - 300) - 1450 * k : H / 2 - 960 * k
+  const tx = align === 'left' ? 60 - 190 * k : align === 'right' ? W - 60 - 890 * k : (W - W * k) / 2
+  ctx.save(); ctx.translate(tx, ty); ctx.scale(k, k)
   // ---- title
   const name = (w.name || t('Workout')).replace(/^\w/, ch => ch.toUpperCase())
   ctx.font = `700 46px ${FONT}`; ctx.fillStyle = '#d0ff52'; ctx.textAlign = 'center'
@@ -67,6 +76,7 @@ export async function renderShareCard({ workout: w, unit, style = 'brand', photo
   let y = 640
   for (const [l, v] of rows) { label(l, y); big(v, y + 118, l === rows[3]?.[0] ? 92 : 112); y += 240 }
   if (prs.length) { ctx.font = `700 40px ${FONT}`; ctx.fillStyle = '#d0ff52'; ctx.fillText(`🏆 ${prs.length === 1 ? t('New personal record') : t('{0} personal records', prs.length)}`, W / 2, y + 20) }
+  ctx.restore()
 
   // ---- brand
   shadow(false)

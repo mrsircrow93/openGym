@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
+import { freshGoals, markGoalsSeen } from './lib/goals.js'
+import GoalCelebration from './components/GoalCelebration.jsx'
 import { bindUI } from './components/ui.jsx'
 import { ACCENTS } from './lib/format.js'
 import { setLang, useLang } from './lib/i18n.js'
@@ -68,6 +70,23 @@ function Shell() {
     }, 900)
     return () => clearTimeout(tm)
   }, [ready, !!S.active, (S.workouts || []).length, (S.meals || []).length, (S.bodyweight || []).length, (S.steps || []).length])
+  // Daily goals (water, steps, protein, calories, target weight): a small celebration the first
+  // time each one is reached that day. First run seeds what is already met so nobody gets
+  // cheered for yesterday's water on install.
+  const waterNow = ((S.water || []).find(w => w.d === todayISO()) || {}).ml || 0
+  const stepsNow = ((S.steps || []).find(r => r.d === todayISO()) || {}).n || 0
+  const mealsNow = (S.meals || []).filter(m => m.d === todayISO()).reduce((a, m) => a + (m.items || []).reduce((b, i) => b + (+i.kcal || 0), 0), 0)
+  useEffect(() => {
+    if (!ready || S.active) return
+    const fresh = freshGoals(S)
+    if (!fresh.length) return
+    if (!S.goalsSeen) { useStore.getState().update(st => markGoalsSeen(st, fresh), false); return }
+    const tm = setTimeout(() => {
+      useStore.getState().update(st => markGoalsSeen(st, fresh))
+      openSheet(close => <GoalCelebration goals={fresh} close={close} />, { kind: 'center' })
+    }, 700)
+    return () => clearTimeout(tm)
+  }, [ready, !!S.active, waterNow, stepsNow, mealsNow, (S.bodyweight || []).length])
   // Store app: refresh steps/weight from the phone's health store on launch and whenever the
   // app comes back to the foreground (quietly — the Settings card has the interactive path).
   useEffect(() => {

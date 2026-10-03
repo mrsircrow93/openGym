@@ -12,6 +12,9 @@ export default function ShareSheet({ workout, prs = [], close }) {
   const unit = useStore(s => s.S.unit)
   const toast = useUI(s => s.toast)
   const [style, setStyle] = useState('brand')
+  const [size, setSize] = useState('lg')
+  const [pos, setPos] = useState('center')
+  const [align, setAlign] = useState('center')
   const [photo, setPhoto] = useState(null)
   const [url, setUrl] = useState('')
   const [blob, setBlob] = useState(null)
@@ -20,9 +23,9 @@ export default function ShareSheet({ workout, prs = [], close }) {
   useEffect(() => {
     let alive = true
     setBusy(true)
-    renderShareCard({ workout, unit, style, photo, prs }).then(b => { if (!alive) return; setBlob(b); setUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(b) }); setBusy(false) }).catch(() => setBusy(false))
+    renderShareCard({ workout, unit, style, photo, prs, size, pos, align }).then(b => { if (!alive) return; setBlob(b); setUrl(u => { if (u) URL.revokeObjectURL(u); return URL.createObjectURL(b) }); setBusy(false) }).catch(() => setBusy(false))
     return () => { alive = false }
-  }, [style, photo])
+  }, [style, photo, size, pos, align])
   const pick = e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setPhoto(f); setStyle('photo') } }
   const share = async () => {
     if (!blob) return
@@ -43,6 +46,14 @@ export default function ShareSheet({ workout, prs = [], close }) {
       {busy && <div className="share-busy"><span className="spin" /></div>}
     </div>
     {style === 'photo' && photo && <button className="linkbtn small" style={{ display: 'block', margin: '6px auto 0' }} onClick={() => input.current?.click()}>{t('Change photo')}</button>}
+    <div className="share-ctl">
+      <span className="small dim">{t('Size')}</span>
+      <div className="row" style={{ gap: 6 }}>{[['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']].map(([v, l]) => <button key={v} className={'chip nocap' + (size === v ? ' on' : '')} onClick={() => setSize(v)}>{t(l)}</button>)}</div>
+      <span className="small dim">{t('Position')}</span>
+      <div className="row" style={{ gap: 6 }}>{[['top', 'Top'], ['center', 'Middle'], ['bottom', 'Bottom']].map(([v, l]) => <button key={v} className={'chip nocap' + (pos === v ? ' on' : '')} onClick={() => setPos(v)}>{t(l)}</button>)}</div>
+      <span className="small dim">{t('Side')}</span>
+      <div className="row" style={{ gap: 6 }}>{[['left', 'Left'], ['center', 'Centre'], ['right', 'Right']].map(([v, l]) => <button key={v} className={'chip nocap' + (align === v ? ' on' : '')} onClick={() => setAlign(v)}>{t(l)}</button>)}</div>
+    </div>
     <div className="row" style={{ gap: 8, marginTop: 12 }}>
       <Button variant="primary" icon="upload" style={{ flex: 1 }} disabled={busy || !blob} onClick={share}>{t('Share')}</Button>
       <Button style={{ flex: 1 }} onClick={close}>{t('Close')}</Button>
