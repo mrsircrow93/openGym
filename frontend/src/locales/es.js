@@ -1299,4 +1299,5 @@ export default {
   'This is part of the plan — pick one to keep going.': 'Esto es parte del plan: elige uno para seguir.',
   'Continue with Apple': 'Continuar con Apple',
   'Apple sign-in failed — try again': 'No se pudo entrar con Apple: inténtalo de nuevo',
+  'Tap the days to change them': 'Toca los días para cambiarlos',
 }

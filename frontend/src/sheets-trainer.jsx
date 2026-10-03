@@ -94,7 +94,7 @@ function Trainer({ close, imported }) {
     const shortSummary = summary.length > 220 && !moreSummary ? summary.slice(0, 200).replace(/\s+\S*$/, '') + '…' : summary
     return <>
       <h3 className="row" style={{ gap: 8 }}><Icon name={imported ? 'upload' : 'sparkles'} style={{ color: 'var(--acc)' }} />{plan.split || plan.title || t('Your plan')}</h3>
-      {imported && <div className="small muted" style={{ marginTop: -4, marginBottom: 6 }}>{t('Read from {0}', imported.fileName)}{plan.confidence === 'low' ? ' · ' + t('Check it before saving — the file was hard to read.') : ''} · {t('Tap the days under each routine to set your week.')}</div>}
+      {imported && <div className="small muted" style={{ marginTop: -4, marginBottom: 6 }}>{t('Read from {0}', imported.fileName)}{plan.confidence === 'low' ? ' · ' + t('Check it before saving — the file was hard to read.') : ''}</div>}
       <div className="tr-stats">
         <div><b>{daysPerWeek}</b><span>{t('days a week')}</span></div>
         <div><b>~{minutes}</b><span>{t('min per session')}</span></div>
@@ -111,7 +111,7 @@ function Trainer({ close, imported }) {
         </div> })}
       </div>
 
-      <div className="eyebrow" style={{ margin: '16px 0 8px' }}>{t('Your routines')}</div>
+      <div className="row between" style={{ margin: '16px 0 8px' }}><div className="eyebrow" style={{ margin: 0 }}>{t('Your routines')}</div><span className="small dim">{t('Tap the days to change them')}</span></div>
       {routines.map(r => {
         const open = openRoutine === r.id
         const shown = open ? r.ex : r.ex.slice(0, 3)
@@ -121,8 +121,7 @@ function Trainer({ close, imported }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.012em' }}>{r.name}</div>
               <div className="muted small">{[t(r.ex.length === 1 ? '{0} exercise' : '{0} exercises', r.ex.length), '~' + routineMinutes(r) + ' min', routineMuscles(r)].filter(Boolean).join(' · ')}</div>
-              {!imported && daysOf(r.id).length > 0 && <div className="row" style={{ gap: 5, marginTop: 6, flexWrap: 'wrap' }}>{daysOf(r.id).map(d => <span key={d} className="pill acc" style={{ padding: '3px 9px', fontSize: 12 }}>{d}</span>)}</div>}
-              {imported && <div className="row" style={{ gap: 5, marginTop: 8, flexWrap: 'wrap' }}>
+              <div className="row" style={{ gap: 5, marginTop: 8, flexWrap: 'wrap' }}>
                 {[1, 2, 3, 4, 5, 6, 0].map(d => { const mine = week[d] === r.id, other = week[d] && !mine
                   return <button key={d} className={'chip nocap' + (mine ? ' on' : '')} style={{ padding: '4px 10px', fontSize: 12, opacity: other ? .45 : 1 }}
                     title={other ? t('Another routine is on this day') : ''}
