@@ -669,7 +669,7 @@ h4.sec{
 .sheet{
   position:absolute;left:0;right:0;bottom:0;background:var(--bg-el);
   border-radius:var(--r-xl) var(--r-xl) 0 0;
-  padding:8px 18px calc(20px + var(--sab));
+  padding:8px 18px calc(20px + var(--sab));overflow-x:hidden;
   max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   animation:sheetup .34s var(--ease);
   overscroll-behavior:contain;touch-action:pan-y;will-change:transform;
@@ -1086,8 +1086,8 @@ h4.sec{
 .tr-stats div{background:var(--surface);border-radius:14px;padding:10px 8px;text-align:center;display:flex;flex-direction:column;gap:2px}
 .tr-stats b{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--acc)}
 .tr-stats span{font-size:11px;color:var(--label-2);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.tr-week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.tr-day{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;border-radius:12px;background:var(--surface);color:var(--label-3)}
+.tr-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;min-width:0}
+.tr-day{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;border-radius:12px;background:var(--surface);color:var(--label-3);min-width:0;overflow:hidden}
 .tr-day.on{background:var(--acc-soft);color:var(--acc)}
 .tr-day-n{font-size:11px;font-weight:700}
 .tr-day-i{font-size:18px}
@@ -1260,3 +1260,9 @@ h4.sec{
 .apple-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:360px;margin:0 auto;min-height:44px;padding:11px 16px;border-radius:999px;border:1px solid #000;background:#000;color:#fff;font-weight:600;font-size:15px;letter-spacing:-.01em}
 :root[data-theme="dark"] .apple-btn,:root:not([data-theme="light"]) .apple-btn{background:#fff;color:#000;border-color:#fff}
 .apple-btn:disabled{opacity:.6}
+
+/* social sign-in buttons: same pill for Apple and Google */
+.social-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:360px;margin:0 auto;min-height:46px;padding:11px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:#fff;color:#111;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.social-btn svg{flex:none}
+.social-btn:disabled{opacity:.6}
+.social-btn:active{transform:scale(.99)}

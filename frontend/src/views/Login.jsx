@@ -194,14 +194,17 @@ function EmailLogin({ head, wrap, signInPasskey }) {
       {(cfg.googleClientId || (cfg.appleClientId && appleAvailable())) && mode !== 'forgot' && <>
         <div className="dim small" style={{ margin: '18px 0 10px' }}>{t('or')}</div>
         {cfg.appleClientId && appleAvailable() && <>
-          <button type="button" className="apple-btn" disabled={gBusy} onClick={withApple}>
+          <button type="button" className="social-btn" disabled={gBusy} onClick={withApple}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M16.37 12.73c-.03-2.6 2.13-3.86 2.23-3.92-1.21-1.77-3.1-2.01-3.77-2.04-1.6-.16-3.13.95-3.94.95-.82 0-2.07-.93-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.15-.47 7.82 1.3 10.38.87 1.25 1.9 2.66 3.25 2.61 1.3-.05 1.8-.84 3.37-.84s2.02.84 3.4.81c1.4-.02 2.29-1.27 3.15-2.53 1-1.45 1.4-2.86 1.43-2.93-.03-.01-2.74-1.05-2.76-4.17zM13.78 5.07c.72-.87 1.2-2.08 1.07-3.28-1.03.04-2.29.69-3.03 1.56-.66.77-1.25 2-1.09 3.18 1.15.09 2.33-.59 3.05-1.46z"/></svg>
             <span>{gBusy ? t('One moment…') : t('Continue with Apple')}</span>
           </button>
           <div style={{ height: 8 }} />
         </>}
         {cfg.googleClientId && (MOBILE
-          ? <Button icon="globe" disabled={gBusy} onClick={nativeGoogle}>{gBusy ? t('One moment…') : t('Continue with Google')}</Button>
+          ? <button type="button" className="social-btn" disabled={gBusy} onClick={nativeGoogle}>
+              <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              <span>{gBusy ? t('One moment…') : t('Continue with Google')}</span>
+            </button>
           : <div ref={gBox} className="gsi-box" style={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />)}
       </>}
       {webauthnOK() && !MOBILE && mode === 'login' && <>
