@@ -3,11 +3,11 @@
 // Each badge: { id, cat, icon, tier, name, desc, goal, value, earned: ISO|null, pct }.
 import { t } from './i18n.js'
 import { weekKey, isoOf } from './format.js'
-import { workoutVolume } from './history.js'
+import { workoutVolume, streakWeeks } from './history.js'
 
-export const CATS = ['workouts', 'streaks', 'month', 'volume', 'milestones', 'steps']
-export const CAT_NAME = { workouts: 'Workouts', streaks: 'Streaks', month: 'Calendar', volume: 'Weight lifted', milestones: 'Milestones', steps: 'Steps' }
-export const CAT_ICON = { workouts: 'target', streaks: 'flame', month: 'calendar', volume: 'kettlebell', milestones: 'trophy', steps: 'footsteps' }
+export const CATS = ['workouts', 'streaks', 'month', 'volume', 'nutrition', 'milestones', 'steps']
+export const CAT_NAME = { workouts: 'Workouts', streaks: 'Streaks', month: 'Calendar', volume: 'Weight lifted', nutrition: 'Nutrition', milestones: 'Milestones', steps: 'Steps' }
+export const CAT_ICON = { workouts: 'target', streaks: 'flame', month: 'calendar', volume: 'kettlebell', nutrition: 'utensils', milestones: 'trophy', steps: 'footsteps' }
 
 // Thresholds per category. `tier` drives the badge colour (1 bronze … 4 gold).
 const TIERS = {
@@ -15,7 +15,10 @@ const TIERS = {
   streaks: [[2, 1], [4, 1], [8, 2], [12, 2], [26, 3], [52, 4]],
   month: [[8, 1], [12, 2], [16, 3], [20, 4]],
   volume: [[10, 1], [50, 2], [100, 2], [250, 3], [500, 3], [1000, 4]],   // tonnes lifted, all time
-  steps: [[10, 1], [15, 2], [20, 3], [100, 4]]                             // k steps in a day; last = 100k in a week
+  steps: [[10, 1], [15, 2], [20, 3], [100, 4]],                            // k steps in a day; last = 100k in a week
+  mealStreak: [[3, 1], [7, 1], [14, 2], [30, 3], [100, 4]],                 // days in a row with meals logged
+  mealsLogged: [[5, 1], [50, 2], [200, 3], [500, 4]],
+  waterDays: [[7, 1], [30, 2], [100, 3]]                                   // days the water goal was met
 }
 
 const sortedWorkouts = S => [...(S.workouts || [])].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0))
@@ -81,11 +84,23 @@ export function computeBadges(S) {
     { id: 'pr10', icon: 'trophy', tier: 3, name: t('10 personal records'), desc: t('Beat your best on exercises 10 times'), earned: prAt, goal: 10, value: prCount },
     { id: 'plan', icon: 'sparkles', tier: 1, name: t('Plan in hand'), desc: t('Let the trainer build your week'), earned: S.trainer ? isoOf(new Date(S.trainer.at || Date.now())) : null, goal: 1, value: S.trainer ? 1 : 0 },
     { id: 'meal1', icon: 'camera', tier: 1, name: t('First meal logged'), desc: t('Log your first meal'), earned: mealDays[0] || null, goal: 1, value: mealDays.length },
-    { id: 'meal7', icon: 'utensils', tier: 2, name: t('7 days of meals'), desc: t('Log meals seven days in a row'), earned: bestMealRun >= 7 ? mealRunEnd : null, goal: 7, value: bestMealRun },
     { id: 'coach', icon: 'heart', tier: 1, name: t('Met your coach'), desc: t('Pick Sofía or Leo'), earned: S.coach ? (ws[0] ? ws[0].d : isoOf(new Date())) : null, goal: 1, value: S.coach ? 1 : 0 },
     { id: 'goalw', icon: 'scale', tier: 4, name: t('Goal weight reached'), desc: t('Reach the body-weight goal you set'), earned: goalHit ? goalHit.d : null, goal: 1, value: goalHit ? 1 : 0 }
   ]
   for (const m of ms) push({ cat: 'milestones', ...m })
+
+  // --- nutrition: days in a row with meals, meals logged, days the water goal was met
+  const runEndAt = {}
+  { let r = 0, pd = null; for (const d of mealDays) { r = pd && (new Date(d) - new Date(pd)) === 86400000 ? r + 1 : 1; pd = d; if (!runEndAt[r]) runEndAt[r] = d } }
+  for (const [n, tier] of TIERS.mealStreak) push({ id: 'ms' + n, cat: 'nutrition', icon: 'flame', tier, goal: n, value: bestMealRun,
+    name: t('{0} days of meals', n), desc: t('Log at least one meal a day for {0} days in a row', n), earned: bestMealRun >= n ? (runEndAt[n] || mealRunEnd) : null })
+  const sortedMeals = [...meals].sort((a, b) => (a.d < b.d ? -1 : 1))
+  for (const [n, tier] of TIERS.mealsLogged) push({ id: 'ml' + n, cat: 'nutrition', icon: 'utensils', tier, goal: n, value: meals.length,
+    name: t('{0} meals logged', n), desc: t('Log {0} meals in total', n), earned: sortedMeals[n - 1] ? sortedMeals[n - 1].d : null })
+  const waterGoal = S.waterGoal || 2000
+  const waterDays = (S.water || []).filter(w => (w.ml || 0) >= waterGoal).map(w => w.d).sort()
+  for (const [n, tier] of TIERS.waterDays) push({ id: 'wd' + n, cat: 'nutrition', icon: 'droplet', tier, goal: n, value: waterDays.length,
+    name: t('{0} days of water', n), desc: t('Reach your water goal on {0} days', n), earned: waterDays[n - 1] || null })
 
   // --- steps
   const steps = S.steps || []
@@ -109,3 +124,19 @@ export const earnedBadges = S => computeBadges(S).filter(b => b.earned)
 export const newBadges = S => earnedBadges(S).filter(b => !(S.badgesSeen || []).includes(b.id))
 export const latestInCat = (badges, cat) => badges.filter(b => b.cat === cat && b.earned).sort((a, b) => (a.earned < b.earned ? 1 : -1))[0] || null
 export const nextInCat = (badges, cat) => badges.filter(b => b.cat === cat && !b.earned).sort((a, b) => a.goal - b.goal)[0] || null
+
+// Current and best streaks for the two cards (Nutrition: days with a meal logged; Training:
+// weeks with a workout). "Current" counts a run that ends today or yesterday, so it does not
+// drop to zero before the day is over.
+export function mealStreak(S, today = isoOf(new Date())) {
+  const days = [...new Set((S.meals || []).map(m => m.d))].sort()
+  let best = 0, run = 0, pd = null, cur = 0
+  for (const d of days) { run = pd && (new Date(d) - new Date(pd)) === 86400000 ? run + 1 : 1; pd = d; best = Math.max(best, run) }
+  const last = days[days.length - 1]
+  if (last) { const gap = (new Date(today) - new Date(last)) / 86400000; cur = gap <= 1 ? run : 0 }
+  return { current: cur, best }
+}
+export function workoutWeekStreak(S) {
+  const s = computeBadges(S).find(b => b.id === 's2')
+  return { current: streakWeeks(S), best: s ? Math.max(s.value || 0, streakWeeks(S)) : streakWeeks(S) }
+}

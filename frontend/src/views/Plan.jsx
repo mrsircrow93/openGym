@@ -7,6 +7,8 @@ import { trainerSheet, importRoutineSheet } from '../sheets-trainer.jsx'
 import { effectiveRoutine } from '../lib/history.js'
 import { routineMinutes, routineMuscles } from '../lib/routine.js'
 import Icon from '../components/Icon.jsx'
+import StreakCard from '../components/StreakCard.jsx'
+import { computeBadges, workoutWeekStreak } from '../lib/badges.js'
 import { Button } from '../components/ui.jsx'
 import { DEFAULT_GLYPH, glyphOf } from '../lib/glyphs.js'
 
@@ -74,6 +76,8 @@ export default function Plan() {
     </>}
 
     {/* ---- routines ---- */}
+    <div style={{ marginTop: 22 }}><StreakCard title={t('Training streak')} unitWord="{0} weeks" streak={workoutWeekStreak(S)} badges={computeBadges(S).filter(b => b.cat === 'streaks' || b.cat === 'workouts')} color="var(--acc)" /></div>
+
     <div className="eyebrow" style={{ margin: '24px 0 10px' }}>{t('Your routines')}</div>
     {S.routines.length ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{S.routines.map(r => {
       const day = dayOf(r), last = lastDone(r)

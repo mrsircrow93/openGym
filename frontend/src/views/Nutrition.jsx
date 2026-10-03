@@ -11,6 +11,8 @@ import { reviewDue, toKg } from '../lib/nutrition-goal.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import Ring from '../components/Ring.jsx'
+import StreakCard from '../components/StreakCard.jsx'
+import { computeBadges, mealStreak } from '../lib/badges.js'
 import { Button } from '../components/ui.jsx'
 
 // Meal log for one day at a time: pick the day on the week strip (or the calendar), see how
@@ -66,6 +68,8 @@ export default function Nutrition() {
       </div>
       <div className="week">{strip}</div>
     </div>
+
+    <StreakCard title={t('Nutrition streak')} unitWord="{0} days" streak={mealStreak(S)} badges={computeBadges(S).filter(b => b.cat === 'nutrition')} color="var(--orange)" />
 
     {S.nutriGoal && reviewDue(S.nutriGoal, lastBW(S) ? toKg(lastBW(S).w, S.unit || 'kg') : null) && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }} onClick={goalWizardSheet}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
