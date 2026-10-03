@@ -43,9 +43,10 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
    docs/BILLING.md: activate account, business name, product with prices 129 / 599 (6-month) /
    999 (yearly), customer portal, webhook (6 events) → `whsec_`, live `sk_live_`, optional rescue
    coupon (17%); load into the server `.env` with the ssh one-liner, then a real purchase test.
-2. Apple Developer account ($99/yr) → unlocks "Continue with Apple", TestFlight, App Store.
-3. Google Play developer account ($25) → store publication; register production signing SHA-1 in
-   Google Cloud (Android OAuth client).
+2. ✅ 2026-10-02 Apple Developer Program paid (order W1869246579), activation email pending → then "Continue with Apple", TestFlight, App Store.
+3. ✅ 2026-10-02 Google Play Console account created (personal, vantixgym@gmail.com); identity
+   verification pending. Personal accounts need a closed test with 12 testers for 14 days before
+   production. Register production signing SHA-1 in Google Cloud (Android OAuth client).
 4. Anthropic spend limit in the console; raise `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15
    paying users (rule: $1.5 × paying users).
 5. Legal entity name for terms, privacy and Stripe receipts.
