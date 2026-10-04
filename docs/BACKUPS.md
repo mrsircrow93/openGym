@@ -18,7 +18,7 @@ are re-downloaded; code is in git.
   which silently skipped every nightly backup from Oct 2 to Oct 4 2026)
 - Passphrase: `~/.backup-pass` on the server, generated on first run. **Keep a copy off the
   server** (password manager). Without it the archives cannot be opened.
-- Env for cron lives in `~/.backup-env` (sourced by the cron line): `AWS_BACKUP_BUCKET=…`.
+- Env lives in `~/.backup-env` (`export AWS_BACKUP_BUCKET=…`); `backup.sh` sources it itself. Off-host copies verified 2026-10-04 (bucket `vantixgym-backups-2026`, us-east-2, versioned, 90-day expiry, IAM user `vantixgym-backup` with PutObject/ListBucket only).
 
 ## Off-host copy (S3) — 5 minutes in the AWS console
 
@@ -34,9 +34,10 @@ are re-downloaded; code is in git.
 4. Security credentials → Create access key (CLI) → copy the two values.
 5. On the server:
    ```bash
-   sudo apt-get -y install awscli
+   # AWS CLI v2 (Ubuntu 24.04+ has no apt package):
+   curl -sS https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip && sudo apt-get -y install unzip && unzip -q -o /tmp/awscliv2.zip -d /tmp && sudo /tmp/aws/install
    aws configure   # paste key id + secret, region us-east-2, output json
-   echo 'AWS_BACKUP_BUCKET=BUCKET' > ~/.backup-env
+   echo 'export AWS_BACKUP_BUCKET=BUCKET' > ~/.backup-env   # backup.sh sources this file itself
    ~/openGym/scripts/backup.sh   # first upload, check the log line ends with → s3://…
    ```
 

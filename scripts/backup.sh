@@ -8,6 +8,10 @@
 set -euo pipefail
 # cron runs with a minimal PATH; the AWS CLI v2 installer puts `aws` in /usr/local/bin
 export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+# off-host settings live in ~/.backup-env (AWS_BACKUP_BUCKET=…); sourced here so neither the
+# cron line nor a shell has to export anything
+[ -f "$HOME/.backup-env" ] && . "$HOME/.backup-env"
+export AWS_BACKUP_BUCKET="${AWS_BACKUP_BUCKET:-}"
 APP="${APP_DIR:-$HOME/openGym}"
 OUT="${BACKUP_DIR:-$HOME/backups}"
 PASS="${BACKUP_PASS_FILE:-$HOME/.backup-pass}"
