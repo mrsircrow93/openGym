@@ -18,8 +18,24 @@ export const STORE = IOS ? 'apple' : ANDROID ? 'google' : null
 export const storePurchases = () => !!(KEY && STORE)
 
 let mod = null, configuredFor = null, chain = Promise.resolve()
-async function sdk() { if (!mod) mod = (await import('@revenuecat/purchases-capacitor')).Purchases; return mod }
 const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + ' timed out')), ms))])
+// Where the store flow is (shown under "Loading plans…" and in support screenshots).
+let stage = ''
+const listeners = new Set()
+export const storeStage = () => stage
+export const onStoreStage = fn => { listeners.add(fn); return () => listeners.delete(fn) }
+const setStage = s => { stage = s; console.log('purchases:', s); listeners.forEach(fn => fn(s)) }
+// NOTE: never return the plugin object from an async function or resolve a promise with it —
+// it is a Proxy that answers every property, including `then`, so `await` would treat it as a
+// thenable and hang forever. Callers read the module variable after awaiting sdk().
+async function sdk() {
+  if (!mod) {
+    setStage('loading sdk')
+    const m = await withTimeout(import('@revenuecat/purchases-capacitor'), 15000, 'sdk import')
+    mod = m.Purchases
+    setStage('sdk loaded')
+  }
+}
 
 // Called whenever the signed-in account changes. RevenueCat's app user id = our user id, so the
 // webhook can find the account; signing out returns the SDK to an anonymous id. Calls are
@@ -27,11 +43,11 @@ const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => se
 export function purchasesIdentify(userId) {
   if (!storePurchases()) return Promise.resolve()
   chain = chain.then(async () => {
-    const P = await sdk()
-    if (!configuredFor) { await withTimeout(P.configure({ apiKey: KEY, appUserID: userId || undefined }), 15000, 'configure'); configuredFor = userId || 'anon'; return }
+    await sdk(); const P = mod
+    if (!configuredFor) { setStage('configuring'); await withTimeout(P.configure({ apiKey: KEY, appUserID: userId || undefined }), 15000, 'configure'); configuredFor = userId || 'anon'; setStage('configured'); return }
     if (userId && configuredFor !== userId) { await P.logIn({ appUserID: userId }); configuredFor = userId }
     else if (!userId && configuredFor !== 'anon') { await P.logOut(); configuredFor = 'anon' }
-  }).catch(e => console.warn('purchases', e.message))
+  }).catch(e => setStage('error: ' + e.message))
   return chain
 }
 // Make sure the SDK is configured for this user before a store call (the plans screen can mount
@@ -47,8 +63,10 @@ async function ready(userId) {
 const PLAN_RE = { monthly: /monthly/i, semester: /semester|six/i, yearly: /yearly|annual/i }
 export async function storePlans(userId) {
   await ready(userId)
-  const P = await sdk()
+  await sdk(); const P = mod
+  setStage('fetching offerings')
   const { current } = await withTimeout(P.getOfferings(), 20000, 'getOfferings')
+  setStage('offerings: ' + (current?.availablePackages || []).length + ' packages')
   const out = {}
   for (const pk of current?.availablePackages || []) {
     const pid = pk.product?.identifier || pk.identifier
@@ -61,13 +79,13 @@ export async function storePlans(userId) {
 
 // Buy, then make the server notice. Resolves true when the account is now active.
 export async function storeBuy(plan) {
-  const P = await sdk()
+  await sdk(); const P = mod
   try { await P.purchasePackage({ aPackage: plan.pkg }) }
   catch (e) { if (e?.userCancelled || /cancel/i.test(e?.message || '')) return null; throw e }
   return settle()
 }
 export async function storeRestore() {
-  const P = await sdk()
+  await sdk(); const P = mod
   await P.restorePurchases()
   return settle()
 }

@@ -10,7 +10,7 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { nav } from '../lib/nav.js'
 import { authVerify, authReset, billingPlans, billingCheckout, billingPortal, authResendVerify } from '../lib/api.js'
 import { daysLeft } from '../lib/entitlements.js'
-import { storePurchases, storePlans, storeBuy, storeRestore, STORE } from '../lib/purchases.js'
+import { storePurchases, storePlans, storeBuy, storeRestore, STORE, storeStage, onStoreStage } from '../lib/purchases.js'
 import Icon from '../components/Icon.jsx'
 import { Mark } from '../components/Logo.jsx'
 import { Button, TextField } from '../components/ui.jsx'
@@ -79,6 +79,8 @@ export function Plans({ compact }) {
   const toast = useUI(s => s.toast)
   const refreshMe = useStore(s => s.refreshMe)
   const store = storePurchases()
+  const [stage, setStage] = useState(storeStage())
+  useEffect(() => onStoreStage(setStage), [])
   // Store builds: the plans come from the server, the prices and the purchase from the store.
   useEffect(() => {
     billingPlans().then(async d => {
@@ -111,7 +113,7 @@ export function Plans({ compact }) {
     catch (e) { toast(e.message || t('Something went wrong — try again')) }
     setBusy('')
   }
-  if (!data) return <div className="small dim">{t('Loading plans…')}</div>
+  if (!data) return <div className="small dim">{t('Loading plans…')}{store && stage && <div style={{ fontSize: 11, marginTop: 4 }}>{stage}</div>}</div>
   const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', maximumFractionDigits: 0 }).format(n)
   const monthly = data.plans.find(p => p.months === 1)
   // Yearly first and preselected: the cheapest month is the default answer, not a discovery.
