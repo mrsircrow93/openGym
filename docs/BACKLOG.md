@@ -39,10 +39,10 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 
 ### Pending — owner (needs the owner's accounts or decisions)
 
-1. **Stripe live** — after the meeting with the partner. Steps in the chat of 2026-10-02 and in
-   docs/BILLING.md: activate account, business name, product with prices 129 / 599 (6-month) /
-   999 (yearly), customer portal, webhook (6 events) → `whsec_`, live `sk_live_`, optional rescue
-   coupon (17%); load into the server `.env` with the ssh one-liner, then a real purchase test.
+1. ✅ 2026-10-03 **Stripe live**: account active (charges + payouts), restricted key `rk_live_`
+   (no money-moving permissions), three live prices, portal, webhook with 6 events, real
+   checkout verified end to end (trial activation → trial_end + 7 days, 3 signed webhooks).
+   Rescue coupon not created yet (`STRIPE_RESCUE_COUPON` unset).
 2. ✅ 2026-10-03 Apple: program active, "Continue with Apple" live (Services ID app.vantixgym.web, Email Sources verified), build 2.0.0 (20) on TestFlight (internal group "Equipo VantixGym", app id 6818728682). Account is Individual → developer name shows the owner; convert to Organization (D-U-N-S) once the company exists.
 3. ✅ 2026-10-02 Google Play Console account created (personal, vantixgym@gmail.com); identity
    verification pending. Personal accounts need a closed test with 12 testers for 14 days before
