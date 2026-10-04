@@ -550,7 +550,7 @@ function applyStoreEvent(ev) {
 }
 // GET /v1/subscribers/<id>: the current picture, used right after a purchase and for "restore".
 async function syncStoreSubscriber(user) {
-  const r = await fetch('https://api.revenuecat.com/v1/subscribers/' + encodeURIComponent(user.id), { headers: { authorization: 'Bearer ' + REVENUECAT_SECRET_KEY, 'x-platform': 'ios' } });
+  const r = await fetch('https://api.revenuecat.com/v1/subscribers/' + encodeURIComponent(user.id), { headers: { authorization: 'Bearer ' + REVENUECAT_SECRET_KEY } });   // no X-Platform header: RevenueCat rejects secret keys that look like app traffic (error 7243)
   if (!r.ok) throw new Error('RevenueCat ' + r.status);
   const s = (await r.json()).subscriber || {};
   let best = null;
