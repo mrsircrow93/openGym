@@ -6,6 +6,8 @@
 #     archive to s3://$AWS_BACKUP_BUCKET/vantixgym/ as the off-host copy (docs/BACKUPS.md)
 # Restore: openssl enc -d -aes-256-cbc -pbkdf2 -in FILE.tar.gz.enc -pass file:~/.backup-pass | tar xz -C ~/openGym
 set -euo pipefail
+# cron runs with a minimal PATH; the AWS CLI v2 installer puts `aws` in /usr/local/bin
+export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 APP="${APP_DIR:-$HOME/openGym}"
 OUT="${BACKUP_DIR:-$HOME/backups}"
 PASS="${BACKUP_PASS_FILE:-$HOME/.backup-pass}"
