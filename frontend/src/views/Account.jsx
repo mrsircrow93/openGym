@@ -84,19 +84,19 @@ export function Plans({ compact }) {
     billingPlans().then(async d => {
       if (!store) return setData(d)
       try {
-        const sp = await storePlans()
+        const sp = await storePlans(user?.id)
         const monthly = sp.monthly?.amount
         const plans = d.plans.filter(p => sp[p.id]).map(p => { const s = sp[p.id]; const base = monthly ? monthly * p.months : 0
           return { ...p, amount: s.amount, perMonth: Math.floor(s.amount / p.months), available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
         setData({ ...d, plans: plans.length ? plans : d.plans, currency: Object.values(sp)[0]?.currency || d.currency, payments: plans.length > 0, store: true, firstChargeAt: null, rescueUntil: null })
-      } catch (e) { console.warn('store plans', e.message); setData({ ...d, payments: false, store: true, storeError: true }) }
+      } catch (e) { console.warn('store plans', e.message); setData({ ...d, payments: false, store: true, storeError: e.message || true }) }
     }).catch(() => setData({ plans: [] }))
   }, [])
   const buy = async id => {
     setBusy(id)
     try {
       if (store) {
-        const plan = (await storePlans())[id]
+        const plan = (await storePlans(user?.id))[id]
         if (!plan) throw new Error(t('The store did not answer — check your connection and try again.'))
         const ok = await storeBuy(plan)
         if (ok === null) { /* sheet dismissed */ }
@@ -144,7 +144,7 @@ export function Plans({ compact }) {
           </div>
         </button> })}
     </div>
-    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? t('The store did not answer — check your connection and try again.') : t('Payments are not open yet — we will email you when they are.')}</div>}
+    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? <>{t('The store did not answer — check your connection and try again.')}{typeof data.storeError === 'string' && <div className="dim" style={{ marginTop: 4, fontSize: 11 }}>{data.storeError}</div>}</> : t('Payments are not open yet — we will email you when they are.')}</div>}
     {data.payments && sel && <>
       <div style={{ height: 12 }} />
       <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
