@@ -478,12 +478,12 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
 function SubscriptionSheet({ user, close }) {
   const toast = useUI(s => s.toast)
   const b = user.billing || {}
-  const portal = () => billingPortal().then(r => { if (r.url) window.location.href = r.url }).catch(e => toast(e.message))
+  const portal = () => billingPortal().then(r => { if (r.url) (r.store ? window.open(r.url, '_blank', 'noopener') : window.location.href = r.url) }).catch(e => toast(e.message))
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="crown" style={{ color: 'var(--yellow)' }} />{t('Subscription')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>{subscriptionLabel(b)}</div>
     {b.status === 'pro' ? <>
-      <div className="small muted" style={{ marginBottom: 12 }}>{t('Change your card, switch plan or cancel from the billing portal. Access always runs to the end of the period you paid for.')}</div>
+      <div className="small muted" style={{ marginBottom: 12 }}>{b.provider === 'apple' ? t('This plan is billed through your Apple ID. Change or cancel it in App Store → Subscriptions. Access always runs to the end of the period you paid for.') : b.provider === 'google' ? t('This plan is billed through Google Play. Change or cancel it in Play Store → Subscriptions. Access always runs to the end of the period you paid for.') : t('Change your card, switch plan or cancel from the billing portal. Access always runs to the end of the period you paid for.')}</div>
       <Button variant="primary" onClick={portal}>{t('Manage subscription')}</Button>
     </> : <>
       {!user.emailVerified && <div className="card small" style={{ marginBottom: 12 }}>{t('Confirm your email before paying — the link is in your inbox.')}</div>}

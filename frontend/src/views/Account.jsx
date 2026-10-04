@@ -10,6 +10,7 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { nav } from '../lib/nav.js'
 import { authVerify, authReset, billingPlans, billingCheckout, billingPortal, authResendVerify } from '../lib/api.js'
 import { daysLeft } from '../lib/entitlements.js'
+import { storePurchases, storePlans, storeBuy, storeRestore, STORE } from '../lib/purchases.js'
 import Icon from '../components/Icon.jsx'
 import { Mark } from '../components/Logo.jsx'
 import { Button, TextField } from '../components/ui.jsx'
@@ -76,10 +77,37 @@ export function Plans({ compact }) {
   const [pick, setPick] = useState(null)
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
-  useEffect(() => { billingPlans().then(setData).catch(() => setData({ plans: [] })) }, [])
+  const refreshMe = useStore(s => s.refreshMe)
+  const store = storePurchases()
+  // Store builds: the plans come from the server, the prices and the purchase from the store.
+  useEffect(() => {
+    billingPlans().then(async d => {
+      if (!store) return setData(d)
+      try {
+        const sp = await storePlans()
+        const monthly = sp.monthly?.amount
+        const plans = d.plans.filter(p => sp[p.id]).map(p => { const s = sp[p.id]; const base = monthly ? monthly * p.months : 0
+          return { ...p, amount: s.amount, perMonth: Math.floor(s.amount / p.months), available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
+        setData({ ...d, plans: plans.length ? plans : d.plans, currency: Object.values(sp)[0]?.currency || d.currency, payments: plans.length > 0, store: true, firstChargeAt: null, rescueUntil: null })
+      } catch (e) { console.warn('store plans', e.message); setData({ ...d, payments: false, store: true, storeError: true }) }
+    }).catch(() => setData({ plans: [] }))
+  }, [])
   const buy = async id => {
     setBusy(id)
-    try { const r = await billingCheckout(id); if (r.url) window.location.href = r.url }
+    try {
+      if (store) {
+        const plan = (await storePlans())[id]
+        if (!plan) throw new Error(t('The store did not answer — check your connection and try again.'))
+        const ok = await storeBuy(plan)
+        if (ok === null) { /* sheet dismissed */ }
+        else { await refreshMe(); toast(ok ? t('Thank you! Your plan is active.') : t('Purchase received — your plan will show as active in a moment.')) }
+      } else { const r = await billingCheckout(id); if (r.url) window.location.href = r.url }
+    } catch (e) { toast(e.message || t('Something went wrong — try again')) }
+    setBusy('')
+  }
+  const restore = async () => {
+    setBusy('restore')
+    try { const ok = await storeRestore(); await refreshMe(); toast(ok ? t('Purchases restored.') : t('No active subscription found for this store account.')) }
     catch (e) { toast(e.message || t('Something went wrong — try again')) }
     setBusy('')
   }
@@ -116,7 +144,7 @@ export function Plans({ compact }) {
           </div>
         </button> })}
     </div>
-    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{t('Payments are not open yet — we will email you when they are.')}</div>}
+    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? t('The store did not answer — check your connection and try again.') : t('Payments are not open yet — we will email you when they are.')}</div>}
     {data.payments && sel && <>
       <div style={{ height: 12 }} />
       <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
@@ -125,9 +153,10 @@ export function Plans({ compact }) {
       <div className="small muted" style={{ marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>
         {inTrial && fcLabel ? t('First charge on {0}: {1} {2}. Cancel any time before from Settings.', fcLabel, fmt(sel.amount), periodWord(sel)) : t('{0} {1}, renews automatically. Cancel any time from Settings.', fmt(sel.amount), periodWord(sel))}
       </div>
-      <div className="small dim" style={{ marginTop: 6, textAlign: 'center' }}>{t('Secure payment with Stripe · automatic receipt · no lock-in')}</div>
+      <div className="small dim" style={{ marginTop: 6, textAlign: 'center' }}>{data.store ? (STORE === 'apple' ? t('Billed through your Apple ID · manage or cancel in App Store settings') : t('Billed through Google Play · manage or cancel in Play Store settings')) : t('Secure payment with Stripe · automatic receipt · no lock-in')}</div>
     </>}
-    {!compact && <div className="small dim" style={{ marginTop: 12, lineHeight: 1.5, textAlign: 'center' }}>{t('Prices include tax. Access runs to the end of the period you paid for.')} <a href="#/terms">{t('terms of service')}</a></div>}
+    {data.store && <div style={{ textAlign: 'center', marginTop: 10 }}><button className="linkbtn small" disabled={!!busy} onClick={restore}>{busy === 'restore' ? t('One moment…') : t('Restore purchases')}</button></div>}
+    {!compact && <div className="small dim" style={{ marginTop: 12, lineHeight: 1.5, textAlign: 'center' }}>{t('Prices include tax. Access runs to the end of the period you paid for.')} <a href="#/terms">{t('terms of service')}</a> · <a href="#/privacy">{t('privacy')}</a></div>}
   </div>
 }
 
@@ -147,7 +176,7 @@ export function Paywall() {
     <Plans />
     <div style={{ height: 18 }} />
     <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-      {b.provider && <Button size="sm" onClick={() => billingPortal().then(r => { if (r.url) window.location.href = r.url }).catch(e => toast(e.message))}>{t('Manage subscription')}</Button>}
+      {b.provider && <Button size="sm" onClick={() => billingPortal().then(r => { if (r.url) (r.store ? window.open(r.url, '_blank', 'noopener') : window.location.href = r.url) }).catch(e => toast(e.message))}>{t('Manage subscription')}</Button>}
       <Button size="sm" onClick={() => refreshMe()}>{t('I already paid')}</Button>
       {b.active ? <Button size="sm" variant="ghost" className="dim" onClick={() => nav('/home')}>{t('Not now')}</Button>
         : <Button size="sm" variant="ghost" className="dim" onClick={() => signOut()}>{t('Sign out')}</Button>}

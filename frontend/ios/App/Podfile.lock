@@ -60,7 +60,13 @@ PODS:
   - PromisesObjC (2.4.1)
   - PromisesSwift (2.4.1):
     - PromisesObjC (= 2.4.1)
+  - PurchasesHybridCommon (19.5.0):
+    - RevenueCat (= 5.92.0)
   - RecaptchaInterop (101.0.0)
+  - RevenueCat (5.92.0)
+  - RevenuecatPurchasesCapacitor (13.7.0):
+    - Capacitor
+    - PurchasesHybridCommon (= 19.5.0)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
@@ -71,6 +77,7 @@ DEPENDENCIES:
   - "CapacitorPreferences (from `../../node_modules/@capacitor/preferences`)"
   - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
   - "CapgoCapacitorSocialLogin (from `../../node_modules/@capgo/capacitor-social-login`)"
+  - "RevenuecatPurchasesCapacitor (from `../../node_modules/@revenuecat/purchases-capacitor`)"
 
 SPEC REPOS:
   trunk:
@@ -87,7 +94,9 @@ SPEC REPOS:
     - IONFilesystemLib
     - PromisesObjC
     - PromisesSwift
+    - PurchasesHybridCommon
     - RecaptchaInterop
+    - RevenueCat
 
 EXTERNAL SOURCES:
   Capacitor:
@@ -106,6 +115,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/share"
   CapgoCapacitorSocialLogin:
     :path: "../../node_modules/@capgo/capacitor-social-login"
+  RevenuecatPurchasesCapacitor:
+    :path: "../../node_modules/@revenuecat/purchases-capacitor"
 
 SPEC CHECKSUMS:
   AppAuth: ef4da5a3fc2e10b90c09a0a94a9baeaedc0341d5
@@ -129,8 +140,11 @@ SPEC CHECKSUMS:
   IONFilesystemLib: e6610c2b260d15e4b9cb9d5e37a87095479b669e
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
+  PurchasesHybridCommon: da80a28f43fdfbf96dcb04c3aa2c6122b0e315d2
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  RevenueCat: 39657b04641af73c29788b4bf2cf1acff52fd0dc
+  RevenuecatPurchasesCapacitor: 75ae3e1077bc9db9081b1e7d324097361ce857c7
 
-PODFILE CHECKSUM: c896f3d7b01267a3a93486652854aa5901f6053e
+PODFILE CHECKSUM: a100b3f4bc46c1948b5e2f891e4e6819123847ba
 
 COCOAPODS: 1.17.0

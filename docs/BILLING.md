@@ -43,13 +43,37 @@ The same account must be Pro everywhere, so entitlement lives in **our** DB (`db
 3. `POST /api/billing/portal` → Stripe customer portal for cancel / card change.
 4. Env: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price ids. Test mode first.
 
-**iOS / Android (Capacitor build): RevenueCat** (wraps StoreKit + Google Play Billing, handles
-receipts and renewals, has a webhook).
-1. `@revenuecat/purchases-capacitor`, `Purchases.configure({ apiKey, appUserID: user.id })`.
-2. Paywall shows `Purchases.getOfferings()`, buys with `purchasePackage`.
-3. RevenueCat webhook → the same `/api/billing/webhook` (branch on provider) → set tier.
-4. Apple/Google take 15–30 %; price the store SKUs to net the same as Stripe, or accept the
-   difference. Do not link to web checkout from inside the iOS app (App Store rule).
+**iOS / Android (Capacitor build): RevenueCat** — live since 2026-10-03 (iOS; Android when
+Play approves the account).
+1. `frontend/src/lib/purchases.js`: `@revenuecat/purchases-capacitor`, configured with the public
+   app key (`appl_…` baked in, `VITE_RC_APPLE_KEY` / `VITE_RC_GOOGLE_KEY` override) and
+   `appUserID = our user id` (`setUser` → `purchasesIdentify`). `storePlans()` maps the current
+   offering's packages to our plan ids by product id (`app.vantixgym.mobile.monthly` /
+   `.semester` / `.yearly`), `storeBuy()` / `storeRestore()` then call `POST /api/billing/sync`
+   and poll `/api/me` until the account is Pro.
+2. The Plans screen (`views/Account.jsx`) uses store prices and `purchasePackage` in the store
+   builds, shows "Billed through your Apple ID / Google Play", "Restore purchases" and the
+   terms + privacy links Apple asks for, and hides every mention of Stripe and the trial bonus
+   (Apple charges at once; there is no `trial_end` on a store purchase).
+3. `POST /api/billing/revenuecat` (RevenueCat → Integrations → Webhooks). `Authorization`
+   header must equal `REVENUECAT_WEBHOOK_AUTH`; idempotent on `event.id` (`db.rcEvents`).
+   `applyStoreEvent`: INITIAL_PURCHASE / RENEWAL / PRODUCT_CHANGE / UNCANCELLATION /
+   BILLING_ISSUE … → `tierUntil = expiration + 1 day`, `plan`, `provider = apple|google`,
+   `cancelAtPeriodEnd = false`; CANCELLATION (unsubscribe) → `cancelAtPeriodEnd = true`, access
+   kept; CANCELLATION with refund reason or EXPIRATION → access ends now. TRANSFER re-syncs the
+   receiving user when the secret key is set. Stripe-store events are ignored (Stripe talks to
+   us directly). Test: `src/lib/revenuecat-server.test.js` boots the real server.
+4. `POST /api/billing/sync` pulls `GET /v1/subscribers/<uid>` with `REVENUECAT_SECRET_KEY`
+   (optional; without it the client waits for the webhook, which takes a few seconds).
+5. `POST /api/billing/portal` answers the store's subscriptions page for `provider`
+   apple/google (`{ url, store }`), opened with `window.open` so it leaves the webview.
+6. Dashboard: entitlement `pro`, offering `default` with `$rc_monthly` / `$rc_six_month` /
+   `$rc_annual`; Apple server notifications (ASC → app → App Information) point at
+   RevenueCat's URL; ASC in-app purchase key 9UF7A9XN54 + API key 53WU743787 uploaded. Prices in
+   the stores are the same 129 / 599 / 999 MXN (Apple keeps 30 %, or 15 % once enrolled in the
+   Small Business Program — do that before the first payout).
+7. Never link to web checkout from inside the iOS app (App Store rule) — the store build never
+   calls `/api/billing/checkout`.
 
 **Mobile build without backend** (current `build:mobile` is offline-first, guest mode): AI
 already requires the user's own key there, so there is nothing to sell until the mobile build

@@ -62,7 +62,7 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 ### Pending — build (once the items above unlock them)
 
 - Continue with Apple (needs #2). Same shape as Google: ID token verified server-side.
-- In-app purchases via RevenueCat for iOS/Android with the same three plans (needs #2, #3).
+- ✅ 2026-10-03 In-app purchases via RevenueCat (iOS live in code; `REVENUECAT_WEBHOOK_AUTH` + webhook in the dashboard, optional `REVENUECAT_SECRET_KEY`). Android: add the Play app in RevenueCat and `VITE_RC_GOOGLE_KEY` once Play is approved. Owner: Apple Small Business Program (15 % instead of 30 %) before the first payout; optional introductory free trial on the ASC subscriptions.
 - Store listings: icons, screenshots, copy, signed builds.
 - Receipts/emails with the legal name (#5).
 - Later: prompt caching, in-memory limiters to the DB if a second API container ever appears,

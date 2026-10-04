@@ -125,6 +125,8 @@ export const useStore = create((set, get) => {
       if (u) { localStorage.setItem('gym_user', JSON.stringify(u)); localStorage.removeItem('gym_guest') }
       else localStorage.removeItem('gym_user')
       set({ user: u })
+      // store builds: keep the purchases SDK on the same account (no-op on the web)
+      import('../lib/purchases.js').then(m => m.purchasesIdentify(u ? u.id : null)).catch(() => {})
     },
     // Re-read the account from the server (after verifying the email, paying, adding a passkey…).
     async refreshMe() {

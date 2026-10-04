@@ -511,6 +511,59 @@ function applySubscription(sub) {
   console.log('stripe: subscription', sub.status, 'user', user.id, 'until', user.tierUntil);
 }
 
+/* ---------- RevenueCat (App Store / Google Play) ---------- */
+// The store apps buy through RevenueCat; it tells us over a webhook (Authorization header is a
+// shared secret, REVENUECAT_WEBHOOK_AUTH) and, when REVENUECAT_SECRET_KEY is set, the client
+// can ask us to pull the subscriber right after a purchase instead of waiting for the webhook.
+// App user id in RevenueCat = our user id (the app logs in with it before buying).
+const REVENUECAT_WEBHOOK_AUTH = process.env.REVENUECAT_WEBHOOK_AUTH || '';
+const REVENUECAT_SECRET_KEY = process.env.REVENUECAT_SECRET_KEY || '';
+db.rcEvents = db.rcEvents || [];
+const storeProvider = store => (/APP_STORE|MAC_APP_STORE/i.test(store || '') ? 'apple' : /PLAY_STORE/i.test(store || '') ? 'google' : /STRIPE/i.test(store || '') ? 'stripe' : 'store');
+// Store product ids look like app.vantixgym.mobile.yearly (or ...yearly:base-plan on Play).
+const planByProduct = pid => PLANS.find(p => new RegExp(`(^|[.:_-])${p.id}($|[.:_-])`, 'i').test(String(pid || ''))) || null;
+const sameSecret = (a, b) => { try { return !!a && !!b && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch { return false; } };
+const findRcUser = ids => { for (const id of ids) { const u = id && db.users.find(u => u.id === id); if (u) return u; } return null; };
+// Fold one RevenueCat event into the user. Access = latest expiration + 1 day grace, like Stripe.
+function applyStoreEvent(ev) {
+  const user = findRcUser([ev.app_user_id, ev.original_app_user_id, ...(ev.aliases || [])]);
+  if (!user) { console.error('revenuecat: event for unknown user', ev.type, ev.app_user_id); return false; }
+  const exp = +ev.expiration_at_ms || 0;
+  const type = String(ev.type || '');
+  const live = ['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'SUBSCRIPTION_EXTENDED', 'TEMPORARY_ENTITLEMENT_GRANT', 'NON_RENEWING_PURCHASE', 'BILLING_ISSUE'].includes(type);
+  const prov = storeProvider(ev.store);
+  if (prov === 'stripe') return false;   // Stripe already reaches us directly
+  user.provider = prov;
+  user.storeUserId = ev.app_user_id || user.storeUserId;
+  if (ev.product_id) user.plan = planByProduct(ev.product_id)?.id || user.plan || null;
+  if (type === 'CANCELLATION') user.cancelAtPeriodEnd = true;            // auto-renew off; access runs to expiration
+  else if (live) user.cancelAtPeriodEnd = false;
+  if (live && exp > Date.now()) { user.tierUntil = new Date(exp + 86400_000).toISOString(); user.subscriptionStatus = type === 'BILLING_ISSUE' ? 'past_due' : 'active'; if (ev.period_type !== 'TRIAL') rewardReferrer(user); }
+  else if (type === 'EXPIRATION' || (type === 'CANCELLATION' && /REFUND|CUSTOMER_SUPPORT/i.test(ev.cancel_reason || ''))) {
+    if (!user.tierUntil || Date.parse(user.tierUntil) > Date.now()) user.tierUntil = nowISO();   // refund / expired: access ends now
+    user.subscriptionStatus = 'canceled';
+  }
+  if (ev.environment === 'SANDBOX') user.storeSandbox = true;
+  saveDb();
+  console.log('revenuecat:', type, prov, 'user', user.id, 'until', user.tierUntil, ev.environment || '');
+  return true;
+}
+// GET /v1/subscribers/<id>: the current picture, used right after a purchase and for "restore".
+async function syncStoreSubscriber(user) {
+  const r = await fetch('https://api.revenuecat.com/v1/subscribers/' + encodeURIComponent(user.id), { headers: { authorization: 'Bearer ' + REVENUECAT_SECRET_KEY, 'x-platform': 'ios' } });
+  if (!r.ok) throw new Error('RevenueCat ' + r.status);
+  const s = (await r.json()).subscriber || {};
+  let best = null;
+  for (const [pid, sub] of Object.entries(s.subscriptions || {})) {
+    const exp = sub.expires_date ? Date.parse(sub.expires_date) : 0;
+    if (!best || exp > best.exp) best = { pid, exp, sub };
+  }
+  if (!best) return false;
+  const { pid, exp, sub } = best;
+  return applyStoreEvent({ type: exp > Date.now() ? (sub.unsubscribe_detected_at ? 'CANCELLATION' : 'RENEWAL') : 'EXPIRATION', app_user_id: user.id, product_id: pid,
+    expiration_at_ms: exp, store: sub.store, period_type: sub.period_type, environment: sub.is_sandbox ? 'SANDBOX' : 'PRODUCTION', cancel_reason: sub.refunded_at ? 'REFUND' : undefined });
+}
+
 /* ---------- challenge store (in-memory, 5 min TTL) ---------- */
 const challenges = new Map(); // cid -> {challenge, name?, uid?, exp}
 function putChallenge(data) {
@@ -1709,6 +1762,9 @@ const routes = {
   'POST /api/billing/portal': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
+    // Store subscriptions are managed in the store, never here.
+    if (user.provider === 'apple') return json(res, 200, { url: 'https://apps.apple.com/account/subscriptions', store: 'apple' });
+    if (user.provider === 'google') return json(res, 200, { url: 'https://play.google.com/store/account/subscriptions', store: 'google' });
     if (!STRIPE_SECRET_KEY || !user.stripeCustomerId) return json(res, 400, { error: 'no subscription to manage' });
     try {
       const p = await stripe('POST', '/billing_portal/sessions', { customer: user.stripeCustomerId, return_url: `${ORIGIN}/#/settings` });
@@ -1734,6 +1790,36 @@ const routes = {
       saveDb();
       json(res, 200, { ok: true });
     } catch (e) { console.error('stripe webhook', ev.type, e.message); json(res, 500, { error: 'handler failed' }); }
+  },
+
+  // RevenueCat → us (Integrations → Webhooks). The Authorization header must equal
+  // REVENUECAT_WEBHOOK_AUTH; idempotent on event id; unknown types are acknowledged.
+  'POST /api/billing/revenuecat': async (req, res) => {
+    if (!REVENUECAT_WEBHOOK_AUTH) return json(res, 501, { error: 'webhook not configured' });
+    if (!sameSecret(String(req.headers.authorization || ''), REVENUECAT_WEBHOOK_AUTH)) return json(res, 401, { error: 'bad authorization' });
+    let body; try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad json' }); }
+    const ev = body.event || {};
+    if (!ev.type) return json(res, 400, { error: 'no event' });
+    if (ev.id && db.rcEvents.includes(ev.id)) return json(res, 200, { ok: true, duplicate: true });
+    if (ev.id) db.rcEvents = [...db.rcEvents.slice(-499), ev.id];
+    if (ev.type === 'TEST') { saveDb(); return json(res, 200, { ok: true, test: true }); }
+    if (ev.type === 'TRANSFER') {
+      // purchases moved to another app user id: the new owner gets re-synced on demand
+      for (const id of ev.transferred_to || []) { const u = db.users.find(u => u.id === id); if (u && REVENUECAT_SECRET_KEY) syncStoreSubscriber(u).catch(e => console.error('revenuecat transfer sync', e.message)); }
+      saveDb(); return json(res, 200, { ok: true });
+    }
+    try { applyStoreEvent(ev); saveDb(); json(res, 200, { ok: true }); }
+    catch (e) { console.error('revenuecat webhook', ev.type, e.message); json(res, 500, { error: 'handler failed' }); }
+  },
+
+  // The app calls this right after a store purchase or "Restore purchases" so access is
+  // immediate instead of waiting for the webhook. Needs the RevenueCat secret key.
+  'POST /api/billing/sync': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!REVENUECAT_SECRET_KEY) return json(res, 501, { error: 'sync not configured' });
+    try { const found = await syncStoreSubscriber(user); json(res, 200, { ok: true, found, billing: entitlement(user) }); }
+    catch (e) { console.error('revenuecat sync', e.message); json(res, 502, { error: 'could not check the purchase — try again' }); }
   },
 
   /* ---------- progress photos (scaffold — see docs/PROGRESS_PHOTOS.md) ---------- */
