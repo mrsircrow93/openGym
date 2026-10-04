@@ -47,12 +47,11 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 3. ✅ 2026-10-02 Google Play Console account created (personal, vantixgym@gmail.com); identity
    verification pending. Personal accounts need a closed test with 12 testers for 14 days before
    production. Register production signing SHA-1 in Google Cloud (Android OAuth client).
-4. Anthropic spend limit in the console; raise `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15
-   paying users (rule: $1.5 × paying users).
+4. ✅ 2026-10-04 Anthropic spend limit set to $50/month with email alerts at $25 and $40 (Oct spend so far: $0.85). Raise it and `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15 paying users (rule: $1.5 × paying users).
 5. Legal entity name for terms, privacy and Stripe receipts.
 6. Store the backup passphrase (`~/.backup-pass` on the server) in a password manager; S3 bucket
    + IAM key for off-host backups (docs/BACKUPS.md).
-7. Cloudflare: Bot Fight Mode; delete the stray CNAME `app.vantixgym.app` in the pentaforge zone;
+7. Cloudflare: ✅ Bot Fight Mode on (webhooks verified with it on); delete the stray CNAME `app.vantixgym.app` in the pentaforge zone;
    optional Google brand verification (Search Console TXT, point consent-screen links to
    https://vantixgym.app/privacidad.html and /terminos.html).
 8. Lightsail firewall: port 22 only.
