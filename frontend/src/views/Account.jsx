@@ -89,7 +89,7 @@ export function Plans({ compact }) {
         const sp = await storePlans(user?.id)
         const monthly = sp.monthly?.amount
         const plans = d.plans.filter(p => sp[p.id]).map(p => { const s = sp[p.id]; const base = monthly ? monthly * p.months : 0
-          return { ...p, amount: s.amount, perMonth: Math.floor(s.amount / p.months), available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
+          return { ...p, amount: s.amount, perMonth: Math.round(s.amount / p.months * 100) / 100, available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
         setData({ ...d, plans: plans.length ? plans : d.plans, currency: Object.values(sp)[0]?.currency || d.currency, payments: plans.length > 0, store: true, firstChargeAt: null, rescueUntil: null })
       } catch (e) { console.warn('store plans', e.message); setData({ ...d, payments: false, store: true, storeError: e.message || true }) }
     }).catch(() => setData({ plans: [] }))
@@ -114,7 +114,8 @@ export function Plans({ compact }) {
     setBusy('')
   }
   if (!data) return <div className="small dim">{t('Loading plans…')}{store && stage && <div style={{ fontSize: 11, marginTop: 4 }}>{stage}</div>}</div>
-  const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', maximumFractionDigits: 0 }).format(n)
+  // Whole pesos stay whole; store prices with cents (USD 5.99) keep them.
+  const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', maximumFractionDigits: Math.abs(n - Math.round(n)) < 0.005 ? 0 : 2 }).format(n)
   const monthly = data.plans.find(p => p.months === 1)
   // Yearly first and preselected: the cheapest month is the default answer, not a discovery.
   const ordered = [...data.plans].sort((a, b) => b.months - a.months)
