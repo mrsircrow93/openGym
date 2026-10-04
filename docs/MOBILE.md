@@ -144,6 +144,10 @@ that would simply install. Your free options:
   2027-10-03) is in the login keychain; the App Store profile "VantixGym App Store" (T5AS33D9CG)
   is installed in `~/Library/MobileDevice/Provisioning Profiles`. Both were created through the
   API with a local CSR because App Manager keys cannot use Xcode cloud signing.
+- `build:mobile` runs ESLint first and then `vite build` **with** `VITE_MOBILE=1` / `VITE_API_BASE`; the
+  env vars must sit right before `vite build`, not before `eslint`, or the store build ships as a web
+  build (build 21 did: Stripe instead of in-app purchases). `scripts/check-mobile-bundle.mjs` now
+  fails the build when the bundle lacks the API base or the RevenueCat key.
 - Upload a build (bump `CURRENT_PROJECT_VERSION` or let `manageAppVersionAndBuildNumber` do it):
 
 ```sh
