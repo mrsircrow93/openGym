@@ -13,7 +13,9 @@ are re-downloaded; code is in git.
 
 ## Server side (done 2026-10-01)
 
-- Cron: `15 3 * * * ~/openGym/scripts/backup.sh >> ~/backups/backup.log 2>&1`
+- Cron: `15 3 * * * [ -f $HOME/.backup-env ] && . $HOME/.backup-env; $HOME/openGym/scripts/backup.sh >> $HOME/backups/backup.log 2>&1`
+  (the `[ -f … ] &&` guard matters: in cron's `sh`, sourcing a missing file aborts the whole line,
+  which silently skipped every nightly backup from Oct 2 to Oct 4 2026)
 - Passphrase: `~/.backup-pass` on the server, generated on first run. **Keep a copy off the
   server** (password manager). Without it the archives cannot be opened.
 - Env for cron lives in `~/.backup-env` (sourced by the cron line): `AWS_BACKUP_BUCKET=…`.
