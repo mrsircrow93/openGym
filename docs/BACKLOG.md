@@ -49,8 +49,7 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
    production. Register production signing SHA-1 in Google Cloud (Android OAuth client).
 4. ✅ 2026-10-04 Anthropic spend limit set to $50/month with email alerts at $25 and $40 (Oct spend so far: $0.85). Raise it and `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15 paying users (rule: $1.5 × paying users).
 5. Legal entity name for terms, privacy and Stripe receipts.
-6. Store the backup passphrase (`~/.backup-pass` on the server) in a password manager; S3 bucket
-   + IAM key for off-host backups (docs/BACKUPS.md).
+6. ✅ 2026-10-04 Backup passphrase in the owner's password manager; S3 off-host copies live (bucket `vantixgym-backups-2026`); cron bug fixed (3 nights skipped).
 7. Cloudflare: ✅ Bot Fight Mode on (webhooks verified with it on); delete the stray CNAME `app.vantixgym.app` in the pentaforge zone;
    optional Google brand verification (Search Console TXT, point consent-screen links to
    https://vantixgym.app/privacidad.html and /terminos.html).
