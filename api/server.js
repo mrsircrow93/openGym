@@ -538,7 +538,7 @@ function applyStoreEvent(ev) {
   if (ev.product_id) user.plan = planByProduct(ev.product_id)?.id || user.plan || null;
   if (type === 'CANCELLATION') user.cancelAtPeriodEnd = true;            // auto-renew off; access runs to expiration
   else if (live) user.cancelAtPeriodEnd = false;
-  if (live && exp > Date.now()) { user.tierUntil = new Date(exp + 86400_000).toISOString(); user.subscriptionStatus = type === 'BILLING_ISSUE' ? 'past_due' : 'active'; if (ev.period_type !== 'TRIAL') rewardReferrer(user); }
+  if (live && exp > Date.now()) { user.tierUntil = new Date(exp + 86400_000).toISOString(); user.subscriptionStatus = type === 'BILLING_ISSUE' ? 'past_due' : 'active'; if (!/^trial$/i.test(ev.period_type || '')) rewardReferrer(user); }
   else if (type === 'EXPIRATION' || (type === 'CANCELLATION' && /REFUND|CUSTOMER_SUPPORT/i.test(ev.cancel_reason || ''))) {
     if (!user.tierUntil || Date.parse(user.tierUntil) > Date.now()) user.tierUntil = nowISO();   // refund / expired: access ends now
     user.subscriptionStatus = 'canceled';
