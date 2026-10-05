@@ -65,3 +65,19 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 - Receipts/emails with the legal name (#5).
 - Later: prompt caching, in-memory limiters to the DB if a second API container ever appears,
   passkeys inside the mobile app.
+
+## v2 wishlist (owner, 2026-10-05) — after the 1.0 store launch
+
+Suggested order by value/effort: 3 → 4 → 2 → 1.
+
+1. **Sleep from a smartwatch** via Apple Health / Health Connect. `capacitor-health` has no sleep
+   type: add a small native plugin (HKCategoryTypeIdentifier.sleepAnalysis / SleepSessionRecord)
+   or switch plugin. Nightly duration (+stages when the watch provides them), 7-day card, coach
+   context, badge. Web: manual entry.
+2. **Distinct personalities for Sofía and Leo**: persona block in `coachSystemPrompt`, monthly
+   photo note and drip copy; same evidence-based guard rails. Owner approves two briefs first.
+3. **More active nutrition notifications** (local): meal-slot nudges when nothing is logged,
+   water, evening protein gap; per-type toggles + quiet hours in Settings; opt-in.
+4. **Supplements** (Nutrition tab): user-defined items (creatine, protein…), schedule by time and
+   weekday, taken/skip log, streak + badge, local reminders (ids 300+), optional kcal/protein
+   auto-add for shakes. Informational only, keeps the medical disclaimer.
