@@ -4,6 +4,26 @@ Today's `/admin` (frontend/src/views/Admin.jsx, 7 routes under `/api/admin/*`) s
 spend per user, invite codes and a user list with disable. It is a founder's dashboard, not an
 operations console. This is the plan to make it one, security first, web only.
 
+## Status (2026-10-05)
+
+**Shipped (v1):** roles (`user.role`, legacy `admin`/`ADMIN_UIDS` migrated to `owner` at boot) with the
+permission table in `api/admin.js`; step-up via password or passkey, 12 h, bound to IP prefix + user
+agent, `Lock console` to drop it; hash-chained audit log at `/data/audit.log` (viewer, verify, NDJSON
+export; also records password/email changes and sign-out-everywhere); request-log ring (3,000 entries,
+paths/status only) + JSON lines on stdout; owner e-mail alerts (new device step-up, role change,
+coupon > 50 %, 3 denials); 90 req/min per staff account. Modules: Overview (MRR estimate, trials,
+conversion, DAU/WAU/MAU, AI spend, backup marker, "needs a human"), Users (filters, detail, resend
+verify, extend trial ≤ 30 d, comp days, re-pull Stripe / re-sync store, sign out everywhere,
+disable/enable, soft delete/restore, JSON export, internal notes, per-user audit), Billing (Stripe
+subscriptions/invoices/balance, refunds for owner/finance, store subs, webhook health), Coupons
+(Stripe coupons + promo codes, deactivate), Team (grant/change/remove roles on existing verified
+accounts), Audit, Logs, System (kill switches for sign-ups / AI / web payments, maintenance banner
+shown on Home, integrations with key prefixes, disk/db/backup). Test: `frontend/src/lib/admin-server.test.js`.
+
+**Not yet:** TOTP as a step-up option, per-session device list (sessions are stateless tokens),
+Comms module (segment announcements, drip template editor), AI caps editable from the UI, referral
+fraud view, CloudWatch shipping of the JSON logs, impersonation ("view as"), audit log rotation.
+
 ## Security foundation (do first — everything else sits on it)
 
 1. **Roles, not a boolean.** `user.role ∈ owner | admin | support | finance | viewer` replaces

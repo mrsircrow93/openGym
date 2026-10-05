@@ -66,6 +66,10 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 - Later: prompt caching, in-memory limiters to the DB if a second API container ever appears,
   passkeys inside the mobile app.
 
+## Admin console
+
+- ✅ 2026-10-05 v1 shipped (web only, additive; see docs/ADMIN_PANEL.md Status). Next: TOTP, Comms module, AI caps in UI, log shipping.
+
 ## v2 wishlist (owner, 2026-10-05) — after the 1.0 store launch
 
 Suggested order by value/effort: 3 → 4 → 2 → 1.

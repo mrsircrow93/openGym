@@ -76,3 +76,14 @@ prompt), file upload, SSRF, CSRF/CORS, sessions, rate limiting, resource exhaust
 Photo IDOR (other account → 404, anonymous → 401), PNG as photo → 400, HTML renamed `.jpg` →
 400, PDF with JavaScript → 400, `data:` prefix → 400, 10 MB PDF body accepted end to end,
 routine and diet imports with real files, Stripe test checkout + cancel (earlier session).
+
+## Admin console (added 2026-10-05)
+
+`/api/admin/*` is served by `api/admin.js`. Access requires (1) a staff role on the account, (2) a
+step-up within 12 h from the same IP prefix + user agent, (3) the role to be in the permission table
+for that route, (4) under 90 requests/min. Every mutation appends a hash-chained entry to
+`/data/audit.log`; `GET /api/admin/audit/verify` recomputes the chain. Kill switches are enforced in
+the dispatcher (503 + `code: paused`). Secrets are never returned: the System page shows key prefixes
+only. Threats considered: stolen session cookie (step-up + device binding limits blast radius),
+compromised support account (cannot read billing, delete, change roles, or exceed trial/comp caps;
+denials alert owners), log tampering (chain), console scraping (rate limit, PII-free request log).
