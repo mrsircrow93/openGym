@@ -162,7 +162,7 @@ export default function Home() {
       <div className="tile">
         <div className="l"><Icon name="utensils" style={{ color: 'var(--orange)' }} />{t('Nutrition')}</div>
         <div className="dim small" style={{ margin: '6px 0 10px' }}>{mealsToday ? t(mealsToday === 1 ? '{0} meal' : '{0} meals', mealsToday) : t('Nothing logged yet')}</div>
-        <Button size="sm" variant="tinted" icon="camera" style={{ width: '100%' }} onClick={() => mealPhoto.current?.click()}>{t('Snap a meal')}</Button>
+        <Button size="sm" variant="tinted" icon="camera" style={{ width: '100%', whiteSpace: 'nowrap' }} onClick={() => mealPhoto.current?.click()}>{t('Snap a meal')}</Button>
       </div>
       <div className="tile">
         <div className="l"><Icon name="droplet" style={{ color: 'var(--blue)' }} />{t('Water')}</div>
