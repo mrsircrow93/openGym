@@ -14,6 +14,7 @@ import { sendEmail, mail, emailConfigured } from './email.js';
 import { inspectUpload, inspectImage } from './upload.js';
 import { verifyGoogleIdToken } from './google.js';
 import { verifyAppleIdToken } from './apple.js';
+import { createAdmin, ROLES, roleOf } from './admin.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -107,7 +108,9 @@ db.subs = db.subs || [];
 db.invites = db.invites || [];
 db.tokens = db.tokens || [];          // email verification / password reset (hashes only)
 db.stripeEvents = db.stripeEvents || [];   // processed webhook ids (idempotency)
-const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+const isLegacyAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+const isAdmin = user => !!user && (isLegacyAdmin(user) || ROLES.includes(user.role));
+let adminMod = null;   // created after the helpers below exist (see /* admin console */)
 function saveDb() { atomicWrite(dbFile, JSON.stringify(db, null, 2)); }
 function atomicWrite(file, content) {
   const tmp = file + '.tmp';
@@ -289,11 +292,8 @@ function readSession(req) {
   return user;
 }
 // Guard for /api/admin/* — resolves the caller and 401/403s if they aren't an admin.
-function requireAdmin(req, res) {
-  const user = readSession(req);
-  if (!user) { json(res, 401, { error: 'not signed in' }); return null; }
-  if (!isAdmin(user)) { json(res, 403, { error: 'forbidden' }); return null; }
-  return user;
+function requireAdmin(req, res, perm = 'invites.write') {
+  return adminMod ? adminMod.guard(req, res, perm) : null;
 }
 function sessionCookie(user) {
   return `gymsid=${makeSession(user)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${SECURE} SameSite=Lax`;
@@ -322,7 +322,7 @@ function entitlement(user) {
     plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
 }
 const pubUser = user => ({ id: user.id, name: user.name, admin: isAdmin(user), email: user.email || null, emailVerified: !!user.emailVerified,
-  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), hasGoogle: !!user.googleSub, hasApple: !!user.appleSub, billing: entitlement(user), referredBy: !!user.referredBy });
+  hasPassword: !!user.pw, hasPasskey: hasPasskey(user), hasGoogle: !!user.googleSub, hasApple: !!user.appleSub, billing: entitlement(user), referredBy: !!user.referredBy, role: roleOf(user) });
 
 // One-time tokens for email links. Only the sha256 of the token is stored; the raw value is in
 // the link and nowhere else. Single use, short-lived, scoped by kind.
@@ -1132,11 +1132,42 @@ function trainerPlanRequest({ profile, candidates }) {
 }
 
 /* ---------- routes ---------- */
+/* ---------- admin console (docs/ADMIN_PANEL.md) ---------- */
+// Passkey step-up: same WebAuthn check as /api/login/verify, but the assertion must belong to
+// the staff member who is already signed in.
+async function verifyPasskeyFor(user, cid, credential) {
+  const c = takeChallenge(cid);
+  if (!c) return false;
+  const cred = db.creds.find(x => x.id === credential?.id && x.userId === user.id);
+  if (!cred) return false;
+  try {
+    const v = await verifyAuthenticationResponse({ response: credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID, requireUserVerification: false,
+      credential: { id: cred.id, publicKey: b64uToBuf(cred.publicKey), counter: cred.counter, transports: cred.transports } });
+    if (!v.verified) return false;
+    cred.counter = v.authenticationInfo.newCounter; saveDb();
+    return true;
+  } catch { return false; }
+}
+// What is wired up, with key prefixes only — never values.
+const integrations = () => ({
+  stripe: { on: !!STRIPE_SECRET_KEY, key: STRIPE_SECRET_KEY.slice(0, 8), webhook: !!STRIPE_WEBHOOK_SECRET, prices: PLANS.filter(p => p.price).length },
+  revenuecat: { on: !!REVENUECAT_WEBHOOK_AUTH, secretKey: !!REVENUECAT_SECRET_KEY },
+  anthropic: { on: !!ANTHROPIC_API_KEY, key: ANTHROPIC_API_KEY.slice(0, 10), models: MODELS_IN_USE },
+  email: { on: emailConfigured() }, google: { on: GOOGLE_CLIENT_IDS.length > 0 }, apple: { on: APPLE_CLIENT_IDS.length > 0 }, push: { on: true }
+});
+adminMod = createAdmin({
+  db, saveDb, readSession, json, readBody, readState, listPhotos, DATA, ORIGIN, clientIp, sendEmail, sendVerifyMail, addDays,
+  isLegacyAdmin, entitlement, aiUsageOf, monthKey, livePresence, presence, verifyPassword, verifyPasskeyFor, integrations,
+  stripe, hasStripe: () => !!STRIPE_SECRET_KEY, applySubscription, syncStoreSubscriber, hasRevenueCat: () => !!REVENUECAT_SECRET_KEY,
+  PLANS, CURRENCY, AI_MONTHLY_USD_CAP, AI_GLOBAL_MONTHLY_USD_CAP, STRIPE_REFERRAL_COUPON, STRIPE_RESCUE_COUPON, BILLING_ENABLED, INVITE_ONLY, TRIAL_DAYS
+});
+
 const routes = {
+  ...adminMod.routes,
   'GET /api/health': async (req, res) => json(res, 200, { ok: true }),
 
   // Public config the login screen needs before anyone is signed in.
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured(), googleClientId: GOOGLE_CLIENT_IDS[0] || null, appleClientId: APPLE_CLIENT_IDS[0] || null }),
+  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY, ai: !!ANTHROPIC_API_KEY, billing: BILLING_ENABLED, trialDays: TRIAL_DAYS, email: emailConfigured(), googleClientId: GOOGLE_CLIENT_IDS[0] || null, appleClientId: APPLE_CLIENT_IDS[0] || null, banner: (db.flags && db.flags.banner) || null }),
 
   'GET /api/me': async (req, res) => {
     const user = readSession(req);
@@ -1255,6 +1286,7 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     user.sv = sessionVersion(user) + 1;
     saveDb();
+    adminMod.audit(req, user, 'account.signout_all', user.id);
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
   },
 
@@ -1446,6 +1478,7 @@ const routes = {
     user.pw = hashPassword(String(body.next));
     user.pwChangedAt = nowISO();
     user.sv = sessionVersion(user) + 1;
+    adminMod.audit(req, user, 'account.password_change', user.id);
     saveDb();
     if (user.email) sendEmail({ to: user.email, ...mail(userLang(user), 'passwordChanged', user.name) }).catch(() => {});
     json(res, 200, withToken(body, user, { ok: true, user: pubUser(user) }), { 'Set-Cookie': sessionCookie(user) });
@@ -1469,6 +1502,7 @@ const routes = {
     const old = user.email;
     user.email = email; user.emailVerified = false;
     saveDb();
+    adminMod.audit(req, user, 'account.email_change', user.id, { before: old ? old.replace(/^(.).*(@.*)$/, '$1…$2') : null, after: email.replace(/^(.).*(@.*)$/, '$1…$2') });
     sendVerifyMail(user).catch(() => {});
     if (old && old !== email) sendEmail({ to: old, ...mail(userLang(user), 'emailChanged', user.name, email) }).catch(() => {});
     json(res, 200, { ok: true, user: pubUser(user) });
@@ -1611,56 +1645,7 @@ const routes = {
     json(res, 200, { ok: true });
   },
 
-  /* ---------- admin dashboard ---------- */
-  // One row per user, cheap enough for a personal instance (reads each state file once).
-  'GET /api/admin/users': async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    const users = db.users.filter(u => !u.deletedAt).map(u => {
-      const S = readState(u.id) || {};
-      const workouts = S.workouts || [];
-      const last = workouts[workouts.length - 1];
-      return {
-        id: u.id, name: u.name, created: u.created || null,
-        disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
-        workouts: workouts.length,
-        lastWorkout: last ? last.d : null,
-        lastSync: S._ts || null,
-        hasPush: db.subs.some(s => s.userId === u.id),
-        live: livePresence(u.id)
-      };
-    });
-    json(res, 200, { users, invite_only: INVITE_ONLY, now: Date.now() });
-  },
-
-  // Drill-down: full workout history + body-weight log for one user.
-  'GET /api/admin/user': async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    const id = new URL(req.url, 'http://x').searchParams.get('id');
-    const u = db.users.find(x => x.id === id);
-    if (!u) return json(res, 404, { error: 'no such user' });
-    const S = readState(u.id) || {};
-    json(res, 200, {
-      user: { id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null },
-      unit: S.unit || 'kg',
-      lastSync: S._ts || null,
-      routines: (S.routines || []).map(r => ({ id: r.id, name: r.name, emoji: r.emoji, count: (r.ex || []).length })),
-      bodyweight: S.bodyweight || [],
-      workouts: (S.workouts || []).slice().reverse()   // newest first for display
-    });
-  },
-
-  'POST /api/admin/user/disable': async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    const body = await readBody(req);
-    const u = db.users.find(x => x.id === body.id);
-    if (!u) return json(res, 404, { error: 'no such user' });
-    if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
-    u.disabled = !!body.disabled;
-    if (u.disabled) presence.delete(u.id);   // drop them off "training now" at once
-    saveDb();
-    json(res, 200, { ok: true, id: u.id, disabled: u.disabled });
-  },
-
+  /* ---------- admin dashboard (console routes live in admin.js; invites stay here) ---------- */
   'GET /api/admin/invites': async (req, res) => {
     if (!requireAdmin(req, res)) return;
     // resolve usedBy uid → name for display
@@ -1682,17 +1667,19 @@ const routes = {
     const invite = { code, note: String(body.note || '').slice(0, 60), createdBy: admin.id, created: new Date().toISOString() };
     db.invites.push(invite);
     saveDb();
+    adminMod.audit(req, admin, 'invite.create', code);
     json(res, 200, { invite });
   },
 
   'POST /api/admin/invites/revoke': async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    const admin = requireAdmin(req, res); if (!admin) return;
     const body = await readBody(req);
     const inv = db.invites.find(i => i.code === String(body.code || '').toUpperCase());
     if (!inv) return json(res, 404, { error: 'no such code' });
     if (inv.usedBy) return json(res, 400, { error: 'already used — cannot revoke' });
     db.invites = db.invites.filter(i => i.code !== inv.code);
     saveDb();
+    adminMod.audit(req, admin, 'invite.revoke', inv.code);
     json(res, 200, { ok: true });
   },
 
@@ -1705,8 +1692,7 @@ const routes = {
     json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: AI_MONTHLY_USD_CAP || null, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE });
   },
   'GET /api/admin/ai-usage': async (req, res) => {
-    const user = readSession(req);
-    if (!isAdmin(user)) return json(res, 403, { error: 'admin only' });
+    if (!requireAdmin(req, res, 'ai.read')) return;
     const month = monthKey();
     const rows = db.users.map(u => ({ id: u.id, name: u.name, ...(db.aiUsage[u.id]?.[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} }) }));
     json(res, 200, { month, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
@@ -1787,9 +1773,10 @@ const routes = {
       else if (ev.type.startsWith('customer.subscription.')) applySubscription(obj);
       else if ((ev.type === 'invoice.paid' || ev.type === 'invoice.payment_failed') && (obj.subscription || obj.parent?.subscription_details?.subscription))
         applySubscription(await stripe('GET', '/subscriptions/' + (obj.subscription || obj.parent.subscription_details.subscription)));
+      db.health.stripe = { lastEventAt: nowISO(), lastType: ev.type, lastError: null };
       saveDb();
       json(res, 200, { ok: true });
-    } catch (e) { console.error('stripe webhook', ev.type, e.message); json(res, 500, { error: 'handler failed' }); }
+    } catch (e) { console.error('stripe webhook', ev.type, e.message); db.health.stripe = { ...(db.health.stripe || {}), lastError: ev.type + ': ' + e.message, lastErrorAt: nowISO() }; saveDb(); json(res, 500, { error: 'handler failed' }); }
   },
 
   // RevenueCat → us (Integrations → Webhooks). The Authorization header must equal
@@ -1808,8 +1795,8 @@ const routes = {
       for (const id of ev.transferred_to || []) { const u = db.users.find(u => u.id === id); if (u && REVENUECAT_SECRET_KEY) syncStoreSubscriber(u).catch(e => console.error('revenuecat transfer sync', e.message)); }
       saveDb(); return json(res, 200, { ok: true });
     }
-    try { applyStoreEvent(ev); saveDb(); json(res, 200, { ok: true }); }
-    catch (e) { console.error('revenuecat webhook', ev.type, e.message); json(res, 500, { error: 'handler failed' }); }
+    try { applyStoreEvent(ev); db.health.revenuecat = { lastEventAt: nowISO(), lastType: ev.type, lastError: null }; saveDb(); json(res, 200, { ok: true }); }
+    catch (e) { console.error('revenuecat webhook', ev.type, e.message); db.health.revenuecat = { ...(db.health.revenuecat || {}), lastError: ev.type + ': ' + e.message, lastErrorAt: nowISO() }; saveDb(); json(res, 500, { error: 'handler failed' }); }
   },
 
   // The app calls this right after a store purchase or "Restore purchases" so access is
@@ -2250,6 +2237,13 @@ http.createServer(async (req, res) => {
   }
   const key = req.method + ' ' + url.pathname;
   const handler = routes[key];
+  const t0 = Date.now();
+  res.on('finish', () => adminMod.logRequest({ t: t0, m: req.method, p: url.pathname, s: res.statusCode, ms: Date.now() - t0, ip: clientIp(req).replace(/\.\d+$/, '.x') }));
+  // Kill switches from the console (docs/ADMIN_PANEL.md): absent = on.
+  const F = db.flags || {};
+  if (F.ai === false && url.pathname.startsWith('/api/ai/')) return json(res, 503, { error: 'the coach is paused for maintenance — back soon', code: 'paused' });
+  if (F.signups === false && (key === 'POST /api/auth/register' || key === 'POST /api/register/options')) return json(res, 503, { error: 'sign-ups are paused for a moment — try again later', code: 'paused' });
+  if (F.payments === false && key === 'POST /api/billing/checkout') return json(res, 503, { error: 'payments are paused for a moment — try again later', code: 'paused' });
   // Paid feature gate (docs/BILLING.md): the AI routes need an active trial or subscription.
   // Checked here, once, so no route can forget it.
   if (BILLING_ENABLED && handler && url.pathname.startsWith('/api/ai/')) {

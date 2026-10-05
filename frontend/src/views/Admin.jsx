@@ -1,175 +1,390 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { api } from '../lib/api.js'
-import { fmtDate, fmtNum, fmtVol, fmtDur } from '../lib/format.js'
-import { workoutVolume, setsDone } from '../lib/history.js'
+import { api, passkeyStepUp } from '../lib/api.js'
+import { fmtDate, fmtNum } from '../lib/format.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
-import { Button } from '../components/ui.jsx'
+import { Button, Switch } from '../components/ui.jsx'
 
-// Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
-// Deliberately English-only — it isn't part of the translated end-user surface, so it stays
-// out of the per-language string packs.
+// Operations console (docs/ADMIN_PANEL.md). Web only, English only — it is an internal tool,
+// not part of the translated end-user surface. Every call is re-checked server-side: role,
+// step-up (12 h, bound to this browser), rate limit, and an audit entry for each mutation.
 
 const rel = ts => {
   if (!ts) return 'never'
-  const s = Math.max(0, (Date.now() - ts) / 1000)
+  const s = Math.max(0, (Date.now() - (typeof ts === 'string' ? Date.parse(ts) : ts)) / 1000)
   if (s < 60) return 'just now'
   if (s < 3600) return Math.floor(s / 60) + 'm ago'
   if (s < 86400) return Math.floor(s / 3600) + 'h ago'
   return Math.floor(s / 86400) + 'd ago'
 }
-const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60) + 'm' }
+const when = iso => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—')
+const money = (n, cur = 'MXN') => new Intl.NumberFormat('es-MX', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n || 0)
+const post = (p, body) => api(p, { method: 'POST', body: JSON.stringify(body || {}) })
+const SECTIONS = [
+  ['overview', 'Overview', 'chart', 'overview.read'], ['users', 'Users', 'person', 'users.read'], ['billing', 'Billing', 'crown', 'billing.read'],
+  ['coupons', 'Coupons', 'sparkles', 'coupons.read'], ['team', 'Team', 'heart', 'team.read'], ['audit', 'Audit', 'shield', 'audit.read'],
+  ['logs', 'Logs', 'list', 'logs.read'], ['system', 'System', 'wrench', 'system.read']
+]
+const Pill = ({ children, tone }) => <span className={'adm-pill' + (tone ? ' ' + tone : '')}>{children}</span>
+const Stat = ({ label, value, sub, tone }) => <div className="adm-stat"><div className="adm-stat-l">{label}</div><div className={'adm-stat-v' + (tone ? ' ' + tone : '')}>{value}</div>{sub && <div className="adm-stat-s">{sub}</div>}</div>
+const statusTone = s => (s === 'pro' ? 'ok' : s === 'trial' ? 'info' : s === 'expired' ? 'warn' : '')
 
-// Server-paid AI: what the instance has spent this month and who spent it. Read-only; the
-// per-user cap lives in AI_MONTHLY_USD_CAP on the server.
-function AISpendCard() {
-  const [d, setD] = useState(null)
-  useEffect(() => { api('/api/admin/ai-usage').then(setD).catch(() => setD(false)) }, [])
-  if (d === null) return null
-  if (d === false) return <div className="card"><h2 style={{ margin: '0 0 4px' }}>AI spend</h2><div className="dim small">AI isn't configured on this server.</div></div>
-  const usd = v => (v > 0 && v < 0.01 ? '< $0.01' : '$' + (+v || 0).toFixed(2))
-  const rows = d.users.filter(u => u.calls).sort((a, b) => b.usd - a.usd)
-  const calls = rows.reduce((a, u) => a + u.calls, 0)
-  return <div className="card">
-    <div className="row between" style={{ marginBottom: 8 }}>
-      <h2 style={{ margin: 0 }}>AI spend · {d.month}</h2>
-      <span className="tag acc">{usd(d.total)}</span>
+function useLoad(path, deps = []) {
+  const [data, setData] = useState(null); const [err, setErr] = useState(null)
+  const reload = () => { setErr(null); return api(path).then(setData).catch(e => setErr(e)) }
+  useEffect(() => { reload() }, deps)
+  return [data, reload, err]
+}
+
+/* ---------------- step-up gate ---------------- */
+function StepUp({ me, onDone }) {
+  const [pw, setPw] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('')
+  const go = async e => {
+    e?.preventDefault(); setBusy(true); setErr('')
+    try { await post('/api/admin/stepup', { password: pw }); onDone() } catch (x) { setErr(x.message || 'Verification failed') }
+    setBusy(false)
+  }
+  const pk = async () => { setBusy(true); setErr(''); try { await passkeyStepUp(); onDone() } catch (x) { setErr(x.message || 'Passkey check failed') } setBusy(false) }
+  return <div className="adm-gate">
+    <div className="adm-gate-card">
+      <Icon name="shield" style={{ fontSize: 34, color: 'var(--acc)' }} />
+      <h2>Confirm it’s you</h2>
+      <p className="muted small">The console needs a fresh check every 12 hours, on each browser. Your role: <b>{me.role}</b>.</p>
+      {me.hasPassword && <form onSubmit={go} className="adm-form">
+        <input className="field" type="password" autoComplete="current-password" placeholder="Account password" value={pw} onChange={e => setPw(e.target.value)} autoFocus />
+        <Button type="submit" variant="primary" disabled={busy || !pw}>{busy ? 'Checking…' : 'Continue'}</Button>
+      </form>}
+      {me.hasPasskey && <Button onClick={pk} disabled={busy} icon="key">Use my passkey</Button>}
+      {!me.hasPassword && !me.hasPasskey && <p className="small" style={{ color: 'var(--red)' }}>Add a password or a passkey to your account first (Settings).</p>}
+      {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
     </div>
-    <div className="dim small" style={{ marginBottom: rows.length ? 8 : 0 }}>
-      {calls} calls · {rows.length} of {d.users.length} users · model {d.models?.text || d.model}{d.cap ? ' · cap $' + d.cap + ' per user' : ''}
-    </div>
-    {rows.map(u => <div key={u.id} className="row between" style={{ padding: '7px 2px', borderTop: '1px solid var(--sep)' }}>
-      <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
-        <div className="dim" style={{ fontSize: '.72rem' }}>{u.calls} calls · {fmtNum((u.in + u.out) / 1000)}k tokens{u.features && Object.keys(u.features).length ? ' · ' + Object.entries(u.features).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + v).join(', ') : ''}</div></div>
-      <span className="small" style={{ fontWeight: 600, color: d.cap && u.usd >= d.cap ? 'var(--red)' : undefined }}>{usd(u.usd)}</span>
-    </div>)}
   </div>
 }
 
-function UserDetail({ id, onChanged, close }) {
-  const [d, setD] = useState(null)
-  const toast = useUI(s => s.toast)
-  useEffect(() => { api('/api/admin/user?id=' + encodeURIComponent(id)).then(setD).catch(e => toast(e.message)) }, [id])
-  if (!d) return <div className="muted small">Loading…</div>
-  const u = d.user
-  const setDisabled = disabled => {
-    api('/api/admin/user/disable', { method: 'POST', body: JSON.stringify({ id: u.id, disabled }) })
-      .then(() => { toast(disabled ? 'User disabled' : 'User enabled'); onChanged(); close() })
-      .catch(e => toast(e.message))
-  }
+/* ---------------- overview ---------------- */
+function Overview({ go }) {
+  const [d, reload, err] = useLoad('/api/admin/overview')
+  useEffect(() => { const iv = setInterval(reload, 30000); return () => clearInterval(iv) }, [])
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const st = d.status || {}
   return <>
-    <h3 className="capitalize">{u.name}</h3>
-    <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '8px 0 12px' }}>
-      {u.admin && <span className="tag acc">admin</span>}
-      {u.disabled && <span className="tag" style={{ color: 'var(--red)' }}>disabled</span>}
-      {u.invitedBy && <span className="tag">invite {u.invitedBy}</span>}
-      <span className="tag">joined {u.created ? fmtDate(u.created.slice(0, 10)) : '—'}</span>
+    <div className="adm-grid4">
+      <Stat label="MRR (estimate)" value={money(d.mrr, d.currency)} sub={`${st.pro || 0} paying · ${d.cancelling} cancelling`} tone="ok" />
+      <Stat label="Trials" value={st.trial || 0} sub={`${d.signups7d} sign-ups this week`} tone="info" />
+      <Stat label="Trial → paid (7 d cohort)" value={d.conversion7d === null ? '—' : d.conversion7d + '%'} sub={`${d.cohort7d} accounts older than 7 d`} />
+      <Stat label="Active" value={`${d.dau} / ${d.wau} / ${d.mau}`} sub="day / week / month" />
+      <Stat label="Users" value={d.users} sub={`${d.verified} verified · ${d.staff} staff · ${d.live} training now`} />
+      <Stat label="AI spend" value={'$' + d.ai.usd} sub={`${d.ai.calls} calls in ${d.ai.month}${d.ai.capGlobal ? ' · cap $' + d.ai.capGlobal : ''}`} tone={d.ai.capGlobal && d.ai.usd > d.ai.capGlobal * 0.8 ? 'warn' : ''} />
+      <Stat label="Last backup" value={d.backup ? rel(d.backup.at) : 'none'} sub={d.backup ? (d.backup.s3 ? 'copied to S3' : 'local only') : 'see System'} tone={d.backup && Date.now() - Date.parse(d.backup.at) < 2 * 86400000 ? 'ok' : 'warn'} />
+      <Stat label="By provider" value={Object.entries(d.provider).map(([k, v]) => `${k} ${v}`).join(' · ') || '—'} sub={Object.entries(d.plan).map(([k, v]) => `${k} ${v}`).join(' · ') || 'no paid plans yet'} />
     </div>
-    <div className="tiles" style={{ textAlign: 'left' }}>
-      <div className="tile"><div className="l">Workouts</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.workouts.length}</div></div>
-      <div className="tile"><div className="l">Weigh-ins</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.bodyweight.length}</div></div>
-      <div className="tile"><div className="l">Routines</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.routines.length}</div></div>
-      <div className="tile"><div className="l">Last sync</div><div className="v" style={{ fontSize: '.95rem' }}>{rel(d.lastSync)}</div></div>
-    </div>
-    {!u.admin && <button className={'btn ' + (u.disabled ? 'primary' : 'danger')} style={{ margin: '12px 0 4px' }}
-      onClick={() => u.disabled ? setDisabled(false)
-        : confirmSheet({ title: 'Disable ' + u.name + '?', message: 'They are signed out everywhere and can no longer sync or log in until re-enabled.', confirmText: 'Disable', danger: true, onConfirm: () => setDisabled(true) })}>
-      {u.disabled ? 'Enable account' : 'Disable account'}</button>}
-    <h4 className="sec">Workout history</h4>
-    {d.workouts.length ? <div className="list" style={{ gap: 0 }}>
-      {d.workouts.slice(0, 60).map(w => <div key={w.id} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
-        <div><div className="small" style={{ fontWeight: 600 }}>{w.name}</div>
-          <div className="dim" style={{ fontSize: '.72rem' }}>{fmtDate(w.d, true)} · {fmtDur((w.end || w.start) - w.start)} · {setsDone(w)} sets{w.prs?.length ? ' · ' + w.prs.length + ' PR' : ''}</div></div>
-        <span className="small muted">{fmtVol(w.vol ?? workoutVolume(w), d.unit)}</span>
+    <div className="adm-card">
+      <div className="adm-card-h"><h3>Needs a human</h3><span className="muted small">{d.attention.length} items</span></div>
+      {!d.attention.length && <div className="dim small">Nothing pending. Nice.</div>}
+      {d.attention.map((a, i) => <div key={i} className="adm-row" onClick={() => a.id && go('users', a.id)} style={a.id ? { cursor: 'pointer' } : null}>
+        <Pill tone={a.kind === 'past_due' || a.kind === 'webhook' ? 'warn' : ''}>{a.kind}</Pill>
+        <div className="grow"><b>{a.name || 'System'}</b> <span className="muted">· {a.detail}</span></div>
+        {a.id && <Icon name="chevronRight" />}
       </div>)}
-    </div> : <div className="empty small">No workouts logged.</div>}
+    </div>
+    {(d.flags.signups === false || d.flags.ai === false || d.flags.payments === false || d.flags.banner) && <div className="adm-card warn">
+      <b>Kill switches active:</b> {['signups', 'ai', 'payments'].filter(k => d.flags[k] === false).join(', ') || 'none'}{d.flags.banner ? ` · banner “${d.flags.banner}”` : ''} — <button className="linkbtn" onClick={() => go('system')}>System</button>
+    </div>}
   </>
 }
 
-function InvitesCard({ invites, reload }) {
-  const toast = useUI(s => s.toast)
-  const gen = () => api('/api/admin/invites/new', { method: 'POST', body: '{}' })
-    .then(({ invite }) => { navigator.clipboard?.writeText(invite.code).catch(() => {}); toast('Code ' + invite.code + ' created & copied'); reload() })
-    .catch(e => toast(e.message))
-  const revoke = code => api('/api/admin/invites/revoke', { method: 'POST', body: JSON.stringify({ code }) })
-    .then(() => { toast('Code revoked'); reload() }).catch(e => toast(e.message))
-  const open = (invites || []).filter(i => !i.usedBy)
-  const used = (invites || []).filter(i => i.usedBy)
-  return <div className="card">
-    <div className="row between"><h2 style={{ margin: 0 }}>Invite codes</h2>
-      <Button variant="primary" size="sm" onClick={gen} icon="plus">Generate</Button></div>
-    <div className="small muted" style={{ margin: '6px 0 10px' }}>{open.length} unused · {used.length} redeemed</div>
-    {open.map(i => <div key={i.code} className="row between" style={{ padding: '7px 2px', borderBottom: '1px solid var(--sep)' }}>
-      <span style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontWeight: 500, letterSpacing: '.06em' }}
-        onClick={() => { navigator.clipboard?.writeText(i.code).catch(() => {}); toast('Copied ' + i.code) }}>{i.code}</span>
-      <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={() => revoke(i.code)} aria-label="revoke"><Icon name="trash" /></button>
-    </div>)}
-    {used.map(i => <div key={i.code} className="row between dim" style={{ padding: '7px 2px', fontSize: '.8rem' }}>
-      <span style={{ fontFamily: 'monospace' }}>{i.code}</span><span>→ {i.usedByName || 'used'}</span>
-    </div>)}
-    {!open.length && !used.length && <div className="dim small">No codes yet — generate one to invite someone.</div>}
+/* ---------------- users ---------------- */
+function Users({ perms, focusId }) {
+  const [qText, setQ] = useState(''); const [status, setStatus] = useState(''); const [provider, setProvider] = useState('')
+  const [sel, setSel] = useState(focusId || null)
+  const path = `/api/admin/users?q=${encodeURIComponent(qText)}&status=${status}&provider=${provider}`
+  const [d, reload, err] = useLoad(path, [qText, status, provider])
+  useEffect(() => { if (focusId) setSel(focusId) }, [focusId])
+  if (err) return <ErrorBox err={err} />
+  return <div className="adm-split">
+    <div className="adm-list-pane">
+      <div className="adm-filters">
+        <input className="field" placeholder="Search name, email or id" value={qText} onChange={e => setQ(e.target.value)} />
+        <select className="field" value={status} onChange={e => setStatus(e.target.value)}><option value="">Any status</option><option value="trial">Trial</option><option value="pro">Paying</option><option value="expired">Expired</option><option value="free">Staff / free</option></select>
+        <select className="field" value={provider} onChange={e => setProvider(e.target.value)}><option value="">Any provider</option><option value="stripe">Stripe</option><option value="apple">Apple</option><option value="google">Google</option><option value="comp">Comp</option></select>
+      </div>
+      {!d ? <Loading /> : <div className="adm-table">
+        <div className="adm-tr adm-th"><span>User</span><span>Plan</span><span>Last seen</span><span>Data</span></div>
+        {d.users.map(u => <div key={u.id} className={'adm-tr' + (sel === u.id ? ' sel' : '') + (u.disabled ? ' off' : '')} onClick={() => setSel(u.id)}>
+          <span className="adm-user"><b>{u.live && <i className="adm-dot" />}{u.name}</b><small>{u.email || u.id}{u.role ? ' · ' + u.role : ''}</small></span>
+          <span><Pill tone={statusTone(u.billing.status)}>{u.billing.status}{u.billing.plan ? ' · ' + u.billing.plan : ''}</Pill>{u.billing.provider && <small className="dim"> {u.billing.provider}{u.storeSandbox ? ' (sandbox)' : ''}</small>}</span>
+          <span className="small">{rel(u.lastSync)}</span>
+          <span className="small dim">{u.workouts} wo{u.hasPush ? ' · push' : ''}{!u.emailVerified && u.email ? ' · unverified' : ''}</span>
+        </div>)}
+        {!d.users.length && <div className="empty small">No matches.</div>}
+      </div>}
+    </div>
+    <div className="adm-detail-pane">{sel ? <UserDetail id={sel} perms={perms} onChanged={reload} /> : <div className="dim small" style={{ padding: 24 }}>Select a user.</div>}</div>
   </div>
 }
 
+function UserDetail({ id, perms, onChanged }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/user?id=' + encodeURIComponent(id), [id])
+  const [days, setDays] = useState(7); const [note, setNote] = useState('')
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const u = d.user, b = u.billing
+  const act = (action, extra = {}, confirm) => {
+    const run = () => post('/api/admin/user/action', { id: u.id, action, ...extra }).then(() => { toast('Done'); reload(); onChanged() }).catch(e => toast(e.message))
+    if (confirm) confirmSheet({ title: confirm, message: 'This is recorded in the audit log.', confirmText: 'Confirm', danger: true, onConfirm: run }); else run()
+  }
+  const canW = perms['users.write'], canD = perms['users.delete']
+  return <div className="adm-detail">
+    <div className="adm-card-h"><h3>{u.name} {u.role && <Pill tone="info">{u.role}</Pill>}{u.disabled && <Pill tone="warn">disabled</Pill>}{u.deletedAt && <Pill tone="warn">deleting</Pill>}</h3><span className="muted small">{u.id}</span></div>
+    <div className="adm-kv">
+      <div><span>Email</span><b>{u.email || '—'} {u.email && (u.emailVerified ? <Pill tone="ok">verified</Pill> : <Pill tone="warn">unverified</Pill>)}</b></div>
+      <div><span>Joined</span><b>{when(u.created)}</b></div>
+      <div><span>Sign-in</span><b>{[u.hasPassword && 'password', u.hasPasskey && 'passkey', u.hasGoogle && 'Google', u.hasApple && 'Apple'].filter(Boolean).join(', ') || '—'}</b></div>
+      <div><span>Status</span><b><Pill tone={statusTone(b.status)}>{b.status}</Pill> {u.plan || ''} {u.provider ? 'via ' + u.provider : ''}{u.cancelAtPeriodEnd ? ' · cancels at period end' : ''}{u.subscriptionStatus ? ' · ' + u.subscriptionStatus : ''}</b></div>
+      <div><span>Trial ends</span><b>{when(u.trialEnds)}</b></div>
+      <div><span>Access until</span><b>{when(u.tierUntil)}</b></div>
+      <div><span>Stripe</span><b>{u.stripeCustomer || '—'} {u.stripeSubscription ? '· ' + u.stripeSubscription : ''}</b></div>
+      <div><span>Referrals</span><b>{u.referrals} invited{u.referralEarnedDays ? ' · earned ' + u.referralEarnedDays + ' d' : ''}{u.referredBy ? ' · was referred' : ''}</b></div>
+      <div><span>Data</span><b>{d.counts.workouts} workouts · {d.counts.meals} meals · {d.counts.bodyweight} weigh-ins · {d.counts.photos} photos · synced {rel(d.lastSync)}</b></div>
+      <div><span>AI this month</span><b>{d.ai.calls || 0} calls · ${(d.ai.usd || 0).toFixed(2)}</b></div>
+    </div>
+    {canW && <div className="adm-actions">
+      {u.email && !u.emailVerified && <Button size="sm" onClick={() => act('resend_verify')}>Resend verification</Button>}
+      <span className="adm-inline"><input className="field" type="number" min="1" max="366" value={days} onChange={e => setDays(e.target.value)} style={{ width: 70 }} />
+        <Button size="sm" onClick={() => act('extend_trial', { days: +days })}>Extend trial</Button>
+        <Button size="sm" onClick={() => act('comp_days', { days: +days })}>Comp days</Button></span>
+      {u.provider === 'stripe' && <Button size="sm" onClick={() => act('stripe_pull')}>Re-pull Stripe</Button>}
+      {(u.provider === 'apple' || u.provider === 'google') && <Button size="sm" onClick={() => act('rc_sync')}>Re-sync store</Button>}
+      <Button size="sm" onClick={() => act('signout_all', {}, 'Sign ' + u.name + ' out everywhere?')}>Sign out everywhere</Button>
+      {!u.disabled ? <Button size="sm" variant="danger" onClick={() => act('disable', {}, 'Disable ' + u.name + '?')}>Disable</Button> : <Button size="sm" variant="primary" onClick={() => act('enable')}>Enable</Button>}
+      {canD && !u.deletedAt && !u.role && <Button size="sm" variant="danger" onClick={() => act('delete', {}, 'Delete ' + u.name + ' (30-day grace)?')}>Delete</Button>}
+      {canD && u.deletedAt && <Button size="sm" onClick={() => act('undelete')}>Restore</Button>}
+      {canD && <a className="btn sm" href={'/api/admin/user/export?id=' + encodeURIComponent(u.id)} target="_blank" rel="noopener">Export JSON</a>}
+    </div>}
+    <h4 className="sec">Notes</h4>
+    {(d.notes || []).map((n, i) => <div key={i} className="adm-note"><span className="dim small">{when(n.t)} · {n.by}</span><div>{n.text}</div></div>)}
+    {canW && <form className="adm-inline" onSubmit={e => { e.preventDefault(); if (note.trim()) { act('note', { text: note }); setNote('') } }}>
+      <input className="field grow" placeholder="Internal note (visible to staff only)" value={note} onChange={e => setNote(e.target.value)} /><Button size="sm" type="submit">Add</Button></form>}
+    <h4 className="sec">Recent workouts</h4>
+    {d.workouts.length ? d.workouts.slice(0, 15).map(w => <div key={w.id} className="adm-row small"><span className="grow"><b>{w.name}</b> · {fmtDate(w.d, true)}</span><span className="dim">{w.sets} sets{w.prs ? ' · ' + w.prs + ' PR' : ''}</span></div>) : <div className="dim small">None yet.</div>}
+    {d.audit?.length > 0 && <><h4 className="sec">Audit trail</h4>{d.audit.slice(0, 20).map(e => <AuditRow key={e.id} e={e} />)}</>}
+  </div>
+}
+
+/* ---------------- billing ---------------- */
+function Billing({ perms }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/billing')
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const refund = inv => confirmSheet({ title: `Refund ${money(inv.total, inv.currency.toUpperCase())} to ${inv.userName || inv.customer}?`, message: 'Full refund through Stripe. Access is not revoked automatically — disable or adjust the user afterwards if needed. Audited.', confirmText: 'Refund', danger: true,
+    onConfirm: () => post('/api/admin/billing/refund', { charge: inv.charge }).then(() => { toast('Refunded'); reload() }).catch(e => toast(e.message)) })
+  const s = d.stripe
+  return <>
+    <div className="adm-grid4">
+      <Stat label="Stripe" value={s.configured ? 'connected' : 'not configured'} sub={s.health ? `last event ${rel(s.health.lastEventAt)} · ${s.health.lastType || ''}` : 'no webhook event yet'} tone={s.health?.lastError ? 'warn' : s.configured ? 'ok' : ''} />
+      <Stat label="RevenueCat" value={d.revenuecat.configured ? 'connected' : 'webhook only'} sub={d.revenuecat.health ? `last event ${rel(d.revenuecat.health.lastEventAt)} · ${d.revenuecat.health.lastType || ''}` : 'no webhook event yet'} tone={d.revenuecat.health?.lastError ? 'warn' : 'ok'} />
+      <Stat label="Stripe balance" value={s.balance ? s.balance.available.map(b => money(b.amount, b.currency.toUpperCase())).join(' · ') || money(0) : '—'} sub={s.balance ? 'pending ' + (s.balance.pending.map(b => money(b.amount, b.currency.toUpperCase())).join(' · ') || money(0)) : ''} />
+      <Stat label="Failed payments" value={d.pastDue.length} sub="past_due, Stripe retrying" tone={d.pastDue.length ? 'warn' : 'ok'} />
+    </div>
+    {(s.health?.lastError || d.revenuecat.health?.lastError) && <div className="adm-card warn"><b>Webhook errors:</b> {s.health?.lastError || ''} {d.revenuecat.health?.lastError || ''}</div>}
+    {s.error && <div className="adm-card warn">Stripe API: {s.error}</div>}
+    {s.subscriptions && <div className="adm-card"><div className="adm-card-h"><h3>Stripe subscriptions</h3><span className="muted small">{s.subscriptions.length}</span></div>
+      <div className="adm-table"><div className="adm-tr adm-th c5"><span>User</span><span>Status</span><span>Plan</span><span>Period end</span><span>Created</span></div>
+        {s.subscriptions.map(x => <div key={x.id} className="adm-tr c5"><span><b>{x.userName || '—'}</b><small>{x.id}</small></span><span><Pill tone={x.status === 'active' ? 'ok' : x.status === 'trialing' ? 'info' : 'warn'}>{x.status}{x.cancelAtPeriodEnd ? ' · cancels' : ''}</Pill></span><span>{x.plan || '—'}</span><span className="small">{x.periodEnd ? fmtDate(new Date(x.periodEnd).toISOString().slice(0, 10)) : '—'}</span><span className="small dim">{fmtDate(new Date(x.created).toISOString().slice(0, 10))}</span></div>)}
+      </div></div>}
+    {s.invoices && <div className="adm-card"><div className="adm-card-h"><h3>Recent invoices</h3></div>
+      <div className="adm-table"><div className="adm-tr adm-th c5"><span>User</span><span>Status</span><span>Total</span><span>Date</span><span></span></div>
+        {s.invoices.map(i => <div key={i.id} className="adm-tr c5"><span><b>{i.userName || '—'}</b><small>{i.number || i.id}</small></span><span><Pill tone={i.status === 'paid' ? 'ok' : i.status === 'open' ? 'warn' : ''}>{i.status}</Pill></span><span>{money(i.total, i.currency.toUpperCase())}</span><span className="small">{fmtDate(new Date(i.created).toISOString().slice(0, 10))}</span>
+          <span className="adm-inline">{i.hostedUrl && <a className="linkbtn small" href={i.hostedUrl} target="_blank" rel="noopener">view</a>}{perms['billing.write'] && i.status === 'paid' && i.charge && <button className="linkbtn small" style={{ color: 'var(--red)' }} onClick={() => refund(i)}>refund</button>}</span></div>)}
+      </div></div>}
+    <div className="adm-card"><div className="adm-card-h"><h3>Store subscriptions (Apple / Google)</h3><span className="muted small">{d.store.length}</span></div>
+      {d.store.length ? d.store.map(x => <div key={x.id} className="adm-row small"><span className="grow"><b>{x.name}</b> · {x.provider} · {x.plan}{x.sandbox ? ' · sandbox' : ''}{x.cancel ? ' · cancels' : ''}</span><span className="dim">until {when(x.tierUntil)}</span></div>) : <div className="dim small">None yet. Refunds for store purchases happen in App Store Connect / Play Console.</div>}
+    </div>
+  </>
+}
+
+/* ---------------- coupons ---------------- */
+function Coupons({ perms }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/coupons')
+  const [f, setF] = useState({ name: '', code: '', percent: 20, amount: '', duration: 'once', months: 3, max: '', redeemBy: '', firstTime: true })
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const create = e => { e.preventDefault(); post('/api/admin/coupons', f).then(r => { toast('Created' + (r.promo ? ' · code ' + r.promo.code : '')); setF({ ...f, name: '', code: '' }); reload() }).catch(x => toast(x.message)) }
+  const off = id => confirmSheet({ title: 'Deactivate ' + id + '?', message: 'Existing redemptions keep their discount.', confirmText: 'Deactivate', danger: true, onConfirm: () => post('/api/admin/coupons/deactivate', { id }).then(() => { toast('Deactivated'); reload() }).catch(x => toast(x.message)) })
+  if (!d.configured) return <div className="adm-card">Stripe is not configured on this server, so there is nothing to manage here.</div>
+  return <>
+    {perms['coupons.write'] && <div className="adm-card"><div className="adm-card-h"><h3>New coupon</h3><span className="muted small">Stripe coupon + optional promo code · over 50 % needs an owner</span></div>
+      <form onSubmit={create} className="adm-formgrid">
+        <label>Name<input className="field" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="Lanzamiento octubre" /></label>
+        <label>Promo code (optional)<input className="field" value={f.code} onChange={e => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="VANTIX20" /></label>
+        <label>Percent off<input className="field" type="number" min="1" max="100" value={f.percent} onChange={e => setF({ ...f, percent: e.target.value, amount: '' })} /></label>
+        <label>or amount off ({'MXN'})<input className="field" type="number" min="1" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value, percent: '' })} /></label>
+        <label>Duration<select className="field" value={f.duration} onChange={e => setF({ ...f, duration: e.target.value })}><option value="once">First payment only</option><option value="repeating">For N months</option><option value="forever">Forever</option></select></label>
+        {f.duration === 'repeating' && <label>Months<input className="field" type="number" min="1" max="12" value={f.months} onChange={e => setF({ ...f, months: e.target.value })} /></label>}
+        <label>Max redemptions<input className="field" type="number" min="1" value={f.max} onChange={e => setF({ ...f, max: e.target.value })} placeholder="unlimited" /></label>
+        <label>Expires<input className="field" type="date" value={f.redeemBy} onChange={e => setF({ ...f, redeemBy: e.target.value })} /></label>
+        <label className="adm-check"><input type="checkbox" checked={f.firstTime} onChange={e => setF({ ...f, firstTime: e.target.checked })} /> First purchase only</label>
+        <Button type="submit" variant="primary">Create</Button>
+      </form></div>}
+    <div className="adm-card"><div className="adm-card-h"><h3>Promo codes</h3><span className="muted small">{d.promos.length}</span></div>
+      {d.promos.map(p => <div key={p.id} className="adm-row"><span className="grow"><b className="mono">{p.code}</b> <span className="dim small">coupon {p.coupon}{p.firstTime ? ' · first purchase' : ''}</span></span><span className="small">{p.redeemed}{p.max ? '/' + p.max : ''} used{p.expires ? ' · until ' + fmtDate(new Date(p.expires).toISOString().slice(0, 10)) : ''}</span><Pill tone={p.active ? 'ok' : ''}>{p.active ? 'active' : 'off'}</Pill>{perms['coupons.write'] && p.active && <button className="linkbtn small" onClick={() => off(p.id)}>deactivate</button>}</div>)}
+      {!d.promos.length && <div className="dim small">No promo codes yet.</div>}
+    </div>
+    <div className="adm-card"><div className="adm-card-h"><h3>Coupons</h3><span className="muted small">{d.referralCoupon ? 'referral: ' + d.referralCoupon + ' · ' : ''}{d.rescueCoupon ? 'rescue: ' + d.rescueCoupon : 'no rescue coupon set'}</span></div>
+      {d.coupons.map(c => <div key={c.id} className="adm-row"><span className="grow"><b>{c.name || c.id}</b> <span className="dim small">{c.id}</span></span><span className="small">{c.percent ? c.percent + '% off' : money(c.amount, (c.currency || 'mxn').toUpperCase()) + ' off'} · {c.duration}{c.months ? ' ' + c.months + ' mo' : ''}</span><span className="small dim">{c.redeemed}{c.max ? '/' + c.max : ''} used</span><Pill tone={c.valid ? 'ok' : ''}>{c.valid ? 'valid' : 'expired'}</Pill>{perms['coupons.write'] && c.valid && <button className="linkbtn small" onClick={() => off(c.id)}>delete</button>}</div>)}
+    </div>
+  </>
+}
+
+/* ---------------- team ---------------- */
+function Team({ perms, meId }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/team')
+  const [email, setEmail] = useState(''); const [role, setRole] = useState('support')
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const setR = (id, r) => post('/api/admin/team/role', { id, role: r }).then(() => { toast('Updated'); reload() }).catch(e => toast(e.message))
+  const add = e => { e.preventDefault(); post('/api/admin/team/role', { email, role }).then(() => { toast('Role granted'); setEmail(''); reload() }).catch(x => toast(x.message)) }
+  return <>
+    <div className="adm-card"><div className="adm-card-h"><h3>Members</h3><span className="muted small">{d.members.length}</span></div>
+      <div className="adm-table"><div className="adm-tr adm-th c4"><span>Person</span><span>Role</span><span>Console</span><span></span></div>
+        {d.members.map(m => <div key={m.id} className="adm-tr c4"><span><b>{m.name}</b><small>{m.email}</small></span>
+          <span>{perms['team.write'] && m.id !== meId ? <select className="field" value={m.role} onChange={e => setR(m.id, e.target.value)}>{d.roles.map(r => <option key={r} value={r}>{r}</option>)}</select> : <Pill tone="info">{m.role}</Pill>}</span>
+          <span className="small">{m.stepUpActive ? 'open · ' + rel(m.stepUpAt) : m.stepUpAt ? 'last ' + rel(m.stepUpAt) : 'never'}</span>
+          <span>{perms['team.write'] && m.id !== meId && <button className="linkbtn small" style={{ color: 'var(--red)' }} onClick={() => confirmSheet({ title: 'Remove ' + m.name + ' from the team?', message: 'Their account stays; only the console access goes.', confirmText: 'Remove', danger: true, onConfirm: () => setR(m.id, null) })}>remove</button>}</span>
+        </div>)}
+      </div></div>
+    {perms['team.write'] && <div className="adm-card"><div className="adm-card-h"><h3>Grant a role</h3><span className="muted small">The person needs an existing, verified VantixGym account.</span></div>
+      <form onSubmit={add} className="adm-inline">
+        <input className="field grow" type="email" required placeholder="their@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+        <select className="field" value={role} onChange={e => setRole(e.target.value)}>{d.roles.map(r => <option key={r} value={r}>{r}</option>)}</select>
+        <Button type="submit" variant="primary">Grant</Button>
+      </form></div>}
+    <div className="adm-card"><div className="adm-card-h"><h3>What each role can do</h3></div>
+      <div className="adm-perms">{Object.entries(d.perms).map(([p, roles]) => <div key={p} className="adm-row small"><span className="mono grow">{p}</span><span className="dim">{roles.join(', ')}</span></div>)}</div>
+    </div>
+  </>
+}
+
+/* ---------------- audit + logs ---------------- */
+function AuditRow({ e }) {
+  const diff = e.before && e.after ? Object.keys({ ...e.before, ...e.after }).filter(k => JSON.stringify(e.before[k]) !== JSON.stringify(e.after[k])).map(k => `${k}: ${fmtV(e.before[k])} → ${fmtV(e.after[k])}`).join(' · ') : ''
+  return <div className="adm-row small adm-audit">
+    <span className="dim mono" style={{ width: 150, flex: 'none' }}>{when(e.t)}</span>
+    <span style={{ width: 130, flex: 'none' }}><b>{e.actorName || 'system'}</b>{e.actorRole && <small className="dim"> {e.actorRole}</small>}</span>
+    <Pill tone={/denied|failed/.test(e.action) ? 'warn' : /delete|refund|flags|role/.test(e.action) ? 'info' : ''}>{e.action}</Pill>
+    <span className="grow">{e.targetName || e.target || ''}{e.days ? ' · ' + e.days + ' d' : ''}{e.perm ? ' · ' + e.perm : ''}{e.code ? ' · ' + e.code : ''}{diff ? ' · ' + diff : ''}</span>
+    <span className="dim mono">{e.ip}</span>
+  </div>
+}
+const fmtV = v => (v === null || v === undefined ? '—' : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : String(v))
+function Audit() {
+  const [qText, setQ] = useState(''); const [action, setAction] = useState('')
+  const [d, reload, err] = useLoad(`/api/admin/audit?q=${encodeURIComponent(qText)}&action=${encodeURIComponent(action)}&limit=300`, [qText, action])
+  const [v] = useLoad('/api/admin/audit/verify')
+  const actions = useMemo(() => [...new Set((d?.entries || []).map(e => e.action))].sort(), [d])
+  if (err) return <ErrorBox err={err} />
+  return <>
+    <div className="adm-filters">
+      <input className="field" placeholder="Search (actor, target, action, ip…)" value={qText} onChange={e => setQ(e.target.value)} />
+      <select className="field" value={action} onChange={e => setAction(e.target.value)}><option value="">All actions</option>{actions.map(a => <option key={a}>{a}</option>)}</select>
+      <span className="small">{v ? (v.ok ? <Pill tone="ok">chain intact · {v.entries} entries</Pill> : <Pill tone="warn">chain BROKEN: {v.error}</Pill>) : ''}</span>
+      <a className="btn sm" href="/api/admin/audit/export" target="_blank" rel="noopener">Export</a>
+      <Button size="sm" onClick={reload}>Refresh</Button>
+    </div>
+    <div className="adm-card">{!d ? <Loading /> : d.entries.length ? d.entries.map(e => <AuditRow key={e.id} e={e} />) : <div className="dim small">No entries.</div>}</div>
+  </>
+}
+function Logs() {
+  const [status, setStatus] = useState(''); const [qText, setQ] = useState('')
+  const [d, reload, err] = useLoad(`/api/admin/logs?status=${status}&q=${encodeURIComponent(qText)}`, [status, qText])
+  useEffect(() => { const iv = setInterval(reload, 10000); return () => clearInterval(iv) }, [status, qText])
+  if (err) return <ErrorBox err={err} />
+  return <>
+    <div className="adm-filters">
+      <select className="field" value={status} onChange={e => setStatus(e.target.value)}><option value="">All requests</option><option value="5xx">Server errors (5xx)</option><option value="4xx">Client errors (4xx)</option><option value="slow">Slow (&gt; 1 s)</option></select>
+      <input className="field" placeholder="Path or status" value={qText} onChange={e => setQ(e.target.value)} />
+      {d && <span className="small dim">{d.summary.last5m} req / 5 min · {d.summary.err5m} errors · p95 {d.summary.p95ms} ms · buffer {d.summary.total}</span>}
+    </div>
+    <div className="adm-card adm-logs">{!d ? <Loading /> : d.entries.map((r, i) => <div key={i} className={'adm-log' + (r.s >= 500 ? ' err' : r.s >= 400 ? ' warn' : '')}><span className="dim">{new Date(r.t).toLocaleTimeString()}</span><span className="mono">{r.m}</span><span className="mono grow">{r.p}</span><span>{r.s}</span><span className="dim">{r.ms} ms</span><span className="dim mono">{r.ip}</span></div>)}</div>
+    <div className="dim small" style={{ marginTop: 8 }}>In-memory ring of the last 3,000 requests (paths and status only, no bodies or identities). Full JSON lines go to the container log.</div>
+  </>
+}
+
+/* ---------------- system ---------------- */
+function System({ perms }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/system')
+  const [banner, setBanner] = useState(null)
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const flags = d.flags || {}
+  const setFlag = (k, v) => confirmSheet({ title: `${v ? 'Resume' : 'Pause'} ${k}?`, message: v ? 'Users get the feature back immediately.' : 'Users see a “paused for maintenance” message until you resume. Owners are emailed.', confirmText: v ? 'Resume' : 'Pause', danger: !v, onConfirm: () => post('/api/admin/flags', { [k]: v }).then(() => { toast('Saved'); reload() }).catch(e => toast(e.message)) })
+  const saveBanner = () => post('/api/admin/flags', { banner }).then(() => { toast('Banner saved'); setBanner(null); reload() }).catch(e => toast(e.message))
+  const I = d.integrations
+  return <>
+    <div className="adm-grid4">
+      <Stat label="API uptime" value={Math.floor(d.uptimeSec / 3600) + 'h ' + Math.floor(d.uptimeSec % 3600 / 60) + 'm'} sub={`node ${d.node} · ${d.memMb} MB`} />
+      <Stat label="Disk (data volume)" value={d.disk ? d.disk.freeGb + ' GB free' : '—'} sub={d.disk ? 'of ' + d.disk.totalGb + ' GB' : ''} tone={d.disk && d.disk.freeGb < 2 ? 'warn' : 'ok'} />
+      <Stat label="Database" value={fmtNum(Math.round(d.dbBytes / 1024)) + ' KB'} sub={d.users + ' accounts (incl. deleted)'} />
+      <Stat label="Audit log" value={d.audit.ok ? 'intact' : 'BROKEN'} sub={d.audit.entries + ' entries'} tone={d.audit.ok ? 'ok' : 'warn'} />
+    </div>
+    <div className="adm-card"><div className="adm-card-h"><h3>Kill switches</h3><span className="muted small">{perms['system.write'] ? 'Owner only · every change is audited and emailed' : 'Read-only for your role'}</span></div>
+      {[['signups', 'Sign-ups', 'New accounts can be created'], ['ai', 'AI features', 'Coach, trainer, meal photos, imports'], ['payments', 'Web payments', 'Stripe checkout (store purchases are unaffected)']].map(([k, l, s]) => <div key={k} className="adm-row"><span className="grow"><b>{l}</b><div className="dim small">{s}</div></span><Switch checked={flags[k] !== false} disabled={!perms['system.write']} onChange={v => setFlag(k, v)} /></div>)}
+      <div className="adm-row"><span className="grow"><b>Maintenance banner</b><div className="dim small">Shown at the top of the app while set (max 160 chars).</div>
+        <div className="adm-inline" style={{ marginTop: 6 }}><input className="field grow" maxLength={160} value={banner ?? flags.banner ?? ''} onChange={e => setBanner(e.target.value)} disabled={!perms['system.write']} placeholder="e.g. Mantenimiento hoy 22:00–22:30" />{perms['system.write'] && banner !== null && <Button size="sm" variant="primary" onClick={saveBanner}>Save</Button>}</div></span></div>
+    </div>
+    <div className="adm-card"><div className="adm-card-h"><h3>Integrations</h3><span className="muted small">prefixes only, never values</span></div>
+      {[['Stripe', I.stripe.on, I.stripe.on ? `key ${I.stripe.key}… · webhook ${I.stripe.webhook ? 'set' : 'missing'} · ${I.stripe.prices}/3 prices` : 'not configured'],
+        ['RevenueCat', I.revenuecat.on, `webhook ${I.revenuecat.on ? 'set' : 'missing'} · secret key ${I.revenuecat.secretKey ? 'set' : 'missing'}`],
+        ['Anthropic', I.anthropic.on, I.anthropic.on ? `key ${I.anthropic.key}… · ${I.anthropic.models.text} / ${I.anthropic.models.vision}` : 'not configured'],
+        ['Email (Resend)', I.email.on, I.email.on ? 'configured' : 'not configured'], ['Google sign-in', I.google.on, I.google.on ? 'configured' : 'off'], ['Apple sign-in', I.apple.on, I.apple.on ? 'configured' : 'off']
+      ].map(([n, on, s]) => <div key={n} className="adm-row small"><span className="grow"><b>{n}</b> <span className="dim">{s}</span></span><Pill tone={on ? 'ok' : 'warn'}>{on ? 'on' : 'off'}</Pill></div>)}
+    </div>
+    <div className="adm-card"><div className="adm-card-h"><h3>Backups</h3></div>
+      {d.backup ? <div className="small">Last: <b>{when(d.backup.at)}</b> · {d.backup.file} · {fmtNum(Math.round(d.backup.bytes / 1024))} KB · {d.backup.s3 ? <Pill tone="ok">copied to S3</Pill> : <Pill tone="warn">local only</Pill>}</div> : <div className="dim small">No marker yet. The nightly job writes one after the next run (see docs/BACKUPS.md).</div>}
+      <div className="dim small" style={{ marginTop: 6 }}>Instance: {d.env.origin} · billing {d.env.billing ? 'on' : 'off'} · trial {d.env.trialDays} d · invite-only {d.env.inviteOnly ? 'yes' : 'no'}</div>
+    </div>
+  </>
+}
+
+const Loading = () => <div className="dim small" style={{ padding: 16 }}>Loading…</div>
+const ErrorBox = ({ err }) => <div className="adm-card warn">{err.status === 403 ? 'Your role cannot see this.' : err.status === 428 ? 'Session check expired — reload the page.' : (err.message || 'Failed to load')}</div>
+
+/* ---------------- shell ---------------- */
 export default function Admin() {
   const nav = useNavigate()
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
-  const openSheet = useUI(s => s.openSheet)
-  const [users, setUsers] = useState(null)
-  const [invites, setInvites] = useState(null)
-  const [inviteOnly, setInviteOnly] = useState(false)
-
-  const loadUsers = () => api('/api/admin/users').then(d => { setUsers(d.users); setInviteOnly(d.invite_only) }).catch(e => toast(e.message || 'Failed to load'))
-  const loadInvites = () => api('/api/admin/invites').then(d => setInvites(d.invites)).catch(() => {})
-  // poll every 15s so the "training now" section stays live without a manual refresh
-  useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
+  const [me, setMe] = useState(null)
+  const [section, setSection] = useState(() => (location.hash.split('?')[1] || '').replace(/^s=/, '') || 'overview')
+  const [focusId, setFocusId] = useState(null)
+  const loadMe = () => api('/api/admin/me').then(setMe).catch(e => { if (e.status === 403) nav('/home'); else toast(e.message) })
+  useEffect(() => { if (user?.admin) loadMe() }, [user?.id])
+  useEffect(() => { document.body.classList.add('console'); return () => document.body.classList.remove('console') }, [])
   if (!user?.admin) return null
-
-  const openUser = id => openSheet(close => <UserDetail id={id} onChanged={loadUsers} close={close} />)
-  const liveUsers = (users || []).filter(u => u.live)
-  const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
-  const disabledCount = (users || []).filter(u => u.disabled).length
-
-  return <div className="narrow">
-    <div className="hdr">
-      <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button>
-      <div style={{ flex: 1, marginLeft: 8 }}><h1 style={{ margin: 0 }}>Admin</h1>
-        <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
-      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
-    </div>
-
-    <div className="tiles" style={{ marginBottom: 12 }}>
-      <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '—'}</div></div>
-      <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '—'}</div></div>
-      <div className="tile"><div className="l">Active 7d</div><div className="v">{users ? activeCount : '—'}</div></div>
-      <div className="tile"><div className="l">Disabled</div><div className="v">{users ? disabledCount : '—'}</div></div>
-    </div>
-
-    {liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
-      <h2 className="row" style={{ margin: '0 0 8px', gap: 6 }}><Icon name="dot" style={{ fontSize: 10, color: 'var(--green)' }} />Training now</h2>
-      {liveUsers.map(u => <div key={u.id} className="row between" style={{ padding: '8px 2px', borderBottom: '1px solid var(--sep)' }} onClick={() => openUser(u.id)}>
-        <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
-          <div className="dim" style={{ fontSize: '.72rem' }}>{u.live.name} · ex {u.live.exIdx}/{u.live.exTotal} · {u.live.setsDone}/{u.live.setsTotal} sets</div></div>
-        <span className="tag acc">{dur(Date.now() - u.live.startedAt)}</span>
-      </div>)}
-    </div>}
-
-    <AISpendCard />
-
-    <InvitesCard invites={invites} reload={loadInvites} />
-
-    <h4 className="sec">Users</h4>
-    <div className="list">
-      {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
-        <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>admin</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
-          <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · synced ' + rel(u.lastSync)}</div></div>
-        {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
-      </div>)}
-      {users && !users.length && <div className="empty">No users yet.</div>}
-    </div>
+  if (!me) return <Loading />
+  if (!me.stepUp) return <StepUp me={me} onDone={loadMe} />
+  const go = (s, id) => { setSection(s); setFocusId(id || null) }
+  const visible = SECTIONS.filter(([, , , perm]) => me.perms[perm])
+  const Section = { overview: Overview, users: Users, billing: Billing, coupons: Coupons, team: Team, audit: Audit, logs: Logs, system: System }[section] || Overview
+  return <div className="adm">
+    <aside className="adm-nav">
+      <div className="adm-brand"><button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button><div><b>VantixGym</b><div className="dim small">console · {me.role}</div></div></div>
+      {visible.map(([id, label, icon]) => <button key={id} className={'adm-navbtn' + (section === id ? ' on' : '')} onClick={() => go(id)}><Icon name={icon} />{label}</button>)}
+      <div className="grow" />
+      <button className="adm-navbtn" onClick={() => post('/api/admin/stepdown').then(() => loadMe())}><Icon name="lock" />Lock console</button>
+    </aside>
+    <main className="adm-main">
+      <div className="adm-head"><h1>{SECTIONS.find(s => s[0] === section)?.[1]}</h1><span className="dim small">{user.name}</span></div>
+      <Section perms={me.perms} go={go} focusId={focusId} meId={user.id} />
+    </main>
   </div>
 }

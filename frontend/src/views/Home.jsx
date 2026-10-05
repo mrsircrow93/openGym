@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW } from '../lib/history.js'
@@ -20,7 +20,7 @@ import CoachAvatar from '../components/CoachAvatar.jsx'
 import Ring from '../components/Ring.jsx'
 import { stepsSheet } from '../sheets-steps.jsx'
 import { stepsOn, stepGoalOf, stepPct } from '../lib/steps.js'
-import { authResendVerify } from '../lib/api.js'
+import { authResendVerify, api } from '../lib/api.js'
 import { useUI } from '../store/useUI.js'
 
 // Home = what to do now, then a glance at today. Deep charts & history live in Stats.
@@ -31,6 +31,9 @@ export default function Home() {
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
   const user = useStore(s => s.user)
+  // maintenance banner set from the admin console (System → banner); empty = nothing shown
+  const [banner, setBanner] = useState('')
+  useEffect(() => { api('/api/config').then(c => setBanner(c.banner || '')).catch(() => {}) }, [])
   const [weekOffset, setWeekOffset] = useState(0)
   const mealPhoto = useRef(null)
 
@@ -86,6 +89,7 @@ export default function Home() {
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
       </div>
     </div>
+    {banner && <div className="card banner" style={{ width: '100%', textAlign: 'left', borderColor: 'var(--orange)' }}><div className="row" style={{ gap: 10, alignItems: 'center' }}><Icon name="wrench" style={{ color: 'var(--orange)', fontSize: 20 }} /><div className="small" style={{ fontWeight: 600 }}>{banner}</div></div></div>}
     {user && user.email && !user.emailVerified && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }}
       onClick={() => authResendVerify().then(() => toastU(t('Sent — check your inbox'))).catch(e => toastU(e.message))}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>

@@ -23,10 +23,14 @@ FILE="$OUT/vantixgym-data-$STAMP.tar.gz.enc"
 # consistent copy: the API writes atomically (tmp + rename), so a plain tar of the directory is safe
 tar -C "$APP" -czf - data | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:$PASS" -out "$FILE"
 chmod 600 "$FILE"
+# marker the admin console reads (data/ is inside the archive path, written after the tar so it describes the previous run on the next backup)
+MARK="$APP/data/.last-backup"
 find "$OUT" -name 'vantixgym-data-*.tar.gz.enc' -mtime +"$KEEP_DAYS" -delete
 if [ -n "${AWS_BACKUP_BUCKET:-}" ] && command -v aws >/dev/null; then
   aws s3 cp --only-show-errors --storage-class STANDARD_IA "$FILE" "s3://$AWS_BACKUP_BUCKET/vantixgym/$(basename "$FILE")"
   echo "$(date -u +%FT%TZ) ok $(basename "$FILE") $(du -h "$FILE" | cut -f1) → s3://$AWS_BACKUP_BUCKET"
+  printf '{"at":"%s","file":"%s","bytes":%s,"s3":true}\n' "$(date -u +%FT%TZ)" "$(basename "$FILE")" "$(stat -c %s "$FILE")" > "$MARK" 2>/dev/null || true
 else
   echo "$(date -u +%FT%TZ) ok $(basename "$FILE") $(du -h "$FILE" | cut -f1) (local only — set AWS_BACKUP_BUCKET for the off-host copy)"
+  printf '{"at":"%s","file":"%s","bytes":%s,"s3":false}\n' "$(date -u +%FT%TZ)" "$(basename "$FILE")" "$(stat -c %s "$FILE")" > "$MARK" 2>/dev/null || true
 fi

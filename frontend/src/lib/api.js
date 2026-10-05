@@ -177,6 +177,13 @@ export async function passkeyLogin() {
   const res = await api('/api/login/verify', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
   return res.user
 }
+// Admin console step-up with a passkey: the same WebAuthn ceremony as sign-in, verified by the
+// console route so the assertion must belong to the staff member who is already signed in.
+export async function passkeyStepUp() {
+  const { cid, options } = await api('/api/login/options', { method: 'POST', body: '{}' })
+  const cred = await navigator.credentials.get({ publicKey: toRequestOptions(options) })
+  return api('/api/admin/stepup', { method: 'POST', body: JSON.stringify({ cid, credential: credToJSON(cred) }) })
+}
 // One meal of the saved diet plan -> 3 alternative recipes that keep its macros and rules.
 // body: { meal, targets, rules, lang, wish, avoid, mealsPerDay }
 export async function aiRecipes(body) {
