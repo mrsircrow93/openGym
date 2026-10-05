@@ -18,10 +18,10 @@ disable/enable, soft delete/restore, JSON export, internal notes, per-user audit
 subscriptions/invoices/balance, refunds for owner/finance, store subs, webhook health), Coupons
 (Stripe coupons + promo codes, deactivate), Team (grant/change/remove roles on existing verified
 accounts), Audit, Logs, System (kill switches for sign-ups / AI / web payments, maintenance banner
-shown on Home, integrations with key prefixes, disk/db/backup). Test: `frontend/src/lib/admin-server.test.js`.
+shown on Home, integrations with key prefixes, disk/db/backup), AI (our meter by month / feature / user, owner-editable spend caps stored in `db.flags.ai*CapUsd`, and Anthropic billed cost + tokens by model through the Usage & Cost Admin API when `ANTHROPIC_ADMIN_KEY` is set; cents-vs-dollars auto-detected against our estimate). Test: `frontend/src/lib/admin-server.test.js`.
 
 **Not yet:** TOTP as a step-up option, per-session device list (sessions are stateless tokens),
-Comms module (segment announcements, drip template editor), AI caps editable from the UI, referral
+Comms module (segment announcements, drip template editor), referral
 fraud view, CloudWatch shipping of the JSON logs, impersonation ("view as"), audit log rotation.
 
 ## Security foundation (do first — everything else sits on it)
