@@ -723,10 +723,14 @@ function recordAiUsage(uid, feature, usage, model) {
   saveDb();
 }
 // Per-user monthly spend ceiling. Off by default; a paid plan sets it per tier (docs/BILLING.md).
+// Caps: env defaults, overridable from the admin console (db.flags.ai*CapUsd; null = env default).
+const capUser = () => (db.flags && db.flags.aiUserCapUsd != null ? +db.flags.aiUserCapUsd : AI_MONTHLY_USD_CAP);
+const capTrial = () => (db.flags && db.flags.aiTrialCapUsd != null ? +db.flags.aiTrialCapUsd : AI_TRIAL_USD_CAP);
+const capGlobal = () => (db.flags && db.flags.aiGlobalCapUsd != null ? +db.flags.aiGlobalCapUsd : AI_GLOBAL_MONTHLY_USD_CAP);
 const aiGlobalUsd = (month = monthKey()) => Object.values(db.aiUsage).reduce((a, u) => a + ((u[month] || {}).usd || 0), 0);
-const userCap = uid => { const u = db.users.find(x => x.id === uid); return u && BILLING_ENABLED && entitlement(u).status === 'trial' ? AI_TRIAL_USD_CAP : AI_MONTHLY_USD_CAP; };
+const userCap = uid => { const u = db.users.find(x => x.id === uid); return u && BILLING_ENABLED && entitlement(u).status === 'trial' ? capTrial() : capUser(); };
 const aiOverBudget = uid => (userCap(uid) > 0 && aiUsageOf(uid).usd >= userCap(uid)) ||
-  (AI_GLOBAL_MONTHLY_USD_CAP > 0 && aiGlobalUsd() >= AI_GLOBAL_MONTHLY_USD_CAP);
+  (capGlobal() > 0 && aiGlobalUsd() >= capGlobal());
 
 async function callAnthropic({ system, messages, tools, tool_choice, max_tokens }, meta) {
   const model = modelFor(meta && meta.feature);
@@ -1159,7 +1163,8 @@ adminMod = createAdmin({
   db, saveDb, readSession, json, readBody, readState, listPhotos, DATA, ORIGIN, clientIp, sendEmail, sendVerifyMail, addDays,
   isLegacyAdmin, entitlement, aiUsageOf, monthKey, livePresence, presence, verifyPassword, verifyPasskeyFor, integrations,
   stripe, hasStripe: () => !!STRIPE_SECRET_KEY, applySubscription, syncStoreSubscriber, hasRevenueCat: () => !!REVENUECAT_SECRET_KEY,
-  PLANS, CURRENCY, AI_MONTHLY_USD_CAP, AI_GLOBAL_MONTHLY_USD_CAP, STRIPE_REFERRAL_COUPON, STRIPE_RESCUE_COUPON, BILLING_ENABLED, INVITE_ONLY, TRIAL_DAYS
+  PLANS, CURRENCY, AI_MONTHLY_USD_CAP, AI_GLOBAL_MONTHLY_USD_CAP, AI_TRIAL_USD_CAP, capUser, capTrial, capGlobal, aiGlobalUsd, MODELS_IN_USE, priceOf,
+  anthropicAdminKey: process.env.ANTHROPIC_ADMIN_KEY || '', anthropicKeyPrefix: ANTHROPIC_API_KEY.slice(0, 18), STRIPE_REFERRAL_COUPON, STRIPE_RESCUE_COUPON, BILLING_ENABLED, INVITE_ONLY, TRIAL_DAYS
 });
 
 const routes = {
@@ -1689,13 +1694,13 @@ const routes = {
   'GET /api/ai/usage': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: AI_MONTHLY_USD_CAP || null, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE });
+    json(res, 200, { month: monthKey(), ...aiUsageOf(user.id), cap: userCap(user.id) || null, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE });
   },
   'GET /api/admin/ai-usage': async (req, res) => {
     if (!requireAdmin(req, res, 'ai.read')) return;
     const month = monthKey();
     const rows = db.users.map(u => ({ id: u.id, name: u.name, ...(db.aiUsage[u.id]?.[month] || { calls: 0, in: 0, out: 0, usd: 0, features: {} }) }));
-    json(res, 200, { month, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE, cap: AI_MONTHLY_USD_CAP || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
+    json(res, 200, { month, model: ANTHROPIC_MODEL_TEXT, models: MODELS_IN_USE, cap: capUser() || null, total: Math.round(rows.reduce((a, r) => a + r.usd, 0) * 1e4) / 1e4, users: rows });
   },
 
   /* ---------- billing (docs/BILLING.md) ---------- */
@@ -1711,7 +1716,7 @@ const routes = {
   'GET /api/billing/status': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { ...entitlement(user), tier: entitlement(user).status, aiCapUsd: entitlement(user).status === 'trial' ? AI_TRIAL_USD_CAP : (AI_MONTHLY_USD_CAP || null), firstChargeAt: firstChargeAt(user), rescueUntil: rescueUntil(user), bonusDays: TRIAL_ACTIVATE_BONUS_DAYS });
+    json(res, 200, { ...entitlement(user), tier: entitlement(user).status, aiCapUsd: entitlement(user).status === 'trial' ? capTrial() : (capUser() || null), firstChargeAt: firstChargeAt(user), rescueUntil: rescueUntil(user), bonusDays: TRIAL_ACTIVATE_BONUS_DAYS });
   },
 
   'POST /api/billing/checkout': async (req, res) => {

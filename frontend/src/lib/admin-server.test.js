@@ -106,6 +106,17 @@ describe('admin console', () => {
     const sys = await j(await call('/api/admin/system', { as: 'owner' }))
     expect(sys.integrations.stripe.on).toBe(false); expect(sys.audit.entries).toBeGreaterThan(0)
   })
+  it('AI section: our meter answers, Anthropic cost is off without an admin key, caps are owner-editable and reversible', async () => {
+    await call('/api/admin/stepup', { as: 'owner', body: { password: 'correct horse battery owner' } })
+    const ai = await j(await call('/api/admin/ai', { as: 'owner' }))
+    expect(ai.http).toBe(200); expect(ai.months).toHaveLength(3); expect(ai.anthropic.available).toBe(false); expect(ai.caps.overrides.global).toBe(null)
+    expect((await call('/api/admin/ai/caps', { as: 'sup', body: { global: 5 } })).status).toBe(403)
+    const set = await j(await call('/api/admin/ai/caps', { as: 'owner', body: { global: 5, trial: 0.5 } }))
+    expect(set.caps.global).toBe(5); expect(set.caps.trial).toBe(0.5)
+    expect((await j(await call('/api/billing/status', { as: 'bob' }))).aiCapUsd).toBe(0.5)
+    const reset = await j(await call('/api/admin/ai/caps', { as: 'owner', body: { global: null, trial: null } }))
+    expect(reset.caps.global).toBe(null)
+  })
   it('step-down closes the console again', async () => {
     await call('/api/admin/stepdown', { as: 'owner', body: {} })
     expect((await call('/api/admin/overview', { as: 'owner' })).status).toBe(428)

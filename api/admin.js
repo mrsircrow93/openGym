@@ -185,7 +185,7 @@ export function createAdmin(ctx) {
       mrr: Math.round(mrr), currency: ctx.CURRENCY, cancelling: pro.filter(x => x.u.cancelAtPeriodEnd).length,
       conversion7d: olderThan7.length ? Math.round(100 * converted / olderThan7.length) : null, cohort7d: olderThan7.length,
       dau: active(day), wau: active(7 * day), mau: active(30 * day), live: [...ctx.presence.keys()].length,
-      ai: { ...ai, usd: Math.round(ai.usd * 100) / 100, capUser: ctx.AI_MONTHLY_USD_CAP || null, capGlobal: ctx.AI_GLOBAL_MONTHLY_USD_CAP || null, month },
+      ai: { ...ai, usd: Math.round(ai.usd * 100) / 100, capUser: ctx.capUser() || null, capGlobal: ctx.capGlobal() || null, month },
       signups7d: users.filter(u => u.created && now - Date.parse(u.created) < 7 * day).length,
       backup, flags: db.flags, attention
     };
@@ -394,6 +394,54 @@ export function createAdmin(ctx) {
         audit(req, me, 'coupon.deactivate', b.id);
         json(res, 200, { ok: true });
       } catch (e) { json(res, 502, { error: e.message }); }
+    },
+
+    /* ----- AI usage & cost ----- */
+    // Our own meter (every call is recorded with tokens and list-price USD) plus, when an
+    // Anthropic *admin* key is configured, the organisation's billed cost and token usage from
+    // the Usage & Cost Admin API — so the estimate can be checked against the invoice.
+    'GET /api/admin/ai': async (req, res) => {
+      if (!guard(req, res, 'ai.read')) return;
+      const months = []; const d = new Date(); for (let i = 0; i < 3; i++) { months.push(d.toISOString().slice(0, 7)); d.setUTCMonth(d.getUTCMonth() - 1); }
+      const perMonth = months.map(m => { let calls = 0, usd = 0, tin = 0, tout = 0, users = 0; for (const u of Object.values(db.aiUsage)) { const r = u[m]; if (!r) continue; users++; calls += r.calls || 0; usd += r.usd || 0; tin += r.in || 0; tout += r.out || 0; } return { month: m, calls, usd: Math.round(usd * 100) / 100, in: tin, out: tout, users }; });
+      const month = months[0]; const features = {}; const rows = [];
+      for (const [uid, u] of Object.entries(db.aiUsage)) { const r = u[month]; if (!r) continue; for (const [f, n] of Object.entries(r.features || {})) features[f] = (features[f] || 0) + n; const acct = db.users.find(x => x.id === uid); rows.push({ id: uid, name: acct ? acct.name : '(deleted)', status: acct ? ctx.entitlement(acct).status : null, calls: r.calls, in: r.in, out: r.out, usd: Math.round(r.usd * 100) / 100, features: r.features, cap: acct ? (ctx.entitlement(acct).status === 'trial' ? ctx.capTrial() : ctx.capUser()) || null : null }); }
+      rows.sort((a, b) => b.usd - a.usd);
+      const out = { months: perMonth, features, users: rows.slice(0, 50), models: ctx.MODELS_IN_USE, prices: { text: ctx.priceOf(ctx.MODELS_IN_USE.text), vision: ctx.priceOf(ctx.MODELS_IN_USE.vision) },
+        caps: { user: ctx.capUser() || null, trial: ctx.capTrial() || null, global: ctx.capGlobal() || null, env: { user: ctx.AI_MONTHLY_USD_CAP || null, trial: ctx.AI_TRIAL_USD_CAP || null, global: ctx.AI_GLOBAL_MONTHLY_USD_CAP || null }, overrides: { user: db.flags.aiUserCapUsd ?? null, trial: db.flags.aiTrialCapUsd ?? null, global: db.flags.aiGlobalCapUsd ?? null } },
+        keyPrefix: ctx.anthropicKeyPrefix, anthropic: { available: false } };
+      if (ctx.anthropicAdminKey) {
+        const start = month + '-01T00:00:00Z'; const H = { 'x-api-key': ctx.anthropicAdminKey, 'anthropic-version': '2023-06-01' };
+        try {
+          const cr = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?starting_at=${start}&bucket_width=1d&limit=31`, { headers: H });
+          if (!cr.ok) throw new Error('cost_report ' + cr.status + (cr.status === 401 || cr.status === 403 ? ' (the key must be an Admin API key, sk-ant-admin…)' : ''));
+          const cj = await cr.json();
+          const byDay = (cj.data || []).map(b => ({ day: (b.starting_at || '').slice(0, 10), amount: (b.results || []).reduce((a, r) => a + (parseFloat(r.amount) || 0), 0), currency: (b.results || [])[0]?.currency || 'USD' }));
+          const raw = byDay.reduce((a, b) => a + b.amount, 0);
+          // The API reports amounts in the currency's minor unit (cents); fall back to dollars if that reading is absurd next to our estimate.
+          const est = perMonth[0].usd; const asCents = raw / 100; const usd = Math.abs(asCents - est) <= Math.abs(raw - est) ? asCents : raw; const scale = usd === asCents ? 100 : 1;
+          const ur = await fetch(`https://api.anthropic.com/v1/organizations/usage_report/messages?starting_at=${start}&bucket_width=1d&group_by[]=model&limit=31`, { headers: H });
+          let byModel = {};
+          if (ur.ok) { const uj = await ur.json(); for (const b of uj.data || []) for (const r of b.results || []) { const m = byModel[r.model || 'unknown'] = byModel[r.model || 'unknown'] || { in: 0, cached: 0, out: 0 }; m.in += (r.uncached_input_tokens || 0); m.cached += (r.cache_read_input_tokens || 0) + (r.cache_creation_input_tokens || 0); m.out += (r.output_tokens || 0); } }
+          out.anthropic = { available: true, usd: Math.round(usd * 100) / 100, byDay: byDay.map(b => ({ day: b.day, usd: Math.round(b.amount / scale * 100) / 100 })), byModel, estimate: est, delta: Math.round((usd - est) * 100) / 100 };
+        } catch (e) { out.anthropic = { available: false, error: e.message }; }
+      } else out.anthropic = { available: false, reason: 'Set ANTHROPIC_ADMIN_KEY (an Admin API key from console.anthropic.com → Settings → Admin keys) on the server to see billed cost here.' };
+      json(res, 200, out);
+    },
+    // Caps editable by owners: null restores the env default. Enforced on the next AI call.
+    'POST /api/admin/ai/caps': async (req, res) => {
+      const me = guard(req, res, 'system.write'); if (!me) return;
+      const b = await readBody(req);
+      const before = { user: db.flags.aiUserCapUsd ?? null, trial: db.flags.aiTrialCapUsd ?? null, global: db.flags.aiGlobalCapUsd ?? null };
+      const num = v => (v === null || v === '' || v === undefined ? null : Math.max(0, Math.round(+v * 100) / 100));
+      if ('user' in b) { const v = num(b.user); if (v === null) delete db.flags.aiUserCapUsd; else db.flags.aiUserCapUsd = v; }
+      if ('trial' in b) { const v = num(b.trial); if (v === null) delete db.flags.aiTrialCapUsd; else db.flags.aiTrialCapUsd = v; }
+      if ('global' in b) { const v = num(b.global); if (v === null) delete db.flags.aiGlobalCapUsd; else db.flags.aiGlobalCapUsd = v; }
+      saveDb();
+      const after = { user: db.flags.aiUserCapUsd ?? null, trial: db.flags.aiTrialCapUsd ?? null, global: db.flags.aiGlobalCapUsd ?? null };
+      audit(req, me, 'ai.caps', null, { before, after });
+      alertOwners('AI spend caps changed', `${me.name} set AI caps (USD/month): ${JSON.stringify(after)} (null = env default).`);
+      json(res, 200, { ok: true, caps: { user: ctx.capUser() || null, trial: ctx.capTrial() || null, global: ctx.capGlobal() || null } });
     },
 
     /* ----- team ----- */

@@ -25,7 +25,7 @@ const money = (n, cur = 'MXN') => new Intl.NumberFormat('es-MX', { style: 'curre
 const post = (p, body) => api(p, { method: 'POST', body: JSON.stringify(body || {}) })
 const SECTIONS = [
   ['overview', 'Overview', 'chart', 'overview.read'], ['users', 'Users', 'person', 'users.read'], ['billing', 'Billing', 'crown', 'billing.read'],
-  ['coupons', 'Coupons', 'sparkles', 'coupons.read'], ['team', 'Team', 'heart', 'team.read'], ['audit', 'Audit', 'shield', 'audit.read'],
+  ['coupons', 'Coupons', 'sparkles', 'coupons.read'], ['ai', 'AI', 'sparkles', 'ai.read'], ['team', 'Team', 'heart', 'team.read'], ['audit', 'Audit', 'shield', 'audit.read'],
   ['logs', 'Logs', 'list', 'logs.read'], ['system', 'System', 'wrench', 'system.read']
 ]
 const Pill = ({ children, tone }) => <span className={'adm-pill' + (tone ? ' ' + tone : '')}>{children}</span>
@@ -243,6 +243,61 @@ function Coupons({ perms }) {
   </>
 }
 
+/* ---------------- AI usage & cost ---------------- */
+function AI({ perms }) {
+  const toast = useUI(s => s.toast)
+  const [d, reload, err] = useLoad('/api/admin/ai')
+  const [caps, setCaps] = useState(null)
+  if (err) return <ErrorBox err={err} />
+  if (!d) return <Loading />
+  const usd = v => (v > 0 && v < 0.01 ? '< $0.01' : '$' + (+v || 0).toFixed(2))
+  const cur = d.months[0]; const A = d.anthropic
+  const c = caps ?? { user: d.caps.overrides.user ?? '', trial: d.caps.overrides.trial ?? '', global: d.caps.overrides.global ?? '' }
+  const save = () => post('/api/admin/ai/caps', { user: c.user === '' ? null : +c.user, trial: c.trial === '' ? null : +c.trial, global: c.global === '' ? null : +c.global }).then(() => { toast('Caps saved'); setCaps(null); reload() }).catch(e => toast(e.message))
+  const feats = Object.entries(d.features).sort((a, b) => b[1] - a[1])
+  return <>
+    <div className="adm-grid4">
+      <Stat label={'Our estimate · ' + cur.month} value={usd(cur.usd)} sub={`${cur.calls} calls · ${cur.users} users · ${fmtNum(Math.round((cur.in + cur.out) / 1000))}k tokens`} />
+      <Stat label="Anthropic billed (month to date)" value={A.available ? usd(A.usd) : '—'} sub={A.available ? (A.delta === 0 ? 'matches our estimate' : (A.delta > 0 ? '+' : '') + usd(Math.abs(A.delta)).replace('$', A.delta < 0 ? '-$' : '$') + ' vs estimate') : (A.error ? A.error : 'admin key not configured')} tone={A.available ? 'ok' : 'warn'} />
+      <Stat label="Global cap" value={d.caps.global ? '$' + d.caps.global : 'none'} sub={d.caps.global && cur.usd >= d.caps.global * 0.8 ? 'close to the cap' : 'per month, whole instance'} tone={d.caps.global && cur.usd >= d.caps.global * 0.8 ? 'warn' : ''} />
+      <Stat label="Per-user caps" value={`${d.caps.trial ? '$' + d.caps.trial : '—'} trial · ${d.caps.user ? '$' + d.caps.user : '∞'} paid`} sub={`models ${d.models.text} / ${d.models.vision}`} />
+    </div>
+    <div className="adm-split">
+      <div>
+        <div className="adm-card"><div className="adm-card-h"><h3>Last 3 months (our meter)</h3><span className="muted small">list prices</span></div>
+          <div className="adm-table"><div className="adm-tr adm-th c5"><span>Month</span><span>Calls</span><span>Users</span><span>Tokens</span><span>USD</span></div>
+            {d.months.map(m => <div key={m.month} className="adm-tr c5"><span><b>{m.month}</b></span><span>{m.calls}</span><span>{m.users}</span><span className="small">{fmtNum(Math.round(m.in / 1000))}k in · {fmtNum(Math.round(m.out / 1000))}k out</span><span><b>{usd(m.usd)}</b></span></div>)}
+          </div></div>
+        <div className="adm-card"><div className="adm-card-h"><h3>By feature · {cur.month}</h3></div>
+          {feats.length ? feats.map(([f, n]) => <div key={f} className="adm-row small"><span className="mono grow">{f}</span><span>{n} calls</span><span className="dim" style={{ width: 90, textAlign: 'right' }}>{Math.round(100 * n / Math.max(1, cur.calls))}%</span></div>) : <div className="dim small">No calls yet this month.</div>}
+        </div>
+        {A.available && <div className="adm-card"><div className="adm-card-h"><h3>Anthropic · by model</h3><span className="muted small">from the Usage API</span></div>
+          {Object.entries(A.byModel).map(([m, t]) => <div key={m} className="adm-row small"><span className="mono grow">{m}</span><span className="dim">{fmtNum(Math.round(t.in / 1000))}k in · {fmtNum(Math.round(t.cached / 1000))}k cached · {fmtNum(Math.round(t.out / 1000))}k out</span></div>)}
+          {!Object.keys(A.byModel).length && <div className="dim small">No usage reported yet.</div>}
+        </div>}
+      </div>
+      <div>
+        <div className="adm-card"><div className="adm-card-h"><h3>Top users · {cur.month}</h3><span className="muted small">{d.users.length}</span></div>
+          <div className="adm-table"><div className="adm-tr adm-th c4"><span>User</span><span>Calls</span><span>Top features</span><span>USD</span></div>
+            {d.users.map(u => <div key={u.id} className="adm-tr c4"><span><b>{u.name}</b><small>{u.status || ''}</small></span><span>{u.calls}</span><span className="small dim">{Object.entries(u.features || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + v).join(', ')}</span><span><b style={{ color: u.cap && u.usd >= u.cap ? 'var(--red)' : undefined }}>{usd(u.usd)}</b>{u.cap ? <small>cap ${u.cap}</small> : null}</span></div>)}
+            {!d.users.length && <div className="dim small" style={{ padding: 12 }}>No usage yet.</div>}
+          </div></div>
+        <div className="adm-card"><div className="adm-card-h"><h3>Spend caps (USD / month)</h3><span className="muted small">{perms['system.write'] ? 'owner · empty = server default' : 'read-only for your role'}</span></div>
+          <div className="adm-formgrid" style={{ gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+            {[['trial', 'Trial user', d.caps.env.trial], ['user', 'Paid user', d.caps.env.user], ['global', 'Whole instance', d.caps.env.global]].map(([k, l, envv]) => <label key={k}>{l}<input className="field" type="number" min="0" step="0.5" placeholder={envv ? 'default $' + envv : 'default: none'} value={c[k]} disabled={!perms['system.write']} onChange={e => setCaps({ ...c, [k]: e.target.value })} /></label>)}
+          </div>
+          {perms['system.write'] && caps && <div className="adm-inline" style={{ marginTop: 10 }}><Button size="sm" variant="primary" onClick={save}>Save caps</Button><Button size="sm" onClick={() => setCaps(null)}>Cancel</Button></div>}
+          <div className="dim small" style={{ marginTop: 8 }}>When a cap is reached the coach answers with a friendly “limit reached” message until next month. Rule of thumb: global ≈ $1.5 × paying users.</div>
+        </div>
+        <div className="adm-card"><div className="adm-card-h"><h3>Anthropic connection</h3></div>
+          <div className="small">Server key: <span className="mono">{d.keyPrefix}…</span> (matches the console’s “Claves de API” list). {A.available ? <Pill tone="ok">billed cost connected</Pill> : <Pill tone="warn">billed cost not connected</Pill>}</div>
+          {!A.available && <div className="dim small" style={{ marginTop: 6 }}>{A.reason || A.error}</div>}
+        </div>
+      </div>
+    </div>
+  </>
+}
+
 /* ---------------- team ---------------- */
 function Team({ perms, meId }) {
   const toast = useUI(s => s.toast)
@@ -374,7 +429,7 @@ export default function Admin() {
   if (!me.stepUp) return <StepUp me={me} onDone={loadMe} />
   const go = (s, id) => { setSection(s); setFocusId(id || null) }
   const visible = SECTIONS.filter(([, , , perm]) => me.perms[perm])
-  const Section = { overview: Overview, users: Users, billing: Billing, coupons: Coupons, team: Team, audit: Audit, logs: Logs, system: System }[section] || Overview
+  const Section = { overview: Overview, users: Users, billing: Billing, coupons: Coupons, ai: AI, team: Team, audit: Audit, logs: Logs, system: System }[section] || Overview
   return <div className="adm">
     <aside className="adm-nav">
       <div className="adm-brand"><button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button><div><b>VantixGym</b><div className="dim small">console · {me.role}</div></div></div>
