@@ -18,24 +18,45 @@ function innerAtTop(target, root) {
 function Sheet({ sheet }) {
   const { closeSheet } = useUI()
   const ref = useRef(null)
-  const drag = useRef({ startY: null, delta: 0 })
+  // startY/startX: where the finger landed; axis: decided from the first ~8 px of movement —
+  // 'y' pulls the sheet, 'x' belongs to a horizontal scroller (chips, badges, heatmap) and is
+  // then ignored until the finger lifts, however much it drifts vertically afterwards.
+  const drag = useRef({ startY: null, startX: 0, delta: 0, axis: null })
+  const inHorizontalScroller = (target, root) => {
+    let n = target
+    while (n && n !== root) {
+      if (n.nodeType === 1) {
+        const ox = getComputedStyle(n).overflowX
+        if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true
+      }
+      n = n.parentNode
+    }
+    return false
+  }
 
   const onTouchStart = e => {
     const el = ref.current
     // a gesture that begins on a slider (or opted-out control) belongs to that control,
     // not to the sheet's swipe-to-dismiss — so it keeps working while you drag
     if (e.target.closest && e.target.closest('input[type=range], [data-nodrag]')) {
-      drag.current = { startY: null, delta: 0 }
+      drag.current = { startY: null, startX: 0, delta: 0, axis: null }
       return
     }
     // Only a drag that starts with every scroll area at its top may pull the sheet down. A
     // gesture inside a scrolled chat or list belongs to that list (the coach's long answers).
-    drag.current = { startY: el.scrollTop <= 0 && innerAtTop(e.target, el) ? e.touches[0].clientY : null, delta: 0 }
+    const ok = el.scrollTop <= 0 && innerAtTop(e.target, el)
+    drag.current = { startY: ok ? e.touches[0].clientY : null, startX: e.touches[0].clientX, delta: 0, axis: inHorizontalScroller(e.target, el) ? 'pending' : 'y' }
   }
   const onTouchMove = e => {
     const el = ref.current, d = drag.current
-    if (d.startY === null) return
-    d.delta = e.touches[0].clientY - d.startY
+    if (d.startY === null || d.axis === 'x') return
+    const dy = e.touches[0].clientY - d.startY, dx = e.touches[0].clientX - d.startX
+    if (d.axis === 'pending') {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return          // not enough movement to tell yet
+      d.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'            // chips row: sideways wins
+      if (d.axis === 'x') return
+    }
+    d.delta = dy
     if (d.delta > 0 && el.scrollTop <= 0 && innerAtTop(e.target, el)) {
       e.preventDefault()
       el.style.transition = 'none'
@@ -46,9 +67,9 @@ function Sheet({ sheet }) {
     const el = ref.current, d = drag.current
     if (d.startY === null) return
     el.style.transition = 'transform .2s'
-    if (d.delta > 90 && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
+    if (d.axis === 'y' && d.delta > 90 && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
     else el.style.transform = ''
-    d.startY = null
+    d.startY = null; d.axis = null
   }
 
   // non-passive touchmove so preventDefault works (bottom sheets only; centered dialogs have no ref)

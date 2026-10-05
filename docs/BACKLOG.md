@@ -81,3 +81,9 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
 4. **Supplements** (Nutrition tab): user-defined items (creatine, protein…), schedule by time and
    weekday, taken/skip log, streak + badge, local reminders (ids 300+), optional kcal/protein
    auto-add for shakes. Informational only, keeps the medical disclaimer.
+5. **Photo / short video on custom exercises** (owner, 2026-10-05): when a person creates their
+   own exercise, let them attach a reference photo or a clip of a few seconds. Needs: media
+   upload route reusing `api/upload.js` checks (images now; video = MP4/MOV ≤ 15 s ≤ 10 MB with
+   magic-byte + duration check, transcode/poster optional), per-user storage like progress photos
+   (`/data/photos/<uid>`), size cap per user, show in the exercise sheet and during the workout,
+   include in export/delete-account. Private to the user (no sharing) so no moderation needed.
