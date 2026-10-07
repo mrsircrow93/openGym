@@ -13,6 +13,11 @@ const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const IMAGE_MAX = 3 * 1024 * 1024;   // decoded bytes; the client resizes to ~1500 px first
 const PDF_MAX = 12.5 * 1024 * 1024;   // a coach's PDF full of photos runs 5-10 MB; cost is per page, not per byte
 const PDF_MAX_PAGES = 30;
+// Reference clips for a custom exercise: a few seconds of "this is how I do it", nothing more.
+// Short and small on purpose — it keeps storage honest and leaves no room for a payload that
+// happens to start with a valid header.
+const VIDEO_MAX = 6 * 1024 * 1024;
+const VIDEO_MAX_SECONDS = 8;
 
 const SIGS = [
   { mediaType: 'image/jpeg', test: b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
@@ -45,6 +50,78 @@ export function inspectImage(b64) {
 // or training plan has no business containing any of these, so a hit simply rejects the file.
 const PDF_ACTIVE = /\/(JavaScript|JS|Launch|EmbeddedFiles?|OpenAction|AA|RichMedia|XFA|SubmitForm|ImportData)(?=[\s/<\[(>]|$)/;
 const PDF_STREAM = /stream\r?\n[\s\S]*?endstream/g;
+
+// ---- short reference clips (MP4 / QuickTime) -------------------------------------------
+// An ISO base-media file is a flat list of boxes: [4-byte size][4-byte type][payload]. We walk
+// that list at the top level, refuse any box type we do not expect, and read the duration out of
+// moov/mvhd. Nothing is transcoded and nothing is executed; the file is accepted only if its own
+// structure says it is a short video, and it is later served with a fixed content type and nosniff.
+const FTYP_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'mmp4', 'M4V ', 'M4VP', 'qt  ', 'dash']);
+const TOP_BOXES = new Set(['ftyp', 'moov', 'mdat', 'free', 'skip', 'wide', 'pnot', 'meta', 'moof', 'mfra', 'sidx', 'styp', 'uuid']);
+
+// Yields top-level boxes as { type, start, end }, or null when the layout is not sane.
+function boxes(buf, from = 0, to = buf.length, depth = 0) {
+  const out = [];
+  let off = from;
+  while (off + 8 <= to) {
+    let size = buf.readUInt32BE(off);
+    const type = buf.toString('latin1', off + 4, off + 8);
+    let head = 8;
+    if (size === 1) {
+      if (off + 16 > to) return null;
+      const hi = buf.readUInt32BE(off + 8);
+      if (hi > 0) return null;                       // > 4 GiB: not a reference clip
+      size = buf.readUInt32BE(off + 12); head = 16;
+      if (size < head) return null;
+    } else if (size === 0) size = to - off;          // last box runs to the end
+    if (size < head || off + size > to) return null;
+    if (!/^[\x20-\x7e]{4}$/.test(type)) return null;
+    out.push({ type, start: off + head, end: off + size });
+    off += size;
+    if (out.length > 64 || depth > 4) return null;
+  }
+  return off === to ? out : null;
+}
+function findBox(buf, list, type) { return (list || []).find(b => b.type === type) || null; }
+
+// moov > mvhd carries the timescale and duration of the whole movie.
+function movieSeconds(buf, moov) {
+  const inner = boxes(buf, moov.start, moov.end, 1);
+  const mvhd = findBox(buf, inner, 'mvhd');
+  if (!mvhd || mvhd.end - mvhd.start < 20) return null;
+  const version = buf[mvhd.start];
+  let timescale, duration;
+  if (version === 0) {
+    timescale = buf.readUInt32BE(mvhd.start + 12);
+    duration = buf.readUInt32BE(mvhd.start + 16);
+  } else if (version === 1) {
+    if (mvhd.end - mvhd.start < 32) return null;
+    timescale = buf.readUInt32BE(mvhd.start + 20);
+    const hi = buf.readUInt32BE(mvhd.start + 24), lo = buf.readUInt32BE(mvhd.start + 28);
+    duration = hi * 4294967296 + lo;
+  } else return null;
+  if (!timescale || !Number.isFinite(duration)) return null;
+  return duration / timescale;
+}
+
+export function inspectVideo(b64) {
+  const buf = decode(b64, VIDEO_MAX);
+  if (!buf) return { ok: false, error: 'clip missing, malformed or larger than 6 MB' };
+  if (buf.length < 32) return { ok: false, error: 'not a video' };
+  const list = boxes(buf);
+  if (!list || !list.length) return { ok: false, error: 'this file is not a plain MP4 or MOV clip' };
+  for (const b of list) if (!TOP_BOXES.has(b.type)) return { ok: false, error: 'this file is not a plain MP4 or MOV clip' };
+  const ftyp = findBox(buf, list, 'ftyp');
+  if (!ftyp || list[0].type !== 'ftyp') return { ok: false, error: 'this file is not a plain MP4 or MOV clip' };
+  const brand = buf.toString('latin1', ftyp.start, ftyp.start + 4);
+  if (!FTYP_BRANDS.has(brand)) return { ok: false, error: 'unsupported video — record it with your phone camera (MP4 or MOV)' };
+  const moov = findBox(buf, list, 'moov');
+  if (!moov || !findBox(buf, list, 'mdat')) return { ok: false, error: 'this video looks incomplete' };
+  const seconds = movieSeconds(buf, moov);
+  if (seconds === null) return { ok: false, error: 'could not read the length of this video' };
+  if (seconds <= 0 || seconds > VIDEO_MAX_SECONDS) return { ok: false, error: `keep the clip under ${VIDEO_MAX_SECONDS} seconds — it is only a reference` };
+  return { ok: true, kind: 'video', mediaType: brand === 'qt  ' ? 'video/quicktime' : 'video/mp4', data: b64, seconds: Math.round(seconds * 10) / 10, bytes: buf.length };
+}
 
 export function inspectPdf(b64) {
   const buf = decode(b64, PDF_MAX);

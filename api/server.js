@@ -11,7 +11,7 @@ import {
 import webpush from 'web-push';
 import { hashPassword, verifyPassword, needsRehash, passwordProblem, DUMMY_HASH } from './password.js';
 import { sendEmail, mail, emailConfigured } from './email.js';
-import { inspectUpload, inspectImage } from './upload.js';
+import { inspectUpload, inspectImage, inspectVideo } from './upload.js';
 import { verifyGoogleIdToken } from './google.js';
 import { verifyAppleIdToken } from './apple.js';
 import { createAdmin, ROLES, roleOf } from './admin.js';
@@ -126,7 +126,16 @@ const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/
 const safeId = v => String(v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
 const photoDir = uid => path.join(DATA, 'photos', safeId(uid));
 const photoFile = (uid, id) => path.join(photoDir(uid), safeId(id) + '.jpg');
-const PHOTO_MAX_PER_USER = 400;   // ~3 poses × 12 months × 10 years; keeps a runaway client from filling the disk
+const PHOTO_MAX_PER_USER = 400;
+// Reference media for custom exercises: /data/exmedia/<uid>/<id><kind>. The kind travels in the
+// last character of the id so one file name carries everything the GET route needs, and the type
+// it is served with comes from that letter — never from anything the client says.
+const exDir = uid => path.join(DATA, 'exmedia', safeId(uid));
+const EX_KIND = { 'image/jpeg': 'j', 'image/png': 'p', 'image/gif': 'g', 'image/webp': 'w', 'video/mp4': 'm', 'video/quicktime': 'q' };
+const EX_TYPE = Object.fromEntries(Object.entries(EX_KIND).map(([k, v]) => [v, k]));
+const EX_MAX_PER_USER = 60;
+const exFile = (uid, id) => path.join(exDir(uid), safeId(id));
+function listExMedia(uid) { try { return fs.readdirSync(exDir(uid)); } catch { return []; } }   // ~3 poses × 12 months × 10 years; keeps a runaway client from filling the disk
 function listPhotos(uid) { try { return fs.readdirSync(photoDir(uid)).filter(f => f.endsWith('.jpg')).map(f => f.slice(0, -4)); } catch { return []; } }
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
@@ -383,6 +392,7 @@ async function sendVerifyMail(user) {
 function purgeUser(u) {
   try { fs.unlinkSync(stateFile(u.id)); } catch {}
   try { fs.rmSync(photoDir(u.id), { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(exDir(u.id), { recursive: true, force: true }); } catch {}
   db.creds = db.creds.filter(c => c.userId !== u.id);
   db.subs = db.subs.filter(s => s.userId !== u.id);
   db.tokens = db.tokens.filter(t => t.userId !== u.id);
@@ -1821,6 +1831,58 @@ const routes = {
     if (!REVENUECAT_SECRET_KEY) return json(res, 501, { error: 'sync not configured' });
     try { const found = await syncStoreSubscriber(user); json(res, 200, { ok: true, found, billing: entitlement(user) }); }
     catch (e) { console.error('revenuecat sync', e.message); json(res, 502, { error: 'could not check the purchase — try again' }); }
+  },
+
+  /* ---------- reference media for custom exercises ---------- */
+  // A photo or a few seconds of video the person attaches to an exercise they created, so they
+  // remember how it goes. Private to the account, inspected byte by byte before it is written,
+  // and gone with the account.
+  'POST /api/exercise-media': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    let body; try { body = await readBody(req, MAX_BODY); } catch { return json(res, 413, { error: 'file too large' }); }
+    const up = body.video ? inspectVideo(body.video) : inspectImage(body.image);
+    if (!up.ok) return json(res, 400, { error: up.error });
+    const kind = EX_KIND[up.mediaType];
+    if (!kind) return json(res, 400, { error: 'unsupported file type' });
+    if (listExMedia(user.id).length >= EX_MAX_PER_USER) return json(res, 409, { error: 'you have reached the limit of exercise photos and clips — delete some first' });
+    if (aiRateLimited('exmedia:' + user.id, 40, 24 * 3600_000)) return json(res, 429, { error: 'too many uploads today' });
+    const id = crypto.randomBytes(12).toString('base64url') + kind;
+    fs.mkdirSync(exDir(user.id), { recursive: true });
+    fs.writeFileSync(exFile(user.id, id), Buffer.from(up.data, 'base64'), { mode: 0o600 });
+    json(res, 200, { ok: true, id, kind: up.kind, seconds: up.seconds || null });
+  },
+  // Served from the authenticated route only; video needs byte ranges or iOS will not play it.
+  'GET /api/exercise-media': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const id = safeId(new URL(req.url, 'http://x').searchParams.get('id'));
+    const type = EX_TYPE[id.slice(-1)];
+    const f = exFile(user.id, id);
+    if (!id || !type || !fs.existsSync(f)) return json(res, 404, { error: 'no such file' });
+    const size = fs.statSync(f).size;
+    const head = { 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', 'content-disposition': 'inline', 'accept-ranges': 'bytes' };
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    if (range) {
+      let start = range[1] ? parseInt(range[1], 10) : 0;
+      let end = range[2] ? parseInt(range[2], 10) : size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+        res.writeHead(416, { 'content-range': `bytes */${size}` }); return res.end();
+      }
+      end = Math.min(end, size - 1);
+      res.writeHead(206, { ...head, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+      return fs.createReadStream(f, { start, end }).pipe(res);
+    }
+    res.writeHead(200, { ...head, 'content-length': size });
+    fs.createReadStream(f).pipe(res);
+  },
+  'DELETE /api/exercise-media': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const id = safeId(new URL(req.url, 'http://x').searchParams.get('id'));
+    if (!id) return json(res, 400, { error: 'id required' });
+    try { fs.unlinkSync(exFile(user.id, id)); } catch { /* already gone */ }
+    json(res, 200, { ok: true });
   },
 
   /* ---------- progress photos (scaffold — see docs/PROGRESS_PHOTOS.md) ---------- */

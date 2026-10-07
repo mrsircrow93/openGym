@@ -101,9 +101,13 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    advice: the sheet states the app recommends neither substances nor doses.
    `lib/supplements.js` + `sheets-supplements.jsx`, tests in `lib/supplements.test.js`.
    Still open from the original idea: auto-adding a protein shake to the day's macros.
-5. **Photo / short video on custom exercises** (owner, 2026-10-05): when a person creates their
-   own exercise, let them attach a reference photo or a clip of a few seconds. Needs: media
-   upload route reusing `api/upload.js` checks (images now; video = MP4/MOV ≤ 15 s ≤ 10 MB with
-   magic-byte + duration check, transcode/poster optional), per-user storage like progress photos
-   (`/data/photos/<uid>`), size cap per user, show in the exercise sheet and during the workout,
-   include in export/delete-account. Private to the user (no sharing) so no moderation needed.
+5. ✅ 2026-10-07 **Photo / short clip on custom exercises**: attach a reference photo or a clip of
+   up to 8 s / 6 MB when creating or editing your own exercise; it shows in the exercise sheet and
+   plays muted, looping and inline, so it reads like a GIF. Security: `inspectVideo` in
+   `api/upload.js` walks the ISO base-media boxes, allows only known top-level box types and
+   ftyp brands, and reads the duration from moov/mvhd — nothing is transcoded or executed; the
+   type served comes from the stored id's last letter, never from the client. Files live in
+   `/data/exmedia/<uid>`, 60 per account, 40 uploads a day, served only to their owner with
+   `nosniff` + byte ranges (iOS needs ranges to play), and deleted with the exercise and with the
+   account. Tests: `lib/exercise-media.test.js` (inspector, tampered and oversized files) and
+   `lib/exmedia-server.test.js` (routes, cross-account access, path traversal, ranges).

@@ -11,6 +11,8 @@ import { nav } from './lib/nav.js'
 import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
+import { uploadExerciseMedia, deleteExerciseMedia, MEDIA_ACCEPT, CLIP_MAX_SECONDS } from './lib/exercise-media.js'
+import ExerciseMedia from './components/ExerciseMedia.jsx'
 import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row, TextField } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
@@ -320,6 +322,7 @@ function ExerciseDetail({ ex, close }) {
       <span className="tag"><Icon name="dumbbell" />{t(ex.eq)}</span>
       {(ex.sm || []).slice(0, 3).map((s, i) => <span key={i} className="tag">{t(s)}</span>)}
     </div>
+    {ex.media && <div className="exmedia-wrap"><ExerciseMedia id={ex.media} /></div>}
     {ex.desc && <div className="exnote">{ex.desc}</div>}
     {best > 0 && <div className="small row" style={{ marginBottom: 6, gap: 5 }}><Icon name="trophy" style={{ fontSize: 14, color: 'var(--yellow)' }} />{t('Best:')} <b className="accent">{fmtNum(best)} {st.unit}</b>{last ? ` · ${t('last')} ${fmtDate(last.d)}: ${last.sets.map(s => setLabel(ex.id, s, last.target)).join(', ')}` : ''}</div>}
     <Button variant="primary" icon="plus" style={{ margin: '10px 0 4px' }} onClick={() => addToRoutineSheet(ex)}>{t('Add to my plan')}</Button>
@@ -375,6 +378,24 @@ function CustomExForm({ existing, prefill, onDone, close }) {
   const [n, setN] = useState(existing ? existing.n : prefillName)
   const [bp, setBp] = useState(existing ? existing.bp : prefillBp)
   const [desc, setDesc] = useState(existing ? (existing.desc || '') : '')
+  // A reference photo or a few seconds of video, uploaded as soon as it is picked so the form
+  // only ever carries an id. Replacing or removing one deletes the old file right away.
+  const [media, setMedia] = useState(existing ? existing.media || null : null)
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef(null)
+  const pick = async e => {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    try {
+      const up = await uploadExerciseMedia(file)
+      if (media) deleteExerciseMedia(media).catch(() => {})
+      setMedia(up.id)
+    } catch (err) { toast(err.message || t('Could not upload that file')) }
+    setBusy(false)
+  }
+  const dropMedia = () => { if (media) deleteExerciseMedia(media).catch(() => {}); setMedia(null) }
   const save = () => {
     const name = n.trim()
     if (!name) { toast(t('Give it a name')); return }
@@ -383,10 +404,10 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     if (dup) { toast(t('“{0}” already exists', dup.n)); return }
     const d = desc.trim().slice(0, 1000)
     let id = existing && existing.id
-    if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) { c.n = name; c.bp = bp; c.desc = d } })
+    if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) { c.n = name; c.bp = bp; c.desc = d; if (media) c.media = media; else delete c.media } })
     else {
       id = 'c' + uid()
-      update(s => { (s.customEx = s.customEx || []).push({ id, n: name, bp, desc: d, tg: '', eq: 'custom', custom: true }) })
+      update(s => { (s.customEx = s.customEx || []).push({ id, n: name, bp, desc: d, tg: '', eq: 'custom', custom: true, ...(media ? { media } : {}) }) })
     }
     close()
     toast(existing ? t('Saved') : t('“{0}” created', name))
@@ -402,6 +423,14 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     {bp === 'cardio' && <div className="small dim row" style={{ marginBottom: 10, gap: 5 }}><Icon name="figureRun" style={{ fontSize: 13 }} />{t('Cardio exercises log time + speed instead of weight × reps.')}</div>}
     <textarea className="input" rows={4} maxLength={1000} placeholder={t('Description (optional) — setup, cues, anything you want to remember')}
       value={desc} onChange={e => setDesc(e.target.value)} />
+    <h4 className="sec">{t('Reference')}</h4>
+    <div className="small dim" style={{ marginBottom: 8 }}>{t('A photo or a clip of up to {0} seconds, just so you remember how it goes. Only you see it.', CLIP_MAX_SECONDS)}</div>
+    {media && <div className="exmedia-wrap"><ExerciseMedia id={media} /></div>}
+    <div className="row" style={{ gap: 8 }}>
+      <Button icon="camera" style={{ flex: 1 }} disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? t('Uploading…') : media ? t('Replace') : t('Add photo or clip')}</Button>
+      {media && <Button variant="danger" icon="trash" onClick={dropMedia}>{t('Remove')}</Button>}
+    </div>
+    <input ref={fileRef} type="file" accept={MEDIA_ACCEPT} hidden onChange={pick} />
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={save}>{existing ? t('Save') : t('Create exercise')}</Button>
     {existing && <><div style={{ height: 8 }} /><Button variant="danger" icon="trash" onClick={() => { close(); deleteCustomEx(existing) }}>{t('Delete exercise')}</Button></>}
@@ -423,6 +452,7 @@ export function deleteCustomEx(ex, afterDelete) {
         s.workouts.forEach(w => w.entries.forEach(e => { if (e.id === ex.id) e.n = ex.n }))
         delete s.exWeights[ex.id]
       })
+      if (ex.media) deleteExerciseMedia(ex.media).catch(() => {})
       toast(t('Exercise deleted'))
       afterDelete && afterDelete()
     }
@@ -563,6 +593,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
       <span className="tag">{t(ex.tg || ex.bp)}</span><span className="tag">{t(ex.eq)}</span>
     </div>
+    {ex.media && <div className="exmedia-wrap"><ExerciseMedia id={ex.media} /></div>}
     {ex.desc && <div className="exnote">{ex.desc}</div>}
     {!cardio && <div style={{ marginBottom: 14 }}>
       <Segmented className="seg-range" value={mode} onChange={setMode}
