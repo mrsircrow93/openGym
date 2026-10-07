@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { lastBW } from '../lib/history.js'
-import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL, MEAL_TYPES } from '../lib/nutrition.js'
+import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, MEAL_TYPE_ICON, MEAL_TYPE_LABEL, MEAL_TYPES } from '../lib/nutrition.js'
 import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, addMealSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
 import { goalWizardSheet, sourcesSheet } from '../sheets-goal.jsx'
 import { reviewDue, toKg } from '../lib/nutrition-goal.js'
@@ -28,7 +28,6 @@ export default function Nutrition() {
   const meals = mealsOn(S, iso)
   const tot = dayTotals(S, iso)
   const by = kcalByDay(S)
-  const avg = avgLogged(S, 7)
   const isToday = iso === todayISO()
 
   const today = new Date()
@@ -84,6 +83,7 @@ export default function Nutrition() {
         <Button size="sm" icon="target" style={{ color: 'var(--yellow)' }} onClick={macroGoalSheet}>{t('Targets')}</Button>
       </div>
       <DaySummary tot={tot} goal={goal} />
+      <MicroLine tot={tot} goal={goal} />
       {/* guideline 1.4.1: the sources behind these targets are one tap away from the targets */}
       <div style={{ marginTop: 8 }}><button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Where do these numbers come from?')}</button></div>
     </div>
@@ -163,14 +163,5 @@ export default function Nutrition() {
       {!meals.length && <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{isToday ? t('Tap a meal to log it — photo, a sentence or by hand.') : t('Nothing logged on {0}.', fmtDate(iso, true))}</div>}
     </div>
 
-    {avg && <div className="card">
-      <h2>{avg.days === 1 ? t('Only one day logged so far') : t('Last {0} logged days · daily average', avg.days)}</h2>
-      <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-        <div className="big">{fmtNum(avg.kcal)} <span className="muted" style={{ fontSize: '1rem' }}>kcal</span></div>
-        <span className="small dim" style={{ marginLeft: 'auto' }}>{avg.kcal > goal.kcal ? t('{0} over target', fmtNum(avg.kcal - goal.kcal)) : t('{0} under target', fmtNum(goal.kcal - avg.kcal))}</span>
-      </div>
-      <div style={{ marginTop: 4 }}><MacroLine tot={avg} /></div>
-      <MicroLine tot={avg} goal={goal} />
-    </div>}
   </div>
 }
