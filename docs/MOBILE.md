@@ -164,3 +164,26 @@ xcodebuild -exportArchive -archivePath $A -exportOptionsPlist ExportOptions.plis
 `ExportOptions.plist` (kept in `frontend/ios/App/`): method app-store-connect, destination upload,
 manual signing, certificate "Apple Distribution", profile "VantixGym App Store".
 `ITSAppUsesNonExemptEncryption=false` in Info.plist (HTTPS only) skips the export-compliance prompt.
+
+## Android: Play upload key and release build (set up 2026-10-06)
+
+- Upload key: `~/.vantixgym/upload-keystore.jks`, alias `vantixgym`, RSA 4096, valid to 2054.
+  Password in `~/.vantixgym/keystore-password.txt` (mode 600) **and in the owner's password
+  manager**. `frontend/android/keystore.properties` points Gradle at it and is gitignored.
+  Back up `~/.vantixgym/` — losing it means asking Google for an upload-key reset.
+  Upload-key SHA-1: `3B:4F:8A:B9:91:0D:3E:3A:22:0E:D0:C0:4F:64:AA:D8:12:ED:43:4F`.
+- Play App Signing re-signs the app with Google's own key, so **Google sign-in on Play builds needs
+  the app-signing SHA-1 from Play Console** (Release → Setup → App signing) added to the Android
+  OAuth client in Google Cloud, next to the debug SHA-1.
+- Build a release bundle:
+
+```sh
+cd frontend && npm run build:mobile && cd android
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradlew bundleRelease
+# -> app/build/outputs/bundle/release/app-release.aab
+```
+
+- `versionCode` must increase on every upload (25 was the first); `versionName` is what Play shows.
+- In-app purchases: a store build with no RevenueCat key for its platform shows "subscriptions are
+  coming soon" instead of falling back to web checkout, because Play (and Apple) forbid that.
+  Android starts selling once the Play app exists in RevenueCat and `VITE_RC_GOOGLE_KEY` is set.

@@ -106,3 +106,36 @@ nutrition, steps via HealthKit), User content (meal photos, progress photos, cha
 Identifiers (user id), Purchases (subscription status). Purpose: app functionality only. No
 tracking, no ads, no data sold, no third-party advertising SDKs. Data is deletable from Settings.
 Photos sent to the AI provider (Anthropic) for analysis are not used for training (API terms).
+
+## Google Play (es-419 primary, en-US secondary)
+
+**Nombre (30):** VantixGym
+**Descripción corta (80):** Rutinas, nutrición con foto y un coach de IA que lee tus números.
+**Descripción completa:** same body as the es-MX App Store description above, minus the Apple-specific
+subscription paragraph; replace it with:
+
+> SUSCRIPCIÓN
+> 7 días gratis sin tarjeta. Después, plan mensual, semestral o anual con cobro por Google Play y
+> renovación automática salvo que la canceles al menos 24 horas antes del fin del periodo. Gestiona o
+> cancela en Play Store → Suscripciones.
+
+**Assets** (generated into the scratchpad `play-es/` by the same scripts, Play rejects the 1290×2796
+App Store frames because their aspect ratio is beyond 9:16):
+- Icon 512×512 (`play-icon-512.png`), feature graphic 1024×500 (`feature-graphic-1024x500.png`),
+  6 phone screenshots 1080×1920.
+
+**Forms Play asks for and the answers**
+- *Privacy policy:* https://vantixgym.app/privacidad.html
+- *App access:* "All functionality is available with the demo account" → the review account in
+  `docs/MOBILE.md` (same one as Apple); sign in with "Continuar con correo".
+- *Ads:* no ads. *Content rating:* IARC questionnaire → Everyone (no objectionable content;
+  health & fitness guidance with a disclaimer, not medical advice).
+- *Target audience:* 18+ (the terms require 18, or 16 with guardian consent).
+- *Data safety:* same answers as the Apple privacy labels above (collected and linked: email, name,
+  health & fitness, photos/videos, other user content, user id, purchase history; purpose: app
+  functionality and personalisation; email also for developer communications; no tracking, no ads,
+  no sale of data; encrypted in transit; users can request deletion from Settings).
+- *Health apps declaration:* required because the app reads Health Connect `READ_STEPS` and
+  `READ_WEIGHT` only, to show steps and weight in the user's own dashboard; data is not shared or
+  sold, stays in the user's account, and is deleted with it.
+- *Government app / financial features:* no.

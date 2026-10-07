@@ -79,6 +79,10 @@ export function Plans({ compact }) {
   const toast = useUI(s => s.toast)
   const refreshMe = useStore(s => s.refreshMe)
   const store = storePurchases()
+  // Inside a store build the platform's own billing is the only allowed way to sell (App Store
+  // rule 3.1.1, Play Payments policy). If that build has no store key yet — Android before the
+  // Play products exist — we show nothing to buy rather than falling back to web checkout.
+  const storeMissing = !!STORE && !store
   const [stage, setStage] = useState(storeStage())
   useEffect(() => onStoreStage(setStage), [])
   // Store builds: the plans come from the server, the prices and the purchase from the store.
@@ -147,8 +151,9 @@ export function Plans({ compact }) {
           </div>
         </button> })}
     </div>
-    {!data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? <>{t('The store did not answer — check your connection and try again.')}{typeof data.storeError === 'string' && <div className="dim" style={{ marginTop: 4, fontSize: 11 }}>{data.storeError}</div>}</> : t('Payments are not open yet — we will email you when they are.')}</div>}
-    {data.payments && sel && <>
+    {storeMissing && <div className="small dim" style={{ marginTop: 10 }}>{t('Subscriptions are coming to this app very soon. Your trial and your data stay exactly as they are.')}</div>}
+    {!storeMissing && !data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? <>{t('The store did not answer — check your connection and try again.')}{typeof data.storeError === 'string' && <div className="dim" style={{ marginTop: 4, fontSize: 11 }}>{data.storeError}</div>}</> : t('Payments are not open yet — we will email you when they are.')}</div>}
+    {!storeMissing && data.payments && sel && <>
       <div style={{ height: 12 }} />
       <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
         {busy ? t('One moment…') : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : b.status === 'expired' ? t('Continue with {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months)) : t('Choose {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months))}

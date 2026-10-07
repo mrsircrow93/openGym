@@ -1294,6 +1294,7 @@ export default {
   'The store did not answer — check your connection and try again.': 'La tienda no respondió: revisa tu conexión e inténtalo de nuevo.',
   'Billed through your Apple ID · manage or cancel in App Store settings': 'Se cobra a tu Apple ID · gestiona o cancela en los ajustes de App Store',
   'Billed through Google Play · manage or cancel in Play Store settings': 'Se cobra por Google Play · gestiona o cancela en los ajustes de Play Store',
+  'Subscriptions are coming to this app very soon. Your trial and your data stay exactly as they are.': 'Las suscripciones llegan muy pronto a esta app. Tu prueba y tus datos se quedan tal cual.',
   'Restore purchases': 'Restaurar compras',
   'privacy': 'privacidad',
   'This plan is billed through your Apple ID. Change or cancel it in App Store → Subscriptions. Access always runs to the end of the period you paid for.': 'Este plan se cobra a tu Apple ID. Cámbialo o cancélalo en App Store → Suscripciones. El acceso siempre dura hasta el final del periodo pagado.',
