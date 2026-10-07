@@ -6,6 +6,7 @@ import { ACCENTS, todayISO, localTZ, fmtNum } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
 import { api, webauthnOK, passkeyLogin, passkeyRegister, IS_ANDROID, BIO, authResendVerify, authChangePassword, authChangeEmail, passkeyAdd, deleteAccount, billingPortal, fetchReferral } from '../lib/api.js'
 import { Plans, subscriptionLabel } from './Account.jsx'
+import { nav as goto } from '../lib/nav.js'
 import { useLocation } from 'react-router-dom'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
@@ -484,7 +485,11 @@ function SubscriptionSheet({ user, close }) {
     <div className="muted small" style={{ marginBottom: 14 }}>{subscriptionLabel(b)}</div>
     {b.status === 'pro' ? <>
       <div className="small muted" style={{ marginBottom: 12 }}>{b.provider === 'apple' ? t('This plan is billed through your Apple ID. Change or cancel it in App Store → Subscriptions. Access always runs to the end of the period you paid for.') : b.provider === 'google' ? t('This plan is billed through Google Play. Change or cancel it in Play Store → Subscriptions. Access always runs to the end of the period you paid for.') : t('Change your card, switch plan or cancel from the billing portal. Access always runs to the end of the period you paid for.')}</div>
-      <Button variant="primary" onClick={portal}>{t('Manage subscription')}</Button>
+      <Button variant="primary" icon="crown" onClick={() => { close(); goto('/plans') }}>{t('Change plan')}</Button>
+      <div style={{ height: 8 }} />
+      {/* cancelling always happens where the money is taken — the store or the Stripe portal */}
+      <Button variant="danger" icon="xmark" onClick={portal}>{b.provider === 'apple' ? t('Cancel in App Store') : b.provider === 'google' ? t('Cancel in Google Play') : t('Cancel subscription')}</Button>
+      {b.cancelAtPeriodEnd && <div className="small muted" style={{ marginTop: 10 }}>{t('Already cancelled — you keep access until {0}.', new Date(b.tierUntil).toLocaleDateString())}</div>}
     </> : <>
       {!user.emailVerified && <div className="card small" style={{ marginBottom: 12 }}>{t('Confirm your email before paying — the link is in your inbox.')}</div>}
       <Plans compact />

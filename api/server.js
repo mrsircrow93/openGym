@@ -317,7 +317,9 @@ function entitlement(user) {
   const trial = user.trialEnds ? Date.parse(user.trialEnds) : 0;
   const paid = user.tierUntil ? Date.parse(user.tierUntil) : 0;
   const active = !BILLING_ENABLED || isAdmin(user) || now < trial || now < paid;
-  const status = !BILLING_ENABLED || isAdmin(user) ? 'free' : paid > now ? 'pro' : trial > now ? 'trial' : 'expired';
+  // Staff keep free access, but if they actually pay we report the real status — otherwise the
+  // subscription screens would tell an owner they have no plan right after they bought one.
+  const status = !BILLING_ENABLED ? 'free' : paid > now ? 'pro' : trial > now ? 'trial' : isAdmin(user) ? 'free' : 'expired';
   return { enabled: BILLING_ENABLED, active, status, trialEnds: user.trialEnds || null, tierUntil: user.tierUntil || null,
     plan: user.plan || null, provider: user.provider || null, cancelAtPeriodEnd: !!user.cancelAtPeriodEnd, payments: !!STRIPE_SECRET_KEY };
 }

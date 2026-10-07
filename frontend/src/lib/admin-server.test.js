@@ -51,7 +51,7 @@ describe('admin console', () => {
     const ok = await j(await call('/api/admin/stepup', { as: 'owner', body: { password: 'correct horse battery owner' } }))
     expect(ok.ok).toBe(true)
     const ov = await j(await call('/api/admin/overview', { as: 'owner' }))
-    expect(ov.http).toBe(200); expect(ov.users).toBe(3); expect(ov.staff).toBe(1); expect(ov.status.trial).toBe(2); expect(ov.status.free).toBe(1)
+    expect(ov.http).toBe(200); expect(ov.users).toBe(3); expect(ov.staff).toBe(1); expect(ov.status.trial).toBe(3)   // staff in trial now report their real status
     const me = await j(await call('/api/admin/me', { as: 'owner' })); expect(me.stepUp).toBe(true); expect(me.perms['team.write']).toBe(true)
   })
   it('step-up is bound to the device: another user agent must re-verify', async () => {
