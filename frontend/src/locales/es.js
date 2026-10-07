@@ -1337,6 +1337,8 @@ export default {
   'Magnesium': 'Magnesio',
   'Multivitamin': 'Multivitamínico',
   'Caffeine': 'Cafeína',
+  'Close and methodical': 'Cercana y metódica',
+  'Direct and to the point': 'Directo y al grano',
   'Done today': 'Hecho hoy',
   'See summary': 'Ver resumen',
   '{0} sets · {1}': '{0} series · {1}',

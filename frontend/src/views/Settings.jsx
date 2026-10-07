@@ -133,7 +133,7 @@ export default function Settings() {
       />
       <SelectRow icon="sparkles" iconTint="var(--acc)" title={t('Coach')} sheetTitle={t('Choose your coach')}
         value={S.coach || ''} onChange={v => update(s => { s.coach = v })}
-        options={[{ value: '', label: t('Not chosen') }, ...COACHES.map(c => ({ value: c.id, label: c.name }))]} />
+        options={[{ value: '', label: t('Not chosen') }, ...COACHES.map(c => ({ value: c.id, label: c.name + ' · ' + t(c.desc) }))]} />
       <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}

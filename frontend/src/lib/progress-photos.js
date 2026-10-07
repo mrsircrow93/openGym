@@ -6,6 +6,7 @@
 import { api } from './api.js'
 import { API_BASE, getToken } from './mobile.js'
 import { readUpload } from './upload.js'
+import { coachOf } from './coach.js'
 import { uid } from './format.js'
 import { t } from './i18n.js'
 
@@ -71,6 +72,7 @@ export function reviewFacts(S, c) {
     weightNow: c.w, weightBefore: prev ? prev.w : null, unit: S.unit || 'kg',
     daysBetween: prev ? Math.max(0, daysSince(prev.d) - daysSince(c.d)) : 0, workoutsBetween: between,
     goal: (S.trainer && S.trainer.answers && S.trainer.answers.goal) || '', sex: S.body === 'female' ? 'female' : 'male',
-    checkinNumber: checkinsOf(S).findIndex(x => x.id === c.id) + 1, lang: S.lang || 'en'
+    checkinNumber: checkinsOf(S).findIndex(x => x.id === c.id) + 1, lang: S.lang || 'en',
+    coach: coachOf(S)   // so the note sounds like the coach they picked
   }
 }

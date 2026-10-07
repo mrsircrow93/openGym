@@ -242,6 +242,7 @@ export default function Home() {
           {COACHES.map(c => <button key={c.id} className="coach-opt tappable" onClick={() => update(s => { s.coach = c.id })}>
             <CoachAvatar gender={c.gender} size={72} />
             <span>{c.name}</span>
+            <span className="dim small" style={{ fontWeight: 500, lineHeight: 1.25 }}>{t(c.desc)}</span>
           </button>)}
         </div>
       </div>

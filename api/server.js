@@ -15,6 +15,7 @@ import { inspectUpload, inspectImage } from './upload.js';
 import { verifyGoogleIdToken } from './google.js';
 import { verifyAppleIdToken } from './apple.js';
 import { createAdmin, ROLES, roleOf } from './admin.js';
+import { personaVoice, pickCoach } from './personas.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -667,7 +668,7 @@ function coachContext(S) {
   };
 }
 function coachSystemPrompt(S, asking, coach) {
-  return (coach ? `Your name is ${coach.name}; you are a ${coach.gender === 'f' ? 'woman' : 'man'} and you speak in the first person as ${coach.name}. ` : '') +
+  return (coach ? `Your name is ${coach.name}; you are a ${coach.gender === 'f' ? 'woman' : 'man'} and you speak in the first person as ${coach.name}.` + personaVoice(coach) + ' ' : '') +
     `You are the user's personal coach inside a fitness app: warm, encouraging, direct, and evidence-based ` +
     `about strength training and everyday nutrition. You have their data as JSON: routines, up to 15 recent ` +
     `sessions (each exercise's target vs what was actually done — "done" sets counted as hit), a week of logged ` +
@@ -942,7 +943,7 @@ function planTargetsRequest({ image, mediaType, pdf, lang }) {
 
 // Check-in photos (now vs before) + facts -> encouraging, specific review. Server-only: the
 // photos never leave the server except to the model, so there is no bring-your-own-key mirror.
-function progressReviewRequest({ curImgs, prevImgs, facts, lang }) {
+function progressReviewRequest({ curImgs, prevImgs, facts, lang, coach }) {
   const content = [];
   const POSE = { front: 'FRONT', side: 'SIDE', back: 'BACK' };
   if (prevImgs.length) {
@@ -956,7 +957,8 @@ function progressReviewRequest({ curImgs, prevImgs, facts, lang }) {
     : 'This is the first check-in, so there is nothing to compare yet: describe the starting point kindly and set up what to look for next month.') });
   return {
     max_tokens: 900,
-    system: 'You are a warm, experienced personal coach writing a monthly check-in note for one client of a ' +
+    system: (coach ? `You are ${coach.name}, this person's coach in the app.` + personaVoice(coach) + ' ' : '') +
+      'You are a warm, experienced personal coach writing a monthly check-in note for one client of a ' +
       'fitness app, based on their progress photos (front, side, back) and a few facts (weight, days between ' +
       'check-ins, workouts done, goal). Your job is to keep them motivated with honest, specific observations.\n' +
       'Rules:\n' +
@@ -1915,10 +1917,8 @@ const routes = {
     const history = Array.isArray(body.history) ? body.history.slice(-8)
       .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
       .map(m => ({ role: m.role, content: m.content.slice(0, 2000) })) : [];
-    // The persona the person picked; only a short whitelisted name reaches the prompt.
-    const coach = body.coach && typeof body.coach.name === 'string'
-      ? { name: body.coach.name.replace(/[^\p{L} ]/gu, '').slice(0, 24) || 'Coach', gender: body.coach.gender === 'f' ? 'f' : 'm' }
-      : null;
+    // The persona the person picked; only a short whitelisted name and a known id reach the prompt.
+    const coach = pickCoach(body.coach);
     const S = readState(user.id);
     if (!S || !((S.workouts || []).length || (S.meals || []).length || (S.bodyweight || []).length)) {
       return json(res, 400, { error: 'log a workout, a meal or your weight first so the coach has something to look at' });
@@ -2099,6 +2099,7 @@ const routes = {
     const curImgs = Object.entries(cur).map(([pose, id]) => ({ pose, data: load(id) })).filter(x => x.data);
     const prevImgs = Object.entries(prev).map(([pose, id]) => ({ pose, data: load(id) })).filter(x => x.data);
     if (!curImgs.length) return json(res, 400, { error: 'no photos in this check-in' });
+    const coach = pickCoach(body.coach);
     const facts = {
       weightNow: +body.weightNow || null, weightBefore: +body.weightBefore || null, unit: body.unit === 'lb' ? 'lb' : 'kg',
       daysBetween: Math.max(0, Math.min(3650, +body.daysBetween || 0)), workoutsBetween: Math.max(0, Math.min(500, +body.workoutsBetween || 0)),
@@ -2107,7 +2108,7 @@ const routes = {
     if (aiRateLimited('review:' + user.id, 6, 30 * 24 * 3600_000)) return json(res, 429, { error: 'you can ask for a new review again in a few days' });
     if (aiOverBudget(user.id)) return json(res, 402, { error: 'AI budget for this month is used up' });
     try {
-      const r = await callAnthropic(progressReviewRequest({ curImgs, prevImgs, facts, lang }), { uid: user.id, feature: 'progress-review' });
+      const r = await callAnthropic(progressReviewRequest({ curImgs, prevImgs, facts, lang, coach }), { uid: user.id, feature: 'progress-review' });
       const call = (r.content || []).find(b => b.type === 'tool_use');
       if (!call) return json(res, 502, { error: 'no structured reply from model' });
       json(res, 200, { ok: true, ...call.input });
