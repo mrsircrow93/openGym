@@ -58,7 +58,7 @@ function ItemRow({ item, onChange, onRemove }) {
       <button className="iconbtn" style={{ width: 30, height: 30, fontSize: 14 }} onClick={() => setOpen(o => !o)} aria-label={t('Edit')}><Icon name={open ? 'chevronUp' : 'pencil'} /></button>
     </div>
     {open && <div className="nitem-edit">
-      <TextField value={item.name} onChange={e => onChange({ ...item, name: e.target.value })} placeholder={t('Food')} />
+      <TextField value={item.name} onChange={e => onChange({ ...item, name: e.target.value })} placeholder={t('Food name')} />
       <div className="row cfgrow">
         <Stepper label={t('Portion (g)')} value={item.grams} step={10} decimal={false} onChange={g => onChange(scaleItem(item, g))} />
         <Stepper label="kcal" value={item.kcal} step={10} decimal={false} onChange={v => onChange({ ...item, kcal: v })} />
