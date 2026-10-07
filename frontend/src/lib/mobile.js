@@ -10,6 +10,7 @@
 // Like the demo build, MOBILE is replaced at build time, so all of this folds away in
 // web bundles; the Capacitor plugins are only ever imported behind it.
 import { t } from './i18n.js'
+import { macroGoalOf, totalsOf } from './nutrition.js'
 
 export const MOBILE = import.meta.env.VITE_MOBILE === '1'
 // Where the store app talks to. Baked in at build time (package.json build:mobile).
@@ -48,6 +49,68 @@ export async function nativeSave(state) {
   } catch (e) { /* keep the localStorage copy */ }
 }
 
+/* ---------------- nutrition nudges (docs/BACKLOG.md v2 #3) ---------------- */
+// Gentle, opt-outable reminders around eating: one per meal slot you have not logged, water and
+// an evening protein check. Local notifications cannot evaluate a condition when they fire, so
+// we re-plan them on every state change: today's slots are skipped when already satisfied or
+// already past, and the next two days are scheduled generically.
+export const NUDGE_DEF = { meals: true, water: false, protein: true, quietFrom: '22:00', quietTo: '07:00' }
+export const nudgesOf = S => ({ ...NUDGE_DEF, ...(S.nudges || {}) })
+const SLOTS = [
+  { key: 'breakfast', kind: 'meals', at: '09:30' },
+  { key: 'lunch', kind: 'meals', at: '14:30' },
+  { key: 'dinner', kind: 'meals', at: '20:30' },
+  { key: 'water', kind: 'water', at: '16:00' },
+  { key: 'protein', kind: 'protein', at: '19:30' }
+]
+const hhmm = v => { const [h, m] = String(v || '0:0').split(':').map(Number); return h * 60 + (m || 0) }
+// Quiet hours wrap past midnight (22:00 → 07:00), so "inside" is two ranges when from > to.
+const inQuiet = (mins, from, to) => (hhmm(from) <= hhmm(to) ? mins >= hhmm(from) && mins < hhmm(to) : mins >= hhmm(from) || mins < hhmm(to))
+const isoOfDate = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+
+export function nutritionNudges(S, now = new Date()) {
+  const n = nudgesOf(S)
+  if (!n.meals && !n.water && !n.protein) return []
+  const goal = macroGoalOf(S)
+  const out = []
+  for (let day = 0; day < 3; day++) {
+    const d = new Date(now); d.setDate(now.getDate() + day)
+    const iso = isoOfDate(d)
+    const meals = (S.meals || []).filter(m => m.d === iso)
+    const totals = meals.reduce((a, m) => { const x = totalsOf(m.items); return { kcal: a.kcal + x.kcal, protein: a.protein + x.protein } }, { kcal: 0, protein: 0 })
+    const waterMl = ((S.water || []).find(w => w.d === iso) || {}).ml || 0
+    const waterGoal = S.waterGoal || 2000
+    for (let i = 0; i < SLOTS.length; i++) {
+      const slot = SLOTS[i]
+      if (!n[slot.kind]) continue
+      const mins = hhmm(slot.at)
+      if (inQuiet(mins, n.quietFrom, n.quietTo)) continue
+      const at = new Date(d); at.setHours(Math.floor(mins / 60), mins % 60, 0, 0)
+      if (at <= now) continue
+      const today = day === 0
+      let title, body
+      if (slot.kind === 'meals') {
+        if (today && meals.some(m => m.type === slot.key)) continue
+        title = slot.key === 'breakfast' ? t('Breakfast') : slot.key === 'lunch' ? t('Lunch') : t('Dinner')
+        body = slot.key === 'breakfast' ? t('Log your breakfast — a photo is enough.')
+          : slot.key === 'lunch' ? t('Log your lunch and keep today’s numbers honest.')
+            : t('Close the day: log your dinner.')
+      } else if (slot.kind === 'water') {
+        if (today && waterMl >= waterGoal) continue
+        title = t('Water')
+        body = today && waterMl ? t('{0} of {1} so far today.', (waterMl / 1000) + ' L', (waterGoal / 1000) + ' L') : t('Keep your water going today.')
+      } else {
+        if (today && totals.protein >= goal.protein) continue
+        const left = Math.max(0, Math.round(goal.protein - totals.protein))
+        title = t('Protein')
+        body = today && meals.length ? t('{0} g of protein to go today.', left) : t('Check your protein before the day closes.')
+      }
+      out.push({ id: 300 + i * 5 + day, title, body, schedule: { at, allowWhileIdle: true } })
+    }
+  }
+  return out
+}
+
 // (Re)schedule the workout-day reminder: one repeating notification per weekday that has a
 // routine in the weekly plan. Cheap enough to run after any state change — the plan or the
 // reminder time may just have been edited. `interactive` gates the OS permission prompt to
@@ -55,16 +118,20 @@ export async function nativeSave(state) {
 export async function syncReminder(S, interactive = false) {
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    await LocalNotifications.cancel({ notifications: [0, 1, 2, 3, 4, 5, 6, 100].map(d => ({ id: 100 + d })) }).catch(() => {})
+    const nudgeIds = []
+    for (let i = 0; i < 25; i++) nudgeIds.push({ id: 300 + i })
+    await LocalNotifications.cancel({ notifications: [...[0, 1, 2, 3, 4, 5, 6, 100].map(d => ({ id: 100 + d })), ...nudgeIds] }).catch(() => {})
     const r = S.reminder
     const photoAt = photoReminderAt(S)
-    if (!r?.on && !photoAt) return true
+    const nudges = nutritionNudges(S)
+    if (!r?.on && !photoAt && !nudges.length) return true
     let perm = await LocalNotifications.checkPermissions()
     if (perm.display !== 'granted' && interactive) perm = await LocalNotifications.requestPermissions()
     if (perm.display !== 'granted') return false
     const notifications = []
     // Monthly photos: one shot, 28 days after the last check-in at 10:00 (id 200).
     if (photoAt) notifications.push({ id: 200, title: t('Monthly photos'), body: t('Four weeks since your last check-in — take today’s front, side and back photos and see what changed.'), schedule: { at: photoAt, allowWhileIdle: true } })
+    notifications.push(...nudges)
     if (!r?.on) { if (notifications.length) await LocalNotifications.schedule({ notifications }); return true }
     const [hour, minute] = (r.time || '08:00').split(':').map(Number)
     notifications.push(...Object.entries(S.week || {})

@@ -88,8 +88,12 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    context, badge. Web: manual entry.
 2. **Distinct personalities for Sofía and Leo**: persona block in `coachSystemPrompt`, monthly
    photo note and drip copy; same evidence-based guard rails. Owner approves two briefs first.
-3. **More active nutrition notifications** (local): meal-slot nudges when nothing is logged,
-   water, evening protein gap; per-type toggles + quiet hours in Settings; opt-in.
+3. ✅ 2026-10-06 **Nutrition notifications** (local, mobile builds): breakfast / lunch / dinner
+   nudges for slots not logged, an afternoon water one (off by default) and an evening protein
+   check, each with its own switch plus quiet hours in Settings → Notifications. Planned three
+   days ahead and re-planned on every state change, because a local notification cannot test a
+   condition when it fires; today's slots are skipped when already satisfied or already past.
+   `nutritionNudges` in `lib/mobile.js`, ids 300–324, tests in `lib/nudges.test.js`.
 4. **Supplements** (Nutrition tab): user-defined items (creatine, protein…), schedule by time and
    weekday, taken/skip log, streak + badge, local reminders (ids 300+), optional kcal/protein
    auto-add for shakes. Informational only, keeps the medical disclaimer.

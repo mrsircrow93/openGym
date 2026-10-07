@@ -15,7 +15,7 @@ import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { COACHES } from '../lib/coach.js'
 import { convertProfile } from '../lib/units.js'
 import { getAIKey, setAIKey, getAIModel, setAIModel, hasUserKey, AI_MODELS, testAIKey } from '../lib/ai.js'
-import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
+import { MOBILE, shareExport, syncReminder, nudgesOf, NUDGE_DEF } from '../lib/mobile.js'
 import { healthSupported, healthAvailable, installHealthConnect, requestHealth, syncHealth, IS_IOS_SHELL } from '../lib/health.js'
 import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -378,8 +378,39 @@ function MobileReminderCard({ S, update, toast }) {
           update(s => { s.photoReminder = on })
         }} />
       </Row>
+      <NutritionNudges S={S} update={update} toast={toast} />
     </Section>
   )
+}
+
+// Eating reminders. Each one only fires for something you have not done yet today, and quiet
+// hours silence the whole set — the point is to help, not to nag.
+function NutritionNudges({ S, update, toast }) {
+  const n = nudgesOf(S)
+  const set = async patch => {
+    const next = { ...n, ...patch }
+    const turningOn = Object.entries(patch).some(([k, v]) => v === true && n[k] !== true)
+    if (turningOn) { const ok = await syncReminder({ ...S, nudges: next }, true); if (!ok) { toast(t('Could not change notification settings')); return } }
+    update(s => { s.nudges = { ...NUDGE_DEF, ...(s.nudges || {}), ...patch } })
+  }
+  const any = n.meals || n.water || n.protein
+  return <>
+    <Row icon="utensils" iconTint="var(--orange)" title={t('Meal reminders')} subtitle={t('Breakfast, lunch and dinner you have not logged')}>
+      <Switch checked={n.meals} onChange={v => set({ meals: v })} />
+    </Row>
+    <Row icon="droplet" iconTint="var(--blue)" title={t('Water reminder')} subtitle={t('Mid-afternoon, only if you are behind')}>
+      <Switch checked={n.water} onChange={v => set({ water: v })} />
+    </Row>
+    <Row icon="flame" iconTint="var(--red)" title={t('Evening protein check')} subtitle={t('At 19:30, if you are short on protein')}>
+      <Switch checked={n.protein} onChange={v => set({ protein: v })} />
+    </Row>
+    {any && <Row icon="moon" iconTint="var(--purple)" title={t('Quiet hours')} subtitle={t('Nothing is sent inside this window')}>
+      <span className="row" style={{ gap: 6 }}>
+        <input type="time" className="timef" value={n.quietFrom} onChange={e => set({ quietFrom: e.target.value })} />
+        <input type="time" className="timef" value={n.quietTo} onChange={e => set({ quietTo: e.target.value })} />
+      </span>
+    </Row>}
+  </>
 }
 
 function PushCard({ S, update, toast }) {
