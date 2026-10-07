@@ -1725,6 +1725,11 @@ const routes = {
     if (!BILLING_ENABLED || !STRIPE_SECRET_KEY) return json(res, 501, { error: 'payments are not set up yet' });
     if (!user.email) return json(res, 400, { error: 'add an email to your account first' });
     if (!user.emailVerified) return json(res, 403, { error: 'confirm your email first' });
+    // Already paying through Stripe: a second Checkout would open a second subscription and bill
+    // twice. Plan changes and cancellation go through the billing portal. (Store subscriptions
+    // are swapped inside the store's own subscription group, so they never reach this route.)
+    if (user.provider === 'stripe' && user.stripeSubscriptionId && entitlement(user).status === 'pro')
+      return json(res, 409, { error: 'you already have an active subscription — change or cancel it from the billing portal', code: 'already_subscribed' });
     const body = await readBody(req);
     const plan = PLANS.find(p => p.id === body.plan && p.price);
     if (!plan) return json(res, 400, { error: 'unknown plan' });

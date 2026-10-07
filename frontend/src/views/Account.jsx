@@ -93,7 +93,7 @@ export function Plans({ compact }) {
         const sp = await storePlans(user?.id)
         const monthly = sp.monthly?.amount
         const plans = d.plans.filter(p => sp[p.id]).map(p => { const s = sp[p.id]; const base = monthly ? monthly * p.months : 0
-          return { ...p, amount: s.amount, perMonth: Math.round(s.amount / p.months * 100) / 100, available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
+          return { ...p, amount: s.amount, priceString: s.priceString, perMonth: Math.round(s.amount / p.months * 100) / 100, available: true, savings: Math.max(0, base - s.amount), savingsPct: base ? Math.max(0, Math.round((1 - s.amount / base) * 100)) : 0 } })
         setData({ ...d, plans: plans.length ? plans : d.plans, currency: Object.values(sp)[0]?.currency || d.currency, payments: plans.length > 0, store: true, firstChargeAt: null, rescueUntil: null })
       } catch (e) { console.warn('store plans', e.message); setData({ ...d, payments: false, store: true, storeError: e.message || true }) }
     }).catch(() => setData({ plans: [] }))
@@ -118,27 +118,38 @@ export function Plans({ compact }) {
     setBusy('')
   }
   if (!data) return <div className="small dim">{t('Loading plans…')}{store && stage && <div style={{ fontSize: 11, marginTop: 4 }}>{stage}</div>}</div>
-  // Whole pesos stay whole; store prices with cents (USD 5.99) keep them.
-  const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', maximumFractionDigits: Math.abs(n - Math.round(n)) < 0.005 ? 0 : 2 }).format(n)
+  // Whole pesos stay whole; store prices with cents (USD 5.99) keep them. narrowSymbol so a
+  // foreign storefront reads "$5.99", not "USD 5.99".
+  const fmt = n => new Intl.NumberFormat(data.currency === 'MXN' ? 'es-MX' : dateLocale(), { style: 'currency', currency: data.currency || 'MXN', currencyDisplay: 'narrowSymbol', maximumFractionDigits: Math.abs(n - Math.round(n)) < 0.005 ? 0 : 2 }).format(n)
+  // The store gives its own localised string for the headline price — always show that one.
+  const amountOf = p => p.priceString || fmt(p.amount)
   const monthly = data.plans.find(p => p.months === 1)
+  const b = user?.billing || {}
+  // Already paying: the screen is about changing plan, not subscribing. Stores swap plans inside
+  // the subscription group; Stripe does it in the billing portal (buying again would open a
+  // second subscription), so there we show the portal instead of buy buttons.
+  const current = b.status === 'pro' ? b.plan || null : null
+  const curPlan = current ? data.plans.find(p => p.id === current) : null
+  const switchHere = !current || !!data.store
   // Yearly first and preselected: the cheapest month is the default answer, not a discovery.
   const ordered = [...data.plans].sort((a, b) => b.months - a.months)
   const best = ordered[0]
-  const sel = data.plans.find(p => p.id === pick) || best
-  const b = user?.billing || {}
+  const sel = data.plans.find(p => p.id === pick) || (current ? ordered.find(p => p.id !== current) || best : best)
   const inTrial = b.status === 'trial'
   const fc = data.firstChargeAt ? new Date(data.firstChargeAt) : null
   const fcLabel = fc ? fc.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' }) : null
   const rescue = data.rescueUntil && Date.parse(data.rescueUntil) > Date.now()
   const periodWord = p => p.months === 1 ? t('every month') : p.months === 12 ? t('every year') : t('every {0} months', p.months)
+  const planName = p => (p.months === 1 ? t('Monthly') : p.months === 12 ? t('Yearly') : t('{0} months', p.months))
   return <div className="pw">
     {inTrial && data.bonusDays > 0 && fcLabel && <div className="pw-bonus"><Icon name="sparkles" /><span>{t('Activate during your trial and we add {0} more days: nothing is charged until {1}.', data.bonusDays, fcLabel)}</span></div>}
     {rescue && <div className="pw-bonus" style={{ borderColor: 'var(--orange)' }}><Icon name="flame" style={{ color: 'var(--orange)' }} /><span>{t('Welcome-back price on the 6-month plan for the next 48 hours.')}</span></div>}
     <div className="pw-plans">
       {ordered.map(p => { const on = p === sel; const perMo = p.months === 1 ? p.amount : p.perMonth
-        return <button key={p.id} className={'pw-plan' + (on ? ' on' : '') + (!p.available ? ' off' : '')} disabled={!!busy || !data.payments} onClick={() => setPick(p.id)} aria-pressed={on}>
-          {p === best && <span className="plan-tag">{t('Best value')}</span>}
-          {p.months === 6 && <span className="plan-tag alt">{t('Popular')}</span>}
+        return <button key={p.id} className={'pw-plan' + (on ? ' on' : '') + (!p.available ? ' off' : '') + (p.id === current ? ' cur' : '')} disabled={!!busy || !data.payments || p.id === current} onClick={() => setPick(p.id)} aria-pressed={on}>
+          {p.id === current ? <span className="plan-tag cur">{t('Your plan')}</span> : <>
+            {p === best && <span className="plan-tag">{t('Best value')}</span>}
+            {p.months === 6 && <span className="plan-tag alt">{t('Popular')}</span>}</>}
           <span className="pw-check"><Icon name={on ? 'checkCircle' : 'dot'} /></span>
           <div className="pw-main">
             <div className="pw-name">{p.months === 1 ? t('Monthly') : p.months === 12 ? t('Yearly') : t('{0} months', p.months)}</div>
@@ -148,20 +159,30 @@ export function Plans({ compact }) {
           {/* App Store 3.1.2(c): the amount actually billed is the largest, most prominent price;
               the per-month equivalent sits under it, smaller and dimmer. */}
           <div className="pw-price">
-            <b>{fmt(p.amount)}</b><span>{periodWord(p)}</span>
+            <b>{amountOf(p)}</b><span>{periodWord(p)}</span>
             {p.months > 1 && <em>{t('≈ {0} per month', fmt(perMo))}</em>}
           </div>
         </button> })}
     </div>
     {storeMissing && <div className="small dim" style={{ marginTop: 10 }}>{t('Subscriptions are coming to this app very soon. Your trial and your data stay exactly as they are.')}</div>}
     {!storeMissing && !data.payments && <div className="small dim" style={{ marginTop: 10 }}>{data.storeError ? <>{t('The store did not answer — check your connection and try again.')}{typeof data.storeError === 'string' && <div className="dim" style={{ marginTop: 4, fontSize: 11 }}>{data.storeError}</div>}</> : t('Payments are not open yet — we will email you when they are.')}</div>}
-    {!storeMissing && data.payments && sel && <>
+    {!storeMissing && data.payments && current && !switchHere && <>
+      <div style={{ height: 12 }} />
+      <Button variant="primary" icon="crown" onClick={() => billingPortal().then(r => { if (r.url) (r.store ? window.open(r.url, '_blank', 'noopener') : window.location.href = r.url) }).catch(e => toast(e.message))}>{t('Change or cancel my plan')}</Button>
+      <div className="small muted" style={{ marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>
+        {t('You are on the {0} plan. Switching plan or cancelling happens in the billing portal, so you are never charged twice.', curPlan ? planName(curPlan) : '')}
+      </div>
+    </>}
+    {!storeMissing && data.payments && sel && switchHere && <>
       <div style={{ height: 12 }} />
       <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
-        {busy ? t('One moment…') : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : t('Subscribe · {0} {1}', fmt(sel.amount), periodWord(sel))}
+        {busy ? t('One moment…')
+          : current ? (curPlan && sel.months > curPlan.months ? t('Upgrade to {0} · {1} {2}', planName(sel), amountOf(sel), periodWord(sel)) : t('Switch to {0} · {1} {2}', planName(sel), amountOf(sel), periodWord(sel)))
+            : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : t('Subscribe · {0} {1}', amountOf(sel), periodWord(sel))}
       </Button>
       <div className="small muted" style={{ marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>
-        {inTrial && fcLabel ? t('First charge on {0}: {1} {2}. Cancel any time before from Settings.', fcLabel, fmt(sel.amount), periodWord(sel)) : t('{0} {1}, renews automatically. Cancel any time from Settings.', fmt(sel.amount), periodWord(sel))}
+        {current ? t('A longer plan starts right away; a shorter one starts when your current period ends. You are never charged twice.')
+          : inTrial && fcLabel ? t('First charge on {0}: {1} {2}. Cancel any time before from Settings.', fcLabel, amountOf(sel), periodWord(sel)) : t('{0} {1}, renews automatically. Cancel any time from Settings.', amountOf(sel), periodWord(sel))}
       </div>
       <div className="small dim" style={{ marginTop: 6, textAlign: 'center' }}>{data.store ? (STORE === 'apple' ? t('Billed through your Apple ID · manage or cancel in App Store settings') : t('Billed through Google Play · manage or cancel in Play Store settings')) : t('Secure payment with Stripe · automatic receipt · no lock-in')}</div>
     </>}
@@ -178,15 +199,15 @@ export function Paywall() {
   const b = user?.billing || {}
   const resend = async () => { try { await authResendVerify(); toast(t('Sent — check your inbox')) } catch (e) { toast(e.message) } }
   return <div className="narrow" style={{ ...wrap, justifyContent: 'flex-start', paddingTop: 48 }}>
-    <Head icon="crown" title={b.status === 'expired' && b.trialEnds ? t('Your free trial has ended') : b.status === 'trial' ? t('Keep everything after your trial') : t('Choose your plan')}
-      sub={b.status === 'trial' ? t('Coach, trainer, meal photos, your nutritionist’s plan and monthly progress photos. Pick a plan now and the trial gets longer.') : t('Keep your coach, your plans and all your progress. Your data is safe either way.')} />
+    <Head icon="crown" title={b.status === 'pro' ? t('Your subscription') : b.status === 'expired' && b.trialEnds ? t('Your free trial has ended') : b.status === 'trial' ? t('Keep everything after your trial') : t('Choose your plan')}
+      sub={b.status === 'pro' ? subscriptionLabel(b) : b.status === 'trial' ? t('Coach, trainer, meal photos, your nutritionist’s plan and monthly progress photos. Pick a plan now and the trial gets longer.') : t('Keep your coach, your plans and all your progress. Your data is safe either way.')} />
     {user && !user.emailVerified && <div className="card small" style={{ textAlign: 'left', marginBottom: 14 }}>
       {t('Confirm your email first — we sent a link to {0}.', user.email)} <button className="linkbtn" onClick={resend}>{t('Send it again')}</button>
     </div>}
     <Plans />
     <div style={{ height: 18 }} />
     <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-      {b.provider && <Button size="sm" onClick={() => billingPortal().then(r => { if (r.url) (r.store ? window.open(r.url, '_blank', 'noopener') : window.location.href = r.url) }).catch(e => toast(e.message))}>{t('Manage subscription')}</Button>}
+      {b.provider && !(b.status === 'pro' && b.provider === 'stripe') && <Button size="sm" onClick={() => billingPortal().then(r => { if (r.url) (r.store ? window.open(r.url, '_blank', 'noopener') : window.location.href = r.url) }).catch(e => toast(e.message))}>{t('Manage subscription')}</Button>}
       <Button size="sm" onClick={() => refreshMe()}>{t('I already paid')}</Button>
       {b.active ? <Button size="sm" variant="ghost" className="dim" onClick={() => nav('/home')}>{t('Not now')}</Button>
         : <Button size="sm" variant="ghost" className="dim" onClick={() => signOut()}>{t('Sign out')}</Button>}

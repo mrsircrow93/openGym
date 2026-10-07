@@ -117,6 +117,16 @@ describe('admin console', () => {
     const reset = await j(await call('/api/admin/ai/caps', { as: 'owner', body: { global: null, trial: null } }))
     expect(reset.caps.global).toBe(null)
   })
+  it('a paying Stripe subscriber cannot open a second checkout', async () => {
+    await call('/api/admin/stepup', { as: 'owner', body: { password: 'correct horse battery owner' } })
+    await call('/api/admin/user/action', { as: 'owner', body: { id: T.bobId, action: 'comp_days', days: 30 } })
+    const dbf = path.join(dir, 'db.json'); const db = JSON.parse(fs.readFileSync(dbf, 'utf8'))
+    const bob = db.users.find(u => u.id === T.bobId); bob.provider = 'stripe'; bob.stripeSubscriptionId = 'sub_x'; bob.plan = 'monthly'
+    fs.writeFileSync(dbf, JSON.stringify(db))
+    await stop(); await boot({ ADMIN_UIDS: T.ownerId, STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_MONTHLY: 'price_m' })
+    const r = await j(await call('/api/billing/checkout', { as: 'bob', body: { plan: 'monthly' } }))
+    expect(r.http).toBe(409); expect(r.code).toBe('already_subscribed')
+  })
   it('step-down closes the console again', async () => {
     await call('/api/admin/stepdown', { as: 'owner', body: {} })
     expect((await call('/api/admin/overview', { as: 'owner' })).status).toBe(428)

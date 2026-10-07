@@ -1241,6 +1241,8 @@ h4.sec{
 .pw-bonus{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;border:1.5px solid var(--acc);background:var(--acc-soft);font-size:14px;line-height:1.45;margin-bottom:12px}
 .pw-bonus .icn{color:var(--acc);flex:none;margin-top:2px}
 .pw-plans{display:flex;flex-direction:column;gap:10px}
+.pw-plan.cur{opacity:.9;border-color:var(--sep);cursor:default}
+.plan-tag.cur{background:var(--surface-2);color:var(--label-2)}
 .pw-plan{position:relative;display:flex;align-items:center;gap:12px;width:100%;padding:16px 14px;border-radius:18px;background:var(--surface);border:2px solid var(--sep);color:var(--label);text-align:left;transition:border-color .15s,transform .15s}
 .pw-plan.on{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,var(--surface))}
 .pw-plan:not(.on){opacity:.82}
