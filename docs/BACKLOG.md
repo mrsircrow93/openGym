@@ -61,6 +61,14 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 
 - Continue with Apple (needs #2). Same shape as Google: ID token verified server-side.
 - ✅ 2026-10-03 In-app purchases via RevenueCat — sandbox purchase verified end to end on the owner's iPhone (INITIAL_PURCHASE → webhook → PRO). (iOS live in code; `REVENUECAT_WEBHOOK_AUTH` + webhook in the dashboard, optional `REVENUECAT_SECRET_KEY`). Android: add the Play app in RevenueCat and `VITE_RC_GOOGLE_KEY` once Play is approved. Owner: Apple Small Business Program (15 % instead of 30 %) before the first payout; optional introductory free trial on the ASC subscriptions.
+- 2026-10-06 **App Store review #1 rejected**, both issues fixed in build 26 and resubmitted:
+  - *3.1.2(c)* the plans screen showed the per-month equivalent larger than the billed amount →
+    the billed total is now the big number, the per-month figure sits under it small and dim, and
+    the CTA reads "Suscribirme · $999 cada año".
+  - *1.4.1* nutrition targets are health information and needed reachable citations → the sources
+    sheet now lists Mifflin-St Jeor, Frankenfield, FAO/WHO/UNU, WHO, CDC, NHLBI, Hall, the ISSN
+    protein position stand and the IOM AMDR as tappable links, and it is reachable from the
+    Nutrition screen and the Daily-targets sheet, not only from inside the goal wizard.
 - ✅ 2026-10-04 App Store: listing (es-MX + en-US copy, 24 framed screenshots, 4+, free, 175 territories, privacy labels, demo account) and **version 1.0 (build 25) submitted for review with the three subscriptions**. Generators: `frontend/scripts/store-shots.mjs` + `store-frames.py`; copy in docs/STORE_LISTING.md. Google Play listing still pending (reuse the same assets).
 - Receipts/emails with the legal name (#5).
 - Later: prompt caching, in-memory limiters to the DB if a second API container ever appears,
