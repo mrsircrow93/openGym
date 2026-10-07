@@ -5,6 +5,7 @@ import { fmtNum, fmtDate, todayISO, isoOf, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { lastBW } from '../lib/history.js'
 import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, MEAL_TYPE_ICON, MEAL_TYPE_LABEL, MEAL_TYPES } from '../lib/nutrition.js'
+import { SupplementsCard } from '../sheets-supplements.jsx'
 import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, addMealSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
 import { goalWizardSheet, sourcesSheet } from '../sheets-goal.jsx'
 import { reviewDue, toKg } from '../lib/nutrition-goal.js'
@@ -162,6 +163,8 @@ export default function Nutrition() {
       </div>}
       {!meals.length && <div className="small dim" style={{ marginTop: 10, textAlign: 'center' }}>{isToday ? t('Tap a meal to log it — photo, a sentence or by hand.') : t('Nothing logged on {0}.', fmtDate(iso, true))}</div>}
     </div>
+
+    {isToday && <SupplementsCard />}
 
   </div>
 }

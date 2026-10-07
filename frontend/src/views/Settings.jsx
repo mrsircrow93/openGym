@@ -393,7 +393,7 @@ function NutritionNudges({ S, update, toast }) {
     if (turningOn) { const ok = await syncReminder({ ...S, nudges: next }, true); if (!ok) { toast(t('Could not change notification settings')); return } }
     update(s => { s.nudges = { ...NUDGE_DEF, ...(s.nudges || {}), ...patch } })
   }
-  const any = n.meals || n.water || n.protein
+  const any = n.meals || n.water || n.protein || n.supplements
   return <>
     <Row icon="utensils" iconTint="var(--orange)" title={t('Meal reminders')} subtitle={t('Breakfast, lunch and dinner you have not logged')}>
       <Switch checked={n.meals} onChange={v => set({ meals: v })} />
@@ -403,6 +403,9 @@ function NutritionNudges({ S, update, toast }) {
     </Row>
     <Row icon="flame" iconTint="var(--red)" title={t('Evening protein check')} subtitle={t('At 19:30, if you are short on protein')}>
       <Switch checked={n.protein} onChange={v => set({ protein: v })} />
+    </Row>
+    <Row icon="sparkles" iconTint="var(--purple)" title={t('Supplement reminders')} subtitle={t('At the times you set for each one')}>
+      <Switch checked={n.supplements} onChange={v => set({ supplements: v })} />
     </Row>
     {any && <Row icon="moon" iconTint="var(--purple)" title={t('Quiet hours')} subtitle={t('Nothing is sent inside this window')}>
       <span className="row" style={{ gap: 6 }}>

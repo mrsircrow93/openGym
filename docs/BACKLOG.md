@@ -94,9 +94,13 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    days ahead and re-planned on every state change, because a local notification cannot test a
    condition when it fires; today's slots are skipped when already satisfied or already past.
    `nutritionNudges` in `lib/mobile.js`, ids 300–324, tests in `lib/nudges.test.js`.
-4. **Supplements** (Nutrition tab): user-defined items (creatine, protein…), schedule by time and
-   weekday, taken/skip log, streak + badge, local reminders (ids 300+), optional kcal/protein
-   auto-add for shakes. Informational only, keeps the medical disclaimer.
+4. ✅ 2026-10-06 **Supplements** (Nutrition tab): user-defined items with dose, unit, up to three
+   times a day and chosen weekdays; today's doses tick off in the card, with a streak of fully
+   kept days; local reminders at the user's own times (ids 400–489, quiet hours apply) behind
+   their own switch in Settings. Presets (creatine, protein, vitamin D…) are starting points, not
+   advice: the sheet states the app recommends neither substances nor doses.
+   `lib/supplements.js` + `sheets-supplements.jsx`, tests in `lib/supplements.test.js`.
+   Still open from the original idea: auto-adding a protein shake to the day's macros.
 5. **Photo / short video on custom exercises** (owner, 2026-10-05): when a person creates their
    own exercise, let them attach a reference photo or a clip of a few seconds. Needs: media
    upload route reusing `api/upload.js` checks (images now; video = MP4/MOV ≤ 15 s ≤ 10 MB with

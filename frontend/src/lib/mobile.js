@@ -11,6 +11,7 @@
 // web bundles; the Capacitor plugins are only ever imported behind it.
 import { t } from './i18n.js'
 import { macroGoalOf, totalsOf } from './nutrition.js'
+import { supplementReminders, SUPPLEMENT_IDS } from './supplements.js'
 
 export const MOBILE = import.meta.env.VITE_MOBILE === '1'
 // Where the store app talks to. Baked in at build time (package.json build:mobile).
@@ -54,7 +55,7 @@ export async function nativeSave(state) {
 // an evening protein check. Local notifications cannot evaluate a condition when they fire, so
 // we re-plan them on every state change: today's slots are skipped when already satisfied or
 // already past, and the next two days are scheduled generically.
-export const NUDGE_DEF = { meals: true, water: false, protein: true, quietFrom: '22:00', quietTo: '07:00' }
+export const NUDGE_DEF = { meals: true, water: false, protein: true, supplements: true, quietFrom: '22:00', quietTo: '07:00' }
 export const nudgesOf = S => ({ ...NUDGE_DEF, ...(S.nudges || {}) })
 const SLOTS = [
   { key: 'breakfast', kind: 'meals', at: '09:30' },
@@ -111,6 +112,20 @@ export function nutritionNudges(S, now = new Date()) {
   return out
 }
 
+// Supplement reminders use the times the person set, so quiet hours are the only filter: if you
+// asked for 22:30 creatine, that is your call, but the default window still protects the night.
+export function supplementNudges(S, now = new Date()) {
+  const n = nudgesOf(S)
+  if (!n.supplements) return []
+  return supplementReminders(S, now).filter(r => !inQuiet(r.at.getHours() * 60 + r.at.getMinutes(), n.quietFrom, n.quietTo))
+    .map(r => ({
+      id: r.id,
+      title: r.sup.name,
+      body: (r.sup.dose ? t('Time for {0} {1} of {2}.', r.sup.dose, r.sup.unit, r.sup.name) : t('Time for your {0}.', r.sup.name)) + (r.sup.withFood ? ' ' + t('Take it with food.') : ''),
+      schedule: { at: r.at, allowWhileIdle: true }
+    }))
+}
+
 // (Re)schedule the workout-day reminder: one repeating notification per weekday that has a
 // routine in the weekly plan. Cheap enough to run after any state change — the plan or the
 // reminder time may just have been edited. `interactive` gates the OS permission prompt to
@@ -120,10 +135,11 @@ export async function syncReminder(S, interactive = false) {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
     const nudgeIds = []
     for (let i = 0; i < 25; i++) nudgeIds.push({ id: 300 + i })
+    for (const id of SUPPLEMENT_IDS) nudgeIds.push({ id })
     await LocalNotifications.cancel({ notifications: [...[0, 1, 2, 3, 4, 5, 6, 100].map(d => ({ id: 100 + d })), ...nudgeIds] }).catch(() => {})
     const r = S.reminder
     const photoAt = photoReminderAt(S)
-    const nudges = nutritionNudges(S)
+    const nudges = [...nutritionNudges(S), ...supplementNudges(S)]
     if (!r?.on && !photoAt && !nudges.length) return true
     let perm = await LocalNotifications.checkPermissions()
     if (perm.display !== 'granted' && interactive) perm = await LocalNotifications.requestPermissions()

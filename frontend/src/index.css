@@ -1372,3 +1372,15 @@ body.console #tabbar{display:none}
   .adm-grid4{grid-template-columns:1fr 1fr} .adm-split{grid-template-columns:1fr} .adm-detail-pane{position:static;max-height:none}
   .adm-formgrid{grid-template-columns:1fr 1fr} .adm-main{padding:14px 14px 80px}
 }
+
+/* -------------------------------------------------------- supplements -- */
+.suprow{display:flex;align-items:center;gap:10px;width:100%;padding:10px 2px;border:0;border-top:1px solid var(--sep);background:none;color:var(--label);font:inherit;text-align:left;cursor:pointer}
+.suprow:first-of-type{border-top:0}
+.suprow .grow{flex:1;min-width:0}
+.suprow b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.suprow .supmeta{display:block;font-size:12px;color:var(--label-3)}
+.supcheck{flex:none;font-size:20px;color:var(--label-3);display:flex}
+.supcheck.on{color:var(--acc)}
+.supdone{text-decoration:line-through;color:var(--label-3)}
+.supedit{flex:none;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--label-3)}
+.supedit:active{background:var(--surface-2)}
