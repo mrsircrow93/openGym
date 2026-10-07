@@ -186,3 +186,5 @@ Apple Developer setup (once): Certificates, IDs & Profiles →
 3. **Services → Sign in with Apple for Email Communication → Email Sources**: add the domain
    `vantixgym.app` and `soporte@vantixgym.app` / `no-reply@vantixgym.app`, so mails to relay
    addresses are delivered (SPF/DKIM already in place).
+
+- Android OAuth client (Play app signing, created 2026-10-07): `918446786425-35ck551a9t9ph1pvhguaf7qd8o8tiip6.apps.googleusercontent.com`, package `app.vantixgym.mobile`, SHA-1 `8C:FE:B2:B7:DA:58:16:B6:DA:DC:CB:D5:B4:52:62:8A:F8:1B:6D:28`. The debug-signed client stays alongside it; an Android client holds one fingerprint each. The app authenticates with the *web* client id.
