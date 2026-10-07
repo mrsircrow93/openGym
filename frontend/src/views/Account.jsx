@@ -142,12 +142,14 @@ export function Plans({ compact }) {
           <span className="pw-check"><Icon name={on ? 'checkCircle' : 'dot'} /></span>
           <div className="pw-main">
             <div className="pw-name">{p.months === 1 ? t('Monthly') : p.months === 12 ? t('Yearly') : t('{0} months', p.months)}</div>
-            <div className="pw-sub">{p.months === 1 ? t('{0} every month', fmt(p.amount)) : t('{0} {1} · one payment', fmt(p.amount), periodWord(p))}</div>
+            <div className="pw-sub">{p.months === 1 ? t('Renews {0}', periodWord(p)) : t('One payment · renews {0}', periodWord(p))}</div>
             {p.savings > 0 && <div className="pw-save">{t('You save {0} ({1}%) vs monthly', fmt(p.savings), p.savingsPct)}</div>}
           </div>
+          {/* App Store 3.1.2(c): the amount actually billed is the largest, most prominent price;
+              the per-month equivalent sits under it, smaller and dimmer. */}
           <div className="pw-price">
-            {monthly && p.months > 1 && <s>{fmt(monthly.amount)}</s>}
-            <b>{fmt(perMo)}</b><span>{t('per month')}</span>
+            <b>{fmt(p.amount)}</b><span>{periodWord(p)}</span>
+            {p.months > 1 && <em>{t('≈ {0} per month', fmt(perMo))}</em>}
           </div>
         </button> })}
     </div>
@@ -156,7 +158,7 @@ export function Plans({ compact }) {
     {!storeMissing && data.payments && sel && <>
       <div style={{ height: 12 }} />
       <Button variant="primary" icon="crown" disabled={!!busy || !sel.available} onClick={() => buy(sel.id)}>
-        {busy ? t('One moment…') : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : b.status === 'expired' ? t('Continue with {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months)) : t('Choose {0}', sel.months === 1 ? t('Monthly') : sel.months === 12 ? t('Yearly') : t('{0} months', sel.months))}
+        {busy ? t('One moment…') : inTrial && fcLabel ? t('Activate my plan · {0} today', fmt(0)) : t('Subscribe · {0} {1}', fmt(sel.amount), periodWord(sel))}
       </Button>
       <div className="small muted" style={{ marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>
         {inTrial && fcLabel ? t('First charge on {0}: {1} {2}. Cancel any time before from Settings.', fcLabel, fmt(sel.amount), periodWord(sel)) : t('{0} {1}, renews automatically. Cancel any time from Settings.', fmt(sel.amount), periodWord(sel))}

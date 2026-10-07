@@ -1253,8 +1253,8 @@ h4.sec{
 .pw-sub{font-size:13px;color:var(--label-2);margin-top:2px}
 .pw-save{font-size:12px;font-weight:600;color:var(--acc);margin-top:4px}
 .pw-price{text-align:right;flex:none}
-.pw-price s{display:block;font-size:12px;color:var(--dim)}
-.pw-price b{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.pw-price em{display:block;font-size:11px;font-style:normal;color:var(--dim);margin-top:2px}
+.pw-price b{display:block;font-size:25px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .pw-price span{display:block;font-size:11px;color:var(--label-2)}
 .plan-tag.alt{background:var(--surface-3);color:var(--label)}
 .pw-plan .plan-tag{top:-10px;left:14px}

@@ -139,17 +139,49 @@ function GoalWizard({ close }) {
 }
 export const goalWizardSheet = () => ui().openSheet(close => <GoalWizard close={close} />)
 
+// Citations for every number the calorie assistant produces. App Store guideline 1.4.1 asks
+// health/medical information to carry sources the user can reach, so each claim links to the
+// paper or health agency it comes from. Reachable from the wizard, the Nutrition screen and the
+// daily-targets sheet.
+const REFS = {
+  mifflin: ['Mifflin MD et al., Am J Clin Nutr 1990', 'https://pubmed.ncbi.nlm.nih.gov/2305711/'],
+  frankenfield: ['Frankenfield D et al., J Am Diet Assoc 2005', 'https://pubmed.ncbi.nlm.nih.gov/15883556/'],
+  fao: ['FAO/WHO/UNU, Human energy requirements 2004', 'https://www.fao.org/4/y5686e/y5686e00.htm'],
+  who: ['WHO, Healthy diet', 'https://www.who.int/news-room/fact-sheets/detail/healthy-diet'],
+  cdc: ['CDC, Losing weight', 'https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html'],
+  nhlbi: ['NHLBI, Practical guide on overweight and obesity', 'https://www.nhlbi.nih.gov/files/docs/guidelines/prctgd_c.pdf'],
+  issn: ['Jäger R et al., ISSN position stand: protein, JISSN 2017', 'https://pubmed.ncbi.nlm.nih.gov/28642676/'],
+  dri: ['Institute of Medicine, Dietary Reference Intakes (AMDR)', 'https://nap.nationalacademies.org/catalog/10490'],
+  hall: ['Hall KD, Int J Obes 2008 (energy per kg of body fat)', 'https://pubmed.ncbi.nlm.nih.gov/18175736/']
+}
+const Ref = ({ k }) => <button className="linkbtn" style={{ fontSize: 12, textAlign: 'left' }} onClick={() => window.open(REFS[k][1], '_blank', 'noopener')}>{REFS[k][0]}</button>
+
 function Sources({ res, close }) {
+  const Item = ({ title, children, refs }) => <div style={{ paddingTop: 10, borderTop: '1px solid var(--sep)' }}>
+    <b className="small">{title}</b>
+    <div className="small muted" style={{ lineHeight: 1.55, margin: '2px 0 4px' }}>{children}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{refs.map(k => <Ref key={k} k={k} />)}</div>
+  </div>
   return <>
     <h3>{t('Where do these numbers come from?')}</h3>
-    <div className="small muted" style={{ lineHeight: 1.6 }}>
-      <p><b>{t('Resting energy')}:</b> {t('Mifflin-St Jeor equation (1990), the one with the best accuracy in adults in comparisons by the Academy of Nutrition and Dietetics.')}{res ? ' ' + t('Yours: about {0} kcal.', fmtNum(res.bmr)) : ''}</p>
-      <p><b>{t('Daily burn')}:</b> {t('resting energy times an activity factor between 1.2 (mostly sitting) and 1.9 (very active).')}{res ? ' ' + t('Yours: about {0} kcal.', fmtNum(res.maintenance)) : ''}</p>
-      <p><b>{t('Deficit or surplus')}:</b> {t('10–25% of the daily burn. About 7,700 kcal correspond to one kilo of body fat, so 500 kcal a day is roughly half a kilo a week. Health agencies (WHO, CDC) recommend no more than 0.5–1 kg a week; the app never plans more than 1% of body weight a week and never goes under 1,200 kcal (women) or 1,500 kcal (men).')}</p>
-      <p><b>{t('Protein')}:</b> {t('1.6–2.2 g per kg of body weight (International Society of Sports Nutrition position stand), higher in a deficit to protect muscle.')}</p>
-      <p><b>{t('Fat and carbs')}:</b> {t('fat around 25–30% of calories for hormones and satiety; carbohydrates fill the rest and fuel training.')}</p>
-      <p>{t('These are population averages: your real burn can differ by 10–15%. Weigh yourself a few times a week and adjust with the review the app suggests.')}</p>
-    </div>
+    <div className="small muted" style={{ lineHeight: 1.6, marginBottom: 8 }}>{t('Every target the app suggests comes from published research or public health guidance. Tap a source to open it.')}</div>
+    <Item title={t('Resting energy')} refs={['mifflin', 'frankenfield']}>
+      {t('Mifflin-St Jeor equation (1990), the one with the best accuracy in adults in comparisons by the Academy of Nutrition and Dietetics.')}{res ? ' ' + t('Yours: about {0} kcal.', fmtNum(res.bmr)) : ''}
+    </Item>
+    <Item title={t('Daily burn')} refs={['fao']}>
+      {t('resting energy times an activity factor between 1.2 (mostly sitting) and 1.9 (very active).')}{res ? ' ' + t('Yours: about {0} kcal.', fmtNum(res.maintenance)) : ''}
+    </Item>
+    <Item title={t('Deficit or surplus')} refs={['cdc', 'who', 'nhlbi', 'hall']}>
+      {t('10–25% of the daily burn. About 7,700 kcal correspond to one kilo of body fat, so 500 kcal a day is roughly half a kilo a week. Health agencies (WHO, CDC) recommend no more than 0.5–1 kg a week; the app never plans more than 1% of body weight a week and never goes under 1,200 kcal (women) or 1,500 kcal (men).')}
+    </Item>
+    <Item title={t('Protein')} refs={['issn']}>
+      {t('1.6–2.2 g per kg of body weight (International Society of Sports Nutrition position stand), higher in a deficit to protect muscle.')}
+    </Item>
+    <Item title={t('Fat and carbs')} refs={['dri']}>
+      {t('fat around 25–30% of calories for hormones and satiety; carbohydrates fill the rest and fuel training.')}
+    </Item>
+    <div className="small muted" style={{ lineHeight: 1.6, margin: '10px 0' }}>{t('These are population averages: your real burn can differ by 10–15%. Weigh yourself a few times a week and adjust with the review the app suggests.')}</div>
+    <div className="card small muted" style={{ lineHeight: 1.5, borderLeft: '3px solid var(--yellow)' }}><Icon name="shield" style={{ fontSize: 13, marginRight: 6, color: 'var(--yellow)' }} />{t(DISCLAIMER)}</div>
     <div style={{ height: 10 }} /><Button onClick={close}>{t('Done')}</Button>
   </>
 }

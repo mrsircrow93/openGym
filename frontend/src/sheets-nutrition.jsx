@@ -15,7 +15,7 @@ import {
 import Icon from './components/Icon.jsx'
 import { Button, Segmented, TextField, TextArea, Stepper } from './components/ui.jsx'
 import Ring from './components/Ring.jsx'
-import { goalWizardSheet, DISCLAIMER } from './sheets-goal.jsx'
+import { goalWizardSheet, sourcesSheet, DISCLAIMER } from './sheets-goal.jsx'
 import { GOAL_LABEL } from './lib/nutrition-goal.js'
 
 const update = (...a) => useStore.getState().update(...a)
@@ -429,6 +429,7 @@ function MacroGoal({ close }) {
   const [planFile, setPlanFile] = useState(null)
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="target" style={{ color: 'var(--yellow)' }} />{t('Daily targets')}</h3>
+    <div style={{ margin: '2px 0 8px' }}><button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Where do these numbers come from?')}</button></div>
     <button className="card tappable" style={{ width: '100%', textAlign: 'left', marginBottom: 12, padding: 14 }} onClick={() => { close(); goalWizardSheet() }}>
       <div className="row" style={{ gap: 12, alignItems: 'center' }}>
         <span className="lrow-i" style={{ '--tint': 'var(--yellow)', color: '#000', width: 40, height: 40, borderRadius: 12 }}><Icon name="bolt" /></span>

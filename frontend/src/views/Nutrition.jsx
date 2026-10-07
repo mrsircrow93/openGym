@@ -6,7 +6,7 @@ import { t, dateLocale } from '../lib/i18n.js'
 import { lastBW } from '../lib/history.js'
 import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, avgLogged, MEAL_TYPE_ICON, MEAL_TYPE_LABEL, MEAL_TYPES } from '../lib/nutrition.js'
 import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, addMealSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
-import { goalWizardSheet } from '../sheets-goal.jsx'
+import { goalWizardSheet, sourcesSheet } from '../sheets-goal.jsx'
 import { reviewDue, toKg } from '../lib/nutrition-goal.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -84,6 +84,8 @@ export default function Nutrition() {
         <Button size="sm" icon="target" style={{ color: 'var(--yellow)' }} onClick={macroGoalSheet}>{t('Targets')}</Button>
       </div>
       <DaySummary tot={tot} goal={goal} />
+      {/* guideline 1.4.1: the sources behind these targets are one tap away from the targets */}
+      <div style={{ marginTop: 8 }}><button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Where do these numbers come from?')}</button></div>
     </div>
 
     <div className="card">
