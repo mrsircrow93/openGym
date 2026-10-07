@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtWater, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
+import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDone, workoutVolume } from '../lib/history.js'
+import { fmtNum, fmtDate, fmtDur, fmtVol, fmtWater, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { daysLeft } from '../lib/entitlements.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, coachSheet, COACH_QUESTIONS, waterSheet, addWater, waterToday } from '../sheets.jsx'
@@ -40,6 +40,9 @@ export default function Home() {
   const today = new Date()
   const routine = effectiveRoutine(S, todayISO())
   const todayOvr = S.dayPlan[todayISO()] !== undefined
+  // Today's session is logged: the card celebrates it instead of offering the same workout again.
+  // Training twice is still possible, just not the default next step.
+  const doneToday = [...S.workouts].reverse().find(w => w.d === todayISO()) || null
   const bw = lastBW(S)
   const prevBW = S.bodyweight.length > 1 ? S.bodyweight[S.bodyweight.length - 2] : null
   const delta = bw && prevBW ? bw.w - prevBW.w : null
@@ -107,23 +110,30 @@ export default function Home() {
     </button>}
 
     {/* the one thing to do now */}
-    <div className={'card' + (routine || S.active ? ' hero' : '')}>
+    <div className={'card' + (routine || S.active || doneToday ? ' hero' : '')}>
       <div className="row between" style={{ marginBottom: 10 }}>
-        <span className={'pill' + (S.active ? '' : ' acc')} style={S.active ? { background: 'color-mix(in srgb,var(--orange) 16%,transparent)', color: 'var(--orange)' } : undefined}>
-          <Icon name={S.active ? 'timer' : routine ? 'play' : 'moon'} />
-          {S.active ? t('In progress') : routine ? t('Next routine') : t('Today')}
+        <span className={'pill' + (S.active || doneToday ? '' : routine ? ' acc' : '')} style={S.active ? { background: 'color-mix(in srgb,var(--orange) 16%,transparent)', color: 'var(--orange)' } : doneToday ? { background: 'color-mix(in srgb,var(--green) 16%,transparent)', color: 'var(--green)' } : undefined}>
+          <Icon name={S.active ? 'timer' : doneToday ? 'checkCircle' : routine ? 'play' : 'moon'} />
+          {S.active ? t('In progress') : doneToday ? t('Done today') : routine ? t('Next routine') : t('Today')}
         </span>
-        <span className="dim small">{todayOvr && routine ? t('rescheduled') : t('Today')}</span>
+        <span className="dim small">{todayOvr && routine && !doneToday ? t('rescheduled') : t('Today')}</span>
       </div>
-      <div className="big" style={{ textTransform: 'capitalize' }}>{S.active ? S.active.name : routine ? routine.name : t('Rest day')}</div>
+      <div className="big" style={{ textTransform: 'capitalize' }}>{S.active ? S.active.name : doneToday ? doneToday.name : routine ? routine.name : t('Rest day')}</div>
       <div className="muted small" style={{ marginTop: 4, marginBottom: 16 }}>
-        {S.active ? t('Pick up where you left off') : routine ? t('{0} exercises', routine.ex.length) + (exNames ? ' · ' + exNames : '') : t('Recover well — or move a session here.')}
+        {S.active ? t('Pick up where you left off')
+          : doneToday ? t('{0} sets · {1}', setsDone(doneToday), fmtDur((doneToday.end || doneToday.start) - doneToday.start)) + ' · ' + fmtVol(doneToday.vol ?? workoutVolume(doneToday), S.unit || 'kg') + (doneToday.prs?.length ? ' · ' + t('{0} PR', doneToday.prs.length) : '')
+            : routine ? t('{0} exercises', routine.ex.length) + (exNames ? ' · ' + exNames : '') : t('Recover well — or move a session here.')}
       </div>
       {S.active
         ? <Button variant="primary" icon="play" onClick={onToday} style={{ background: 'var(--orange)', color: '#000', boxShadow: 'none' }}>{t('Resume workout')}</Button>
-        : routine
-          ? <Button variant="primary" icon="play" onClick={onToday}>{t('Start workout')}</Button>
-          : <Button variant="tinted" icon="calendar" onClick={onToday}>{t('Train anyway')}</Button>}
+        : doneToday
+          ? <div className="row" style={{ gap: 8 }}>
+            <Button style={{ flex: 1 }} icon="chart" onClick={() => nav('/history')}>{t('See summary')}</Button>
+            <Button style={{ flex: 1 }} variant="tinted" icon="play" onClick={onToday}>{t('Train again')}</Button>
+          </div>
+          : routine
+            ? <Button variant="primary" icon="play" onClick={onToday}>{t('Start workout')}</Button>
+            : <Button variant="tinted" icon="calendar" onClick={onToday}>{t('Train anyway')}</Button>}
     </div>
 
     {!S.routines.length && !S.active && (
