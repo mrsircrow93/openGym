@@ -173,8 +173,13 @@ manual signing, certificate "Apple Distribution", profile "VantixGym App Store".
   Back up `~/.vantixgym/` — losing it means asking Google for an upload-key reset.
   Upload-key SHA-1: `3B:4F:8A:B9:91:0D:3E:3A:22:0E:D0:C0:4F:64:AA:D8:12:ED:43:4F`.
 - Play App Signing re-signs the app with Google's own key, so **Google sign-in on Play builds needs
-  the app-signing SHA-1 from Play Console** (Release → Setup → App signing) added to the Android
-  OAuth client in Google Cloud, next to the debug SHA-1.
+  the app-signing SHA-1 registered in Google Cloud**. An Android OAuth client holds exactly one
+  fingerprint, so there are two clients for the same package `app.vantixgym.mobile`:
+  debug `8C:9C:97:B1:04:0F:2C:C7:4E:DB:7D:E9:BE:FF:EB:E9:40:97:C5:65` (local installs) and
+  Play app-signing `8C:FE:B2:B7:DA:58:16:B6:DA:DC:CB:D5:B4:52:62:8A:F8:1B:6D:28` (store installs).
+  The app keeps using the *web* client id as `serverClientId`; the Android clients only authorise
+  the signature. In Play Console the fingerprint lives at `…/app/<id>/keymanagement` (Google moved
+  it out of the sidebar into "Protegido con Play").
 - Build a release bundle:
 
 ```sh
