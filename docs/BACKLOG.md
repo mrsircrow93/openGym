@@ -82,7 +82,8 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 
 Suggested order by value/effort: 3 → 4 → 2 → 1.
 
-1. **Sleep from a smartwatch** via Apple Health / Health Connect. `capacitor-health` has no sleep
+1. ⏸ **Deferred to v2 by the owner (2026-10-07)** — **Sleep from a smartwatch** via Apple Health /
+   Health Connect (whatever the user's watch already writes there; no per-brand integrations). `capacitor-health` has no sleep
    type: add a small native plugin (HKCategoryTypeIdentifier.sleepAnalysis / SleepSessionRecord)
    or switch plugin. Nightly duration (+stages when the watch provides them), 7-day card, coach
    context, badge. Web: manual entry.
