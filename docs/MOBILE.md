@@ -183,6 +183,11 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradl
 # -> app/build/outputs/bundle/release/app-release.aab
 ```
 
+- The social-login plugin bundles the Facebook SDK (we only use Google and Apple), which declares
+  `com.google.android.gms.permission.AD_ID` and `ACCESS_ADSERVICES_AD_ID`. Both are stripped with
+  `tools:node="remove"` in `app/src/main/AndroidManifest.xml`, so Play's advertising-id declaration
+  is honestly "no". If the plugin is ever updated, re-check the merged manifest:
+  `unzip -p app-release.aab base/manifest/AndroidManifest.xml | strings | grep AD_ID`.
 - `versionCode` must increase on every upload (25 was the first); `versionName` is what Play shows.
 - In-app purchases: a store build with no RevenueCat key for its platform shows "subscriptions are
   coming soon" instead of falling back to web checkout, because Play (and Apple) forbid that.

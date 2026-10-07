@@ -45,6 +45,12 @@
     <!-- Permissions -->
     <!-- Health Connect (steps + weight only — every declared permission shows on the consent screen) -->
     <queries><package android:name="com.google.android.apps.healthdata" /></queries>
+    <!-- The Facebook SDK rides along inside the social-login plugin (we only use Google and
+         Apple) and declares the advertising id permissions. We do not read the advertising id,
+         do not show ads and do not track anyone, so the permissions come straight back out:
+         Play asks every developer to declare this, and the honest answer is "no". -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <!-- the plugin library declares every health permission; strip the ones we never ask for (Play shows all declared) -->
