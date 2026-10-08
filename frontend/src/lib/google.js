@@ -35,7 +35,10 @@ export async function nativeGoogleSignIn(webClientId) {
   const { SocialLogin } = await import('@capgo/capacitor-social-login')
   if (!nativeReady) nativeReady = SocialLogin.initialize({ google: { webClientId, iOSClientId: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || undefined, iOSServerClientId: webClientId, mode: 'online' } })
   await nativeReady
-  const r = await SocialLogin.login({ provider: 'google', options: { scopes: ['email', 'profile'] } })
+  // No `scopes` here on purpose: the plugin already asks for openid, email and profile, and on
+  // Android passing *any* scopes array makes it refuse unless MainActivity implements the
+  // plugin's own interface ("You CANNOT use scopes without modifying the main activity").
+  const r = await SocialLogin.login({ provider: 'google', options: {} })
   const tok = r && r.result && r.result.idToken
   if (!tok) throw new Error('Google did not return a sign-in token')
   return tok
