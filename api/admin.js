@@ -295,7 +295,9 @@ export function createAdmin(ctx) {
           if (roleOf(u)) return json(res, 400, { error: 'remove the role first' });
           u.deletedAt = new Date().toISOString(); u.sv = (u.sv || 0) + 1; ctx.presence.delete(u.id); break;
         }
-        case 'undelete': { if (!can(me, 'users.delete')) return json(res, 403, { error: 'your role cannot restore accounts' }); delete u.deletedAt; break; }
+        // Restoring brings the account all the way back: a deleted account that was also
+        // disabled would otherwise still be refused at sign-in, with no way for the person to tell.
+        case 'undelete': { if (!can(me, 'users.delete')) return json(res, 403, { error: 'your role cannot restore accounts' }); delete u.deletedAt; u.disabled = false; break; }
         case 'stripe_pull': {
           if (!stripeOn() || !u.stripeSubscriptionId) return json(res, 400, { error: 'no Stripe subscription' });
           ctx.applySubscription(await ctx.stripe('GET', '/subscriptions/' + u.stripeSubscriptionId)); break;

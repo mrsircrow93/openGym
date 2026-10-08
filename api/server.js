@@ -1289,7 +1289,7 @@ const routes = {
     saveDb();
     const user = db.users.find(u => u.id === cred.userId);
     if (!user) return json(res, 500, { error: 'user missing' });
-    if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    if (user.disabled) return json(res, 403, { error: 'this account has been disabled', code: 'account_disabled' });
     if (user.deletedAt) { delete user.deletedAt; saveDb(); }   // signing in within the grace period undoes the deletion
     json(res, 200, { user: pubUser(user) }, { 'Set-Cookie': sessionCookie(user) });
   },
@@ -1321,7 +1321,7 @@ const routes = {
     const code = String(body.code || '').trim().toUpperCase();
     const invite = INVITE_ONLY ? db.invites.find(i => i.code === code && !i.usedBy && !i.revoked) : null;
     if (INVITE_ONLY && !invite) return json(res, 403, { error: 'a valid invite code is required' });
-    if (db.users.some(u => u.email === email)) return json(res, 409, { error: 'there is already an account with this email — sign in instead' });
+    if (db.users.some(u => u.email === email)) return json(res, 409, { error: 'there is already an account with this email — sign in instead', code: 'email_taken' });
     const user = { id: crypto.randomBytes(12).toString('base64url'), name, email, emailVerified: false, pw: hashPassword(password), created: nowISO() };
     const referrer = findReferrer(body.ref);
     if (referrer) { user.referredBy = referrer.id; referrer.referrals = [...(referrer.referrals || []), { id: user.id, at: user.created }]; }
@@ -1339,12 +1339,12 @@ const routes = {
     const email = normEmail(body.email), password = String(body.password || '');
     if (!email || !password) return json(res, 400, { error: 'email and password required' });
     const wait = lockedFor(email);
-    if (wait) return json(res, 429, { error: 'too many attempts — try again in a few minutes', retryAfter: wait });
+    if (wait) return json(res, 429, { error: 'too many attempts — try again in a few minutes', retryAfter: wait, code: 'too_many_attempts' });
     const user = db.users.find(u => u.email === email);
     // verify against a dummy hash when the account doesn't exist so timing doesn't reveal it
     const ok = verifyPassword(password, user && user.pw ? user.pw : DUMMY_HASH) && !!(user && user.pw);
-    if (!ok) { noteFail(email); return json(res, 401, { error: 'invalid email or password' }); }
-    if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    if (!ok) { noteFail(email); return json(res, 401, { error: 'invalid email or password', code: 'bad_credentials' }); }
+    if (user.disabled) return json(res, 403, { error: 'this account has been disabled', code: 'account_disabled' });
     clearFails(email);
     if (needsRehash(user.pw)) user.pw = hashPassword(password);
     if (user.deletedAt) delete user.deletedAt;

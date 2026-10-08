@@ -9,6 +9,20 @@ export const BIO = IS_APPLE ? 'Face ID / Touch ID' : IS_ANDROID ? 'fingerprint o
 export const VAULT = IS_APPLE ? 'iCloud Keychain' : IS_ANDROID ? 'Google Password Manager' : 'your password manager'
 export const webauthnOK = () => !!(window.PublicKeyCredential && navigator.credentials)
 
+// The API answers in English because it has no idea who is asking. The handful of errors a person
+// actually sees carry a `code`, so the app can say it in their language; anything else falls back
+// to the server's own wording.
+const SERVER_ERRORS = {
+  bad_credentials: () => t('That email and password don’t match. Check them and try again.'),
+  account_disabled: () => t('This account is blocked. Write to soporte@vantixgym.app and we’ll sort it out.'),
+  too_many_attempts: () => t('Too many attempts — wait a few minutes and try again.'),
+  email_taken: () => t('There is already an account with this email. Sign in instead, or use “Forgot your password?”.'),
+  subscription_required: () => t('Your access has ended — choose a plan to carry on.'),
+  verify_required: () => t('Confirm your email to use the coach.'),
+  paused: () => t('We’re doing maintenance on this for a moment. Try again shortly.')
+}
+const serverMessage = (data, status) => (data.code && SERVER_ERRORS[data.code] ? SERVER_ERRORS[data.code]() : (data.error || ('HTTP ' + status)))
+
 export async function api(path, opts) {
   const headers = { 'Content-Type': 'application/json' }
   const tok = getToken()
@@ -18,7 +32,7 @@ export async function api(path, opts) {
   // parsed with a reviver that drops __proto__/constructor keys: replies are merged into state
   // with Object.assign, which would otherwise honour them
   const data = await r.text().then(s => (s ? JSON.parse(s, (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v) : {})).catch(() => ({}))
-  if (!r.ok) { const e = new Error(data.error || ('HTTP ' + r.status)); e.status = r.status; throw e }
+  if (!r.ok) { const e = new Error(serverMessage(data, r.status)); e.status = r.status; e.code = data.code || null; throw e }
   return data
 }
 
