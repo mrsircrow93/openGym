@@ -120,6 +120,14 @@ reviewed as mobile: the threat model is different because the attacker has the d
 **MASVS v2, profile L1 + MASVS-PRIVACY**; L2 and MASVS-RESILIENCE are out of scope for now (we are
 not a bank and anti-tampering buys little against a server-side entitlement check).
 
+**Root / jailbreak blocking: decided against as a block, 2026-10-09.** Detection is bypassed in
+minutes with Frida or Magisk, so it only stops people who were not the threat, while locking out
+paying users on GrapheneOS or a custom ROM. What the thing an attacker would actually want to
+forge — PRO status — is already settled server-side from the RevenueCat webhooks, and AI cost is
+bounded by the per-user caps. The useful version is attestation as a *signal*: Play Integrity on
+Android and App Attest on iOS, verified on the server, used to refuse the expensive AI routes or
+flag an account, never to refuse to open the app. Queued behind the L1 work, which is worth more.
+
 Run it as one pass over both platforms, writing findings into a new `docs/MASVS.md` with the MASTG
 test id next to each. What matters here, by control group:
 
@@ -140,9 +148,16 @@ test id next to each. What matters here, by control group:
   local wipe), lockout still enforced server-side when the client is modified, admin step-up cannot
   be reached from a mobile session, and the trial/entitlement gate is never trusted from the client.
 - **MASVS-NETWORK** — cleartext disabled on Android (`usesCleartextTraffic=false`, network security
-  config) and no `NSAllowsArbitraryLoads` on iOS; all traffic to `app.vantixgym.app` over TLS;
-  decide on certificate pinning for the API (worth it, costs a rotation plan). Verify with the Burp
-  MCP against a real device.
+  config) and no `NSAllowsArbitraryLoads` on iOS; all traffic to `app.vantixgym.app` over TLS.
+  Verify with the Burp MCP against a real device.
+  **Certificate pinning: decided against, 2026-10-09.** The chain is Cloudflare-managed Let's
+  Encrypt (leaf `CN=vantixgym.app`, 90 days, intermediate `YE2`, root ISRG). Cloudflare rotates the
+  leaf automatically and may change issuer without notice, so a pin on the leaf expires in 90 days
+  and a pin on the intermediate dies the day Cloudflare switches CA — in both cases for every
+  already-installed copy, fixable only through a new build and an App Store review. The benefit is
+  small anyway: intercepting a user's own traffic exposes that user's own token, and Android 7+
+  already ignores user-installed CAs by default. Revisit only with a Cloudflare dedicated
+  certificate we control, pinning the SPKI with a backup pin and a server-side kill switch.
 - **MASVS-PLATFORM** — the WebView configuration Capacitor ships (file access, universal access from
   file URLs, JavaScript bridges), the `allowNavigation` allowlist, exported activities and
   receivers, and above all the **OAuth callback**: a custom scheme can be claimed by another app, so
