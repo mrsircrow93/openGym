@@ -112,3 +112,51 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    `nosniff` + byte ranges (iOS needs ranges to play), and deleted with the exercise and with the
    account. Tests: `lib/exercise-media.test.js` (inspector, tampered and oversized files) and
    `lib/exmedia-server.test.js` (routes, cross-account access, path traversal, ranges).
+
+## Mobile security review (OWASP MASVS) — pending, owner asked 2026-10-09
+
+`docs/SECURITY_REVIEW.md` covers the server and the web app. The mobile builds have never been
+reviewed as mobile: the threat model is different because the attacker has the device. Target
+**MASVS v2, profile L1 + MASVS-PRIVACY**; L2 and MASVS-RESILIENCE are out of scope for now (we are
+not a bank and anti-tampering buys little against a server-side entitlement check).
+
+Run it as one pass over both platforms, writing findings into a new `docs/MASVS.md` with the MASTG
+test id next to each. What matters here, by control group:
+
+- **MASVS-STORAGE** — **known finding, confirmed 2026-10-09**: `lib/mobile.js` keeps the bearer
+  token in `@capacitor/preferences`, which is `UserDefaults` on iOS and `SharedPreferences` on
+  Android — a plain plist and a plain XML file, not Keychain or Keystore. On a jailbroken or rooted
+  device, and in an unencrypted device backup, it is readable. Move it to real secure storage
+  (`capacitor-secure-storage-plugin` or a small native wrapper over Keychain / EncryptedSharedPreferences),
+  keeping `Preferences` as the fallback on the web build. Also:
+  `android:allowBackup` and the iOS backup flags on anything holding the token or cached photos,
+  no tokens or emails in logcat / os_log, no sensitive data left in the WebView cache or in
+  `/data/exmedia` copies on the device, and the task-switcher snapshot on both platforms.
+- **MASVS-CRYPTO** — little of our own crypto, but check the passkey and step-up paths use the
+  platform APIs and nothing home-rolled, and that no key or secret is embedded in the bundle. The
+  RevenueCat public key (`appl_…`) and the Google client ids are public by design; verify nothing
+  else is (`scripts/check-mobile-bundle.mjs` already asserts the opposite direction).
+- **MASVS-AUTH** — token lifetime and what happens on logout (server-side invalidation, not just a
+  local wipe), lockout still enforced server-side when the client is modified, admin step-up cannot
+  be reached from a mobile session, and the trial/entitlement gate is never trusted from the client.
+- **MASVS-NETWORK** — cleartext disabled on Android (`usesCleartextTraffic=false`, network security
+  config) and no `NSAllowsArbitraryLoads` on iOS; all traffic to `app.vantixgym.app` over TLS;
+  decide on certificate pinning for the API (worth it, costs a rotation plan). Verify with the Burp
+  MCP against a real device.
+- **MASVS-PLATFORM** — the WebView configuration Capacitor ships (file access, universal access from
+  file URLs, JavaScript bridges), the `allowNavigation` allowlist, exported activities and
+  receivers, and above all the **OAuth callback**: a custom scheme can be claimed by another app, so
+  check the Google and Apple return paths use App Links / Universal Links with the asset-links and
+  associated-domains files served, not a bare custom scheme.
+- **MASVS-CODE** — enable R8/minify (already due by Feb 2027, see the Play notes), ship no source
+  maps in the release bundle, `android:debuggable` false, dependency scan on both `npm audit` and
+  Gradle, and a plan for forcing an upgrade when a bad version is in the wild.
+- **MASVS-PRIVACY** — the Play data-safety form and the App Store privacy labels must match what the
+  app actually sends; re-check after the supplements and exercise-media features. Confirm the
+  advertising id stays absent from the built bundle (the Facebook SDK injects it; we strip it with
+  `tools:node="remove"`).
+
+Tooling: MobSF for the static pass on the `.aab`/`.ipa`, the Burp MCP for traffic, Frida/objection
+for the storage and WebView checks on a rooted emulator. Size: 2–3 days, plus whatever the findings
+cost. Do it before production on Play, not before the current reviews — it may need code changes and
+a new build.
