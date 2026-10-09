@@ -152,7 +152,11 @@ const REFS = {
   nhlbi: ['NHLBI, Practical guide on overweight and obesity', 'https://www.nhlbi.nih.gov/files/docs/guidelines/prctgd_c.pdf'],
   issn: ['Jäger R et al., ISSN position stand: protein, JISSN 2017', 'https://pubmed.ncbi.nlm.nih.gov/28642676/'],
   dri: ['Institute of Medicine, Dietary Reference Intakes (AMDR)', 'https://nap.nationalacademies.org/catalog/10490'],
-  hall: ['Hall KD, Int J Obes 2008 (energy per kg of body fat)', 'https://pubmed.ncbi.nlm.nih.gov/18175736/']
+  hall: ['Hall KD, Int J Obes 2008 (energy per kg of body fat)', 'https://pubmed.ncbi.nlm.nih.gov/18175736/'],
+  whoSugar: ['WHO, Guideline: sugars intake for adults and children (2015)', 'https://www.who.int/publications/i/item/9789241549028'],
+  whoSodium: ['WHO, Guideline: sodium intake for adults and children (2012)', 'https://www.who.int/publications/i/item/9789241504836'],
+  fiber: ['Institute of Medicine, DRI for fibre (2005)', 'https://nap.nationalacademies.org/catalog/10490'],
+  usda: ['USDA FoodData Central (food composition reference)', 'https://fdc.nal.usda.gov/']
 }
 const Ref = ({ k }) => <button className="linkbtn" style={{ fontSize: 12, textAlign: 'left' }} onClick={() => window.open(REFS[k][1], '_blank', 'noopener')}>{REFS[k][0]}</button>
 
@@ -179,6 +183,12 @@ function Sources({ res, close }) {
     </Item>
     <Item title={t('Fat and carbs')} refs={['dri']}>
       {t('fat around 25–30% of calories for hormones and satiety; carbohydrates fill the rest and fuel training.')}
+    </Item>
+    <Item title={t('Sugar, fibre and sodium')} refs={['whoSugar', 'whoSodium', 'fiber']}>
+      {t('Free sugars under 10% of daily calories (about 50 g on a 2,000 kcal diet) and salt under 2,300 mg of sodium a day, both WHO guidance; fibre around 25–30 g a day, from the Institute of Medicine reference intakes.')}
+    </Item>
+    <Item title={t('The calories and macros of each food')} refs={['usda']}>
+      {t('When you log a meal from a photo or a description, the app estimates the foods and portions and takes their composition from public food-composition tables. They are estimates: check and correct the numbers before saving, and weigh the food when you want precision.')}
     </Item>
     <div className="small muted" style={{ lineHeight: 1.6, margin: '10px 0' }}>{t('These are population averages: your real burn can differ by 10–15%. Weigh yourself a few times a week and adjust with the review the app suggests.')}</div>
     <div className="card small muted" style={{ lineHeight: 1.5, borderLeft: '3px solid var(--yellow)' }}><Icon name="shield" style={{ fontSize: 13, marginRight: 6, color: 'var(--yellow)' }} />{t(DISCLAIMER)}</div>

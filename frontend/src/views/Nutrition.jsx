@@ -81,11 +81,15 @@ export default function Nutrition() {
     <div className="card">
       <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Daily intake')}</h2>
-        <Button size="sm" icon="target" style={{ color: 'var(--yellow)' }} onClick={macroGoalSheet}>{t('Targets')}</Button>
+        <span className="row" style={{ gap: 6 }}>
+          {/* guideline 1.4.1: the sources sit next to the numbers they explain, as a labelled
+              button rather than a line of small print under the card */}
+          <Button size="sm" icon="info" onClick={() => sourcesSheet(null)}>{t('Sources')}</Button>
+          <Button size="sm" icon="target" style={{ color: 'var(--yellow)' }} onClick={macroGoalSheet}>{t('Targets')}</Button>
+        </span>
       </div>
       <DaySummary tot={tot} goal={goal} />
       <MicroLine tot={tot} goal={goal} />
-      {/* guideline 1.4.1: the sources behind these targets are one tap away from the targets */}
       <div style={{ marginTop: 8 }}><button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Where do these numbers come from?')}</button></div>
     </div>
 
@@ -116,6 +120,7 @@ export default function Nutrition() {
           <Icon name="chevronRight" className="chev" />
         </div>)}
       </div>
+      <div className="small dim" style={{ marginTop: 8 }}>{t('This plan is your nutritionist’s; the app only follows it.')} <button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Sources')}</button></div>
       {S.dietPlan.rules?.length > 0 && <details className="plan-rules"><summary className="small muted">{t('Rules from your nutritionist')}</summary>
         <ul className="plan-items small">{S.dietPlan.rules.map((r, i) => <li key={i}>{r}</li>)}</ul></details>}
       <div className="small dim" style={{ marginTop: 8 }}>{t('Tap a meal to see it, or the sparkle for a different recipe with the same numbers.')} <button className="linkbtn" onClick={() => confirmSheet({ title: t('Remove this plan?'), message: t('Your targets stay as they are.'), confirmText: t('Remove'), danger: true, onConfirm: removeDietPlan })}>{t('Remove plan')}</button></div>

@@ -134,6 +134,10 @@ function MealForm({ draft, onSave, onDelete, close, saveLabel, refine }) {
       {m.items.map((it, i) => <ItemRow key={i} item={it} onChange={x => setItem(i, x)} onRemove={() => rmItem(i)} />)}
     </div>
     <Button size="sm" icon="plus" onClick={addItem}>{t('Add food manually')}</Button>
+    {/* guideline 1.4.1: the nutrition figures on this sheet say where they come from */}
+    <div className="small dim" style={{ marginTop: 8, lineHeight: 1.45 }}>
+      {t('Estimated from public food-composition tables — check the portions before saving.')} <button className="linkbtn small" onClick={() => sourcesSheet(null)}>{t('Sources')}</button>
+    </div>
 
     {/* 3. Talk back to the estimate in one sentence. */}
     {refine && m.items.length > 0 && <div className="ncorr card" style={{ marginTop: 12 }}>
