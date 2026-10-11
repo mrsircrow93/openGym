@@ -35,6 +35,7 @@ import { newBadges } from './lib/badges.js'
 import { locked } from './lib/entitlements.js'
 import { MOBILE } from './lib/mobile.js'
 import { syncHealth } from './lib/health.js'
+import { initBackButton } from './lib/backbutton.js'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -155,5 +156,7 @@ function Shell() {
 export default function App() {
   const boot = useStore(s => s.boot)
   useEffect(() => { boot() }, [boot])
+  // Android's Back key, once per process; a no-op everywhere else.
+  useEffect(() => { initBackButton() }, [])
   return <HashRouter><Shell /></HashRouter>
 }

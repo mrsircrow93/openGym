@@ -113,6 +113,21 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    account. Tests: `lib/exercise-media.test.js` (inspector, tampered and oversized files) and
    `lib/exmedia-server.test.js` (routes, cross-account access, path traversal, ranges).
 
+## First-run tutorial (owner, 2026-10-09)
+
+A mini walkthrough the first time the app opens, skippable from the first step and never shown
+again once finished or dismissed. Testers land on a full app with no idea where anything is.
+
+Shape: 4 to 6 steps, each one sentence over the real screen, not a slideshow of mockups. Home and
+the day's workout, starting and logging a set, the Nutrition tab and the photo of a meal, the
+coach, and where the calendar and progress live. Every step has **Saltar** as well as **Siguiente**,
+and a **Ver el tutorial** entry in Settings so it can be replayed. State goes in `S.tourDone` so it
+syncs and does not re-run on a second device. Do not gate anything behind it, and do not start it on
+top of the sign-up flow — wait until the first Home render.
+
+Size: 2 days. Worth doing before the Play production release, because it is the cheapest fix for
+the "no entendí qué hacer" feedback.
+
 ## Mobile security review (OWASP MASVS) — pending, owner asked 2026-10-09
 
 `docs/SECURITY_REVIEW.md` covers the server and the web app. The mobile builds have never been

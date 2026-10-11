@@ -286,6 +286,10 @@ h4.sec{
 .btn.ghost:active,.btn.plain:active{background:var(--surface-2)}
 .btn.sm{padding:9px 14px;width:auto;font-size:14px;border-radius:99px;gap:5px;font-weight:600}
 .btn.sm .icn{font-size:16px}
+
+/* xs pills never got their own icon size, so they inherited the 19px of a full-size button
+   inside a 13px pill — the glyph crowded the padding and read as off-centre. */
+.btn.xs .icn{font-size:15px}
 .btn.xs{padding:5px 11px;width:auto;font-size:13px;border-radius:99px;gap:4px;font-weight:600}
 .btn:disabled{opacity:.32;pointer-events:none}
 
@@ -683,6 +687,15 @@ h4.sec{
   width:min(84vw,300px);background:var(--bg-el);border-radius:var(--r-lg);padding:20px;
   box-shadow:0 20px 60px -12px rgba(0,0,0,.5);
   animation:pop .28s var(--ease);
+  /* A centred dialog taller than the screen used to overflow past both edges with nothing to
+     scroll, so whatever sat at the bottom — on the finish-workout summary, the only button that
+     dismisses it — was unreachable, and on Android, with no Back handling, the app looked frozen.
+     Cap it to the viewport and scroll the content instead. dvh second so it wins where supported
+     and vh still covers the rest. */
+  max-height:calc(100vh - 24px);
+  max-height:calc(100dvh - 24px);
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(20px + var(--sab));
 }
 :root[data-theme="light"] .center{background:#fff}
 @keyframes pop{from{transform:translate(-50%,-50%) scale(.94);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}

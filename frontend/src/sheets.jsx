@@ -983,6 +983,12 @@ export const workoutCompleteSheet = () => ui().openSheet(close => <WorkoutComple
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
+    {/* A way out that is always on screen. This summary is the tallest dialog in the app — four
+        tiles, a PR list and the body map — so on a small phone its dismiss button sat below the
+        fold, and with the backdrop locked and Android's Back unhandled there was no way off it. */}
+    <div style={{ position: 'sticky', top: 0, zIndex: 1, display: 'flex', justifyContent: 'flex-end', height: 0 }}>
+      <button className="linkbtn" aria-label={t('Close')} onClick={close} style={{ padding: 6, margin: -6, color: 'var(--label-3)' }}><Icon name="xmark" /></button>
+    </div>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'left' }}>
@@ -1049,7 +1055,7 @@ function doFinishWorkout() {
   })
   useUI.getState().stopRest()
   beep(snd(), 880, 0.15); beep(snd(), 1100, 0.15, 0.18); beep(snd(), 1320, 0.3, 0.36)
-  ui().openSheet(close => <FinishSummary w={w} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center', locked: true })
+  ui().openSheet(close => <FinishSummary w={w} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center' })
 }
 
 /* ============================ AI: quick-log a set from text ============================ */
