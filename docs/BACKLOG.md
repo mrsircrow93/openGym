@@ -48,7 +48,14 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
    verification pending. Personal accounts need a closed test with 12 testers for 14 days before
    production. Register production signing SHA-1 in Google Cloud (Android OAuth client).
 4. ✅ 2026-10-04 Anthropic spend limit set to $50/month with email alerts at $25 and $40 (Oct spend so far: $0.85). Raise it and `AI_GLOBAL_MONTHLY_USD_CAP` (now $20) at ~15 paying users (rule: $1.5 × paying users).
-5. Legal entity name for terms, privacy and Stripe receipts.
+5. Legal entity name **and a public business address** for terms, privacy, Stripe receipts and the
+   Play store listing. Play publishes a physical address for anyone selling subscriptions, and the
+   owner does not want his home on it (2026-10-12). The payments-profile address is separate and
+   stays private, so it keeps the real fiscal address. Options: a mailbox / virtual office in San
+   Luis (fastest, legal, unblocks today), or an S.A.S. — which would also let the Apple account
+   convert to Organization so the listing reads VantixGym instead of "Daniel Oliva", though that
+   needs a D-U-N-S number and weeks of waiting. Never a fabricated address: Google verifies and
+   terminates for it.
 6. ✅ 2026-10-04 Backup passphrase in the owner's password manager; S3 off-host copies live (bucket `vantixgym-backups-2026`); cron bug fixed (3 nights skipped).
 7. Cloudflare: ✅ Bot Fight Mode on (webhooks verified with it on); delete the stray CNAME `app.vantixgym.app` in the pentaforge zone;
    optional Google brand verification (Search Console TXT, point consent-screen links to
