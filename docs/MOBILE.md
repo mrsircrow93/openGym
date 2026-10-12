@@ -197,3 +197,41 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ./gradl
 - In-app purchases: a store build with no RevenueCat key for its platform shows "subscriptions are
   coming soon" instead of falling back to web checkout, because Play (and Apple) forbid that.
   Android starts selling once the Play app exists in RevenueCat and `VITE_RC_GOOGLE_KEY` is set.
+
+## Android billing: RevenueCat + Play (started 2026-10-12)
+
+The server needs no changes. `storeProvider` already maps `PLAY_STORE` to `google`, the webhook is
+store-agnostic, and `/api/billing/portal` returns Play's subscription page for a `google` provider.
+What is missing is console setup plus one build-time variable.
+
+Order matters, because each step feeds the next.
+
+**1. Play Console → Monetizar → Productos → Suscripciones.** Create three, reusing the iOS product
+ids so both stores read the same in our data:
+
+| Product ID | Base plan | Price (MXN) |
+|---|---|---|
+| `app.vantixgym.mobile.monthly` | auto-renewing, P1M | 129 |
+| `app.vantixgym.mobile.semester` | auto-renewing, P6M | 599 |
+| `app.vantixgym.mobile.yearly` | auto-renewing, P1Y | 999 |
+
+Each needs its base plan **activated**, not just saved — a saved-but-inactive plan is invisible to
+the SDK and produces the same "none of the products could be fetched" that cost a day on iOS.
+
+**2. Link a Google Cloud service account to Play.** Play Console → Configuración → Acceso a la API
+→ link a Cloud project, create a service account, grant it *View financial data* and *Manage orders
+and subscriptions*, download the JSON key. **Permissions take up to 36 hours to propagate**; until
+then RevenueCat reports the credentials as invalid and nothing is wrong.
+
+**3. RevenueCat → Project → Apps → New → Google Play.** Package `app.vantixgym.mobile`, upload the
+service-account JSON. Then add the three products, attach them to the existing entitlement
+`vantixgym_pro`, and add them as packages on the existing `default` offering, so the paywall needs
+no code change.
+
+**4. The public SDK key.** RevenueCat shows a `goog_…` key for the Play app. It goes in
+`build:mobile` as `VITE_RC_GOOGLE_KEY`, exactly like the `appl_…` one — public by design, safe in
+the bundle. Without it `storePurchases()` is false and the app shows "subscriptions coming soon".
+
+**5. Rebuild, bump versionCode, upload, verify.** A real purchase can only be tested from a track,
+with the tester's account added under Play Console → Configuración → Prueba de licencias, which
+makes purchases free and renewals fast.
