@@ -60,6 +60,17 @@ describe('RevenueCat webhook', () => {
     await hook({ id: 'e6', type: 'PRODUCT_CHANGE', app_user_id: uid, new_product_id: 'x', product_id: 'app.vantixgym.mobile.yearly:p1y', expiration_at_ms: Date.now() + 365 * day, store: 'PLAY_STORE' })
     expect((await me()).billing).toMatchObject({ active: true, plan: 'yearly', provider: 'google' })
   })
+  // The Play products were created by hand and the 6-month one came out as `vantixgym_semestral`,
+  // which the canonical matcher missed — the buyer kept their access but fell out of MRR with no
+  // error anywhere. Both spellings must land on the same plan.
+  it('maps a Play product id named in Spanish to the same plan as the canonical one', async () => {
+    const exp = Date.now() + 180 * day
+    await hook({ id: 'e6b', type: 'INITIAL_PURCHASE', app_user_id: uid, product_id: 'vantixgym_semestral:semestral', expiration_at_ms: exp, store: 'PLAY_STORE', environment: 'PRODUCTION', period_type: 'NORMAL' })
+    expect((await me()).billing).toMatchObject({ plan: 'semester', provider: 'google', active: true })
+    await hook({ id: 'e6c', type: 'PRODUCT_CHANGE', app_user_id: uid, product_id: 'app.vantixgym.mobile.monthly:mensual', expiration_at_ms: Date.now() + 30 * day, store: 'PLAY_STORE' })
+    expect((await me()).billing.plan).toBe('monthly')
+  })
+
   it('a refund pulls access now; EXPIRATION locks the account', async () => {
     await hook({ id: 'e7', type: 'CANCELLATION', app_user_id: uid, product_id: 'app.vantixgym.mobile.yearly', expiration_at_ms: Date.now() + 300 * day, store: 'APP_STORE', cancel_reason: 'CUSTOMER_SUPPORT' })
     expect((await me()).billing.active).toBe(false)

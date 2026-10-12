@@ -534,7 +534,18 @@ const REVENUECAT_SECRET_KEY = process.env.REVENUECAT_SECRET_KEY || '';
 db.rcEvents = db.rcEvents || [];
 const storeProvider = store => (/APP_STORE|MAC_APP_STORE/i.test(store || '') ? 'apple' : /PLAY_STORE/i.test(store || '') ? 'google' : /STRIPE/i.test(store || '') ? 'stripe' : 'store');
 // Store product ids look like app.vantixgym.mobile.yearly (or ...yearly:base-plan on Play).
-const planByProduct = pid => PLANS.find(p => new RegExp(`(^|[.:_-])${p.id}($|[.:_-])`, 'i').test(String(pid || ''))) || null;
+// Play base plans are named in the store's own language and a product id typed into a console by
+// hand does not always come out canonical — the 6-month product was created as
+// `vantixgym_semestral`, which matched nothing. An unmatched id is not harmless: it leaves
+// user.plan null, so the subscriber silently drops out of MRR and the plans screen cannot say
+// which plan they are on. Hence the Spanish names, and a log line when nothing matches at all.
+const PLAN_ALIASES = { monthly: ['mensual'], semester: ['semestral', 'semestre'], yearly: ['anual', 'annual'] };
+const planByProduct = pid => {
+  const s = String(pid || '');
+  const hit = PLANS.find(p => [p.id, ...(PLAN_ALIASES[p.id] || [])].some(n => new RegExp(`(^|[.:_-])${n}($|[.:_-])`, 'i').test(s))) || null;
+  if (!hit && s) console.error('revenuecat: product id matches no plan —', s);
+  return hit;
+};
 const sameSecret = (a, b) => { try { return !!a && !!b && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch { return false; } };
 const findRcUser = ids => { for (const id of ids) { const u = id && db.users.find(u => u.id === id); if (u) return u; } return null; };
 // Fold one RevenueCat event into the user. Access = latest expiration + 1 day grace, like Stripe.
