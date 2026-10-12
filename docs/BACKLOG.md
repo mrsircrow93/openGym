@@ -37,6 +37,27 @@ sign-in (web + iOS + Android), progress photos with monthly coach note and remin
 diet import from photo/PDF (HEIC, PDFs to 12 MB), security pass (docs/SECURITY_REVIEW.md), new
 pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), English marketing site.
 
+### Where things stand — 2026-10-12
+
+Apple is done and selling. Everything live now hangs on Google Play, in this order:
+
+| # | Step | State | Blocks |
+|---|---|---|---|
+| A | Play payments profile (public commerce profile uses the café address, not the owner's home) | ✅ 2026-10-12 | B, D |
+| B | Google 15 % service-fee programme | open, 2 min | money |
+| C | **Apple Small Business Programme (15 % instead of 30 %)** | open, urgent | money on live sales |
+| D | Payment method (bank account) on the Play payments profile | open | getting paid |
+| E | Google Cloud service account linked to Play, JSON key | open, **up to 36 h to propagate** | F, G |
+| F | Three subscription products in Play, base plans *activated* | open | G |
+| G | RevenueCat Play app, products on `vantixgym_pro` / `default` offering | open | H |
+| H | `VITE_RC_GOOGLE_KEY` in `build:mobile`, versionCode 33, upload | mine, waiting on G | Android selling |
+| I | 12 testers for 14 continuous days | 6 of 12 | Play production |
+| J | Comp 90 days to each tester so the 7-day trial does not dead-end them | open, urgent | keeping testers |
+
+C and E have clocks: Apple's enrolment applies from the first of the following month, and E takes
+up to 36 hours, so both should start before anything else. J is urgent for a different reason —
+testers who hit the paywall uninstall, and the 14-day count restarts.
+
 ### Pending — owner (needs the owner's accounts or decisions)
 
 1. ✅ 2026-10-03 **Stripe live**: account active (charges + payouts), restricted key `rk_live_`
@@ -68,6 +89,10 @@ pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), Engli
 
 - Continue with Apple (needs #2). Same shape as Google: ID token verified server-side.
 - ✅ 2026-10-03 In-app purchases via RevenueCat — sandbox purchase verified end to end on the owner's iPhone (INITIAL_PURCHASE → webhook → PRO). (iOS live in code; `REVENUECAT_WEBHOOK_AUTH` + webhook in the dashboard, optional `REVENUECAT_SECRET_KEY`). Android: add the Play app in RevenueCat and `VITE_RC_GOOGLE_KEY` once Play is approved. Owner: Apple Small Business Program (15 % instead of 30 %) before the first payout; optional introductory free trial on the ASC subscriptions.
+- ✅ 2026-10-12 **VantixGym 1.0 is live on the App Store** (build 33), with the three subscriptions
+  APPROVED, after three review rounds. `https://apps.apple.com/mx/app/vantixgym/id6818728682`.
+  Seller shows as "Daniel Oliva"; no address is published. Release type is AFTER_APPROVAL, so the
+  next version goes live by itself once approved.
 - 2026-10-06 **App Store review #1 rejected**, both issues fixed in build 26 and resubmitted:
   - *3.1.2(c)* the plans screen showed the per-month equivalent larger than the billed amount →
     the billed total is now the big number, the per-month figure sits under it small and dim, and
