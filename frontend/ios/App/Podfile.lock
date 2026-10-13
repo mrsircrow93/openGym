@@ -13,6 +13,8 @@ PODS:
     - RecaptchaInterop (~> 101.0)
   - Capacitor (8.5.2):
     - CapacitorCordova
+  - CapacitorApp (8.1.2):
+    - Capacitor
   - CapacitorCordova (8.5.2)
   - CapacitorFilesystem (8.1.3):
     - Capacitor
@@ -70,6 +72,7 @@ PODS:
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
   - CapacitorHealth (from `../../node_modules/capacitor-health`)
@@ -101,6 +104,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   Capacitor:
     :path: "../../node_modules/@capacitor/ios"
+  CapacitorApp:
+    :path: "../../node_modules/@capacitor/app"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorFilesystem:
@@ -122,6 +127,7 @@ SPEC CHECKSUMS:
   AppAuth: ef4da5a3fc2e10b90c09a0a94a9baeaedc0341d5
   AppCheckCore: be8fce5469f68d7f6a29aa94b25f097409ff7fdc
   Capacitor: 89067779e14fb7ea56af07b4817f45d1f0c2a269
+  CapacitorApp: 7b7e43debe505bc61beedb83796aa1368c86078b
   CapacitorCordova: 5bec5648cbd09a176ce34ce5e7b6cdabb2c8a327
   CapacitorFilesystem: b2bbd84bb91c177906c9dbc252864cb71ab9957b
   CapacitorHealth: c09e466346080a1cc726b098f59b890860e3eb66
@@ -145,6 +151,6 @@ SPEC CHECKSUMS:
   RevenueCat: 39657b04641af73c29788b4bf2cf1acff52fd0dc
   RevenuecatPurchasesCapacitor: 75ae3e1077bc9db9081b1e7d324097361ce857c7
 
-PODFILE CHECKSUM: a100b3f4bc46c1948b5e2f891e4e6819123847ba
+PODFILE CHECKSUM: dc1d82e3b44f851e5e64ff79e33fb25369211acf
 
 COCOAPODS: 1.17.0
