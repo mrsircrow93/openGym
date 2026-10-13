@@ -17,6 +17,7 @@
 // reference implementation, this is the same thing moved client-side for the BYO-key path.
 
 import { useStore } from '../store/useStore.js'
+import { bodyUnit, toDisplay } from './units.js'
 
 const KEY_LS = 'gym_ai_key'
 const MODEL_LS = 'gym_ai_model'
@@ -117,7 +118,9 @@ export function coachContext(S) {
     date: w.d,
     entries: (w.entries || []).map(e => ({
       id: e.id, target: e.target,
-      sets: (e.sets || []).map(s => ({ done: !!s.done, r: s.r, w: s.w, sec: s.sec, min: s.min }))
+      // Every load goes to the model in the one unit declared below, not in each exercise's own
+      // — a fact pack that mixed units under a single label would be worse than useless.
+      sets: (e.sets || []).map(s => ({ done: !!s.done, r: s.r, w: toDisplay(s.w, S.unit || 'kg'), sec: s.sec, min: s.min }))
     }))
   }))
   const routines = (S.routines || []).map(r => ({ name: r.name, prog: r.prog || 'linear', exCount: (r.ex || []).length }))
@@ -133,12 +136,15 @@ export function coachContext(S) {
     avgPerLoggedDay: days.length ? round(Object.fromEntries(Object.entries(sum(days.flatMap(d => byDay[d]))).map(([k, v]) => [k, v / days.length]))) : null,
     loggedDaysLast7: days.length
   }
-  const bw = (S.bodyweight || []).slice(-8).map(b => ({ d: b.d, w: b.w }))
+  // Weights are stored in kilograms; the model is handed the numbers the person sees, under
+  // the unit they see them in, so its answers read back naturally.
+  const bwU = bodyUnit(S)
+  const bw = (S.bodyweight || []).slice(-8).map(b => ({ d: b.d, w: toDisplay(b.w, bwU) }))
   const stepRow = (S.steps || []).find(r => r.d === today)
   return {
     today, unit: S.unit || 'kg',
     profile: (S.trainer && S.trainer.answers) || null,
-    bodyweight: { unit: S.unit || 'kg', recent: bw, target: S.targetW || null },
+    bodyweight: { unit: bwU, recent: bw, target: S.targetW != null ? toDisplay(S.targetW, bwU) : null },
     steps: { today: stepRow ? stepRow.n : 0, goal: Math.max(500, +S.stepGoal || 8000) },
     water: { goalMl: S.waterGoal || 2000 },
     dietPlan: S.dietPlan ? { summary: S.dietPlan.summary || '', meals: (S.dietPlan.meals || []).map(m => ({ name: m.name, time: m.time || '', options: (m.options || []).map(o => o.title) })), rules: S.dietPlan.rules || [] } : null,

@@ -2,6 +2,7 @@
 // nothing to store except which ones the person has already been shown (S.badgesSeen).
 // Each badge: { id, cat, icon, tier, name, desc, goal, value, earned: ISO|null, pct }.
 import { t } from './i18n.js'
+import { toDisplay } from './units.js'
 import { weekKey, isoOf } from './format.js'
 import { workoutVolume, streakWeeks } from './history.js'
 
@@ -63,8 +64,10 @@ export function computeBadges(S) {
   for (const w of ws) { cum += (w.vol || workoutVolume(w) || 0) / 1000; for (const [n] of TIERS.volume) if (cum >= n && !cumAt[n]) cumAt[n] = w.d }
   // Said in the person's unit and compared with something you can picture; a "tonne" means
   // little to most people, "as much as two cars" does.
-  const lb = S.unit === 'lb'
-  const amount = n => (lb ? Math.round(n * 2204.6 / 1000) * 1000 : n * 1000).toLocaleString() + ' ' + (lb ? 'lb' : 'kg')
+  // `cum` is tonnes of kilograms, because volume is stored in kilograms. Reading it in pounds
+  // is a conversion like any other rather than a hand-typed 2204.6.
+  const unit = S.unit === 'lb' ? 'lb' : 'kg'
+  const amount = n => Math.round(toDisplay(n * 1000, unit) / 1000) * 1000 + ' ' + unit
   const LIKE = { 10: t('about two cars'), 50: t('a loaded truck'), 100: t('a blue whale'), 250: t('a passenger plane'), 500: t('three blue whales'), 1000: t('a freight train') }
   for (const [n, tier] of TIERS.volume) push({ id: 'v' + n, cat: 'volume', icon: 'kettlebell', tier, goal: n, value: Math.round(cum * 10) / 10,
     name: t('{0} lifted', amount(n)), desc: t('Lift {0} in total across all your workouts — {1}', amount(n), LIKE[n]), earned: cumAt[n] || null })

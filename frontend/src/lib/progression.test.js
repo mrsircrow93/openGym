@@ -3,6 +3,9 @@ import {
   readSession, sessionsFor, stallCount, nextPrescription, applyPrescription,
   policyFor, defaultIncrement, POLICIES_FOR, DELOAD_AFTER, MAX_BW_SETS
 } from './progression.js'
+import { toDisplay, fromDisplay } from './units.js'
+// What the screen shows: stored kilograms, read in a unit, rounded the way every display rounds.
+const shown = (kg, unit) => Math.round(toDisplay(kg, unit) * 10) / 10
 import { EXDB } from './exercises.js'
 
 const LIFT = EXDB.find(e => e.bp !== 'cardio' && !['upper legs', 'lower legs', 'back', 'hips', 'glutes'].includes(e.bp)).id
@@ -165,9 +168,21 @@ describe('linear progression', () => {
     expect(p.weight).toBe(61)
   })
 
-  it('works in pounds', () => {
-    const S = { ...hist(LIFT, [[135, 5, 5, 5]]), unit: 'lb' }
-    expect(nextPrescription(S, cfg).weight).toBe(140)
+  // History is stored in kilograms whatever the person reads, so a pounds profile is 135 lb
+  // *stored as* 61.235 kg. The jump has to be a pound jump — 5 lb, not 5 kg — and land back in
+  // storage as the kilogram equivalent of 140 lb.
+  it('works in pounds: a pound-sized jump, stored in kilograms', () => {
+    const S = { ...hist(LIFT, [[fromDisplay(135, 'lb'), 5, 5, 5]]), unit: 'lb' }
+    const p = nextPrescription(S, cfg)
+    expect(shown(p.weight, 'lb')).toBe(140)        // what the person reads
+    expect(p.weight).toBeCloseTo(fromDisplay(140, 'lb'), 3)
+    expect(p.why).toEqual(['Every rep last time — {0} {1} more.', 5, 'lb'])
+  })
+
+  // A pound dumbbell next to a kilo machine: the override decides the step, not the profile.
+  it('an exercise logged in pounds inside a kilo profile still steps in pounds', () => {
+    const S = { ...hist(LIFT, [[fromDisplay(135, 'lb'), 5, 5, 5]]), unit: 'kg', exUnits: { [LIFT]: 'lb' } }
+    expect(shown(nextPrescription(S, cfg).weight, 'lb')).toBe(140)
   })
 })
 

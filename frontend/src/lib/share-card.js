@@ -1,7 +1,7 @@
 // Strava-style share image for a finished workout: a 1080×1920 story with the numbers over the
 // person's own photo, over the brand background, or transparent to drop on top of a video.
 // Pure canvas, no dependencies. Returns a PNG Blob.
-import { fmtNum, fmtDur } from './format.js'
+import { fmtNum, fmtDur, fmtW} from './format.js'
 import { setsDone } from './history.js'
 import { t } from './i18n.js'
 import { EXIDX } from './exercises.js'
@@ -23,7 +23,7 @@ function topLift(w, unit) {
   for (const e of w.entries || []) for (const s of e.sets || []) if (s.done && !s.warmup && s.w > 0 && (!best || s.w > best.w)) best = { id: e.id, w: s.w, r: s.r }
   if (!best) return null
   const name = (EXIDX[best.id] || {}).n || ''
-  return { name, line: `${fmtNum(best.w)} ${unit} × ${best.r || 1}` }
+  return { name, line: `${fmtW(best.w, unit)} ${unit} × ${best.r || 1}` }
 }
 
 // `size` scales the stats block (lg = full, md = 3/4, sm = just over half); `pos` places it
@@ -68,7 +68,7 @@ export async function renderShareCard({ workout: w, unit, style = 'brand', photo
   // ---- stats stack
   const rows = [
     [t('Duration'), fmtDur(Math.max(0, (w.end || Date.now()) - w.start))],
-    [t('Volume'), `${fmtNum(w.vol || 0)} ${unit}`],
+    [t('Volume'), `${fmtW(w.vol || 0, unit)} ${unit}`],
     [t('Sets'), String(setsDone(w))]
   ]
   const top = topLift(w, unit)

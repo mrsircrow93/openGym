@@ -2,6 +2,7 @@
 // exist in the library. Pure helpers here (candidate shortlist, validation, materialising the
 // model's answer into routine objects); the sheet in sheets-trainer.jsx owns the UI.
 import { allExercises, isCardio } from './exercises.js'
+import { bodyUnit, toDisplay } from './units.js'
 import { defaultConfig } from './history.js'
 import { uid } from './format.js'
 import { GLYPHS, DEFAULT_GLYPH } from './glyphs.js'
@@ -113,7 +114,7 @@ export function trainerRequestBody(S, answers, candidates) {
     profile: {
       goal: a.goal, level: a.level, daysPerWeek: a.days, minutesPerSession: a.minutes, equipment: a.equipment,
       focus: a.focus, limitations: a.limits, age: a.age, sex: S.body === 'female' ? 'female' : 'male',
-      bodyweight: a.weight, targetWeight: a.targetW, unit: S.unit || 'kg',
+      bodyweight: toDisplay(a.weight, bodyUnit(S)), targetWeight: toDisplay(a.targetW, bodyUnit(S)), unit: bodyUnit(S),
       lang: S.lang || 'en'
     },
     candidates

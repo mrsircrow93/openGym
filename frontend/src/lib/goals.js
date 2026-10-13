@@ -2,6 +2,8 @@
 // Pure; the App effect calls it after state changes and marks what it showed in S.goalsSeen
 // ({ 'YYYY-MM-DD': ['water', ...], ever: ['weight:72'] }) so each one fires once.
 import { todayISO } from './format.js'
+import { bodyUnit } from './units.js'
+import { fmtWU } from './format.js'
 import { macroGoalOf, dayTotals, mealsOn } from './nutrition.js'
 import { stepsOn, stepGoalOf } from './steps.js'
 import { lastBW } from './history.js'
@@ -31,7 +33,7 @@ export function reachedGoals(S, iso = todayISO(), now = new Date()) {
   const meals = mealsOn(S, iso).length
   if (g.kcal > 0 && meals >= 3 && now.getHours() >= 18 && tot.kcal >= g.kcal * 0.9 && tot.kcal <= g.kcal * 1.05) out.push({ id: 'kcal', detail: g.kcal.toLocaleString() })
   const bw = lastBW(S)
-  if (S.targetW && bw && bw.d === iso && Math.abs(bw.w - S.targetW) <= 0.2) out.push({ id: 'weight', detail: bw.w + ' ' + (S.unit || 'kg'), ever: 'weight:' + S.targetW })
+  if (S.targetW && bw && bw.d === iso && Math.abs(bw.w - S.targetW) <= 0.2) out.push({ id: 'weight', detail: fmtWU(bw.w, bodyUnit(S)), ever: 'weight:' + S.targetW })
   return out
 }
 

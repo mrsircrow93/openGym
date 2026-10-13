@@ -17,6 +17,7 @@
 // So a session that fell apart can never advance the load as though it had succeeded.
 
 import { modeOf, repStep } from './history.js'
+import { toDisplay, fromDisplay, loadUnit } from './units.js'
 import { EXIDX } from './exercises.js'
 
 export const POLICIES = ['off', 'linear', 'greyskull', 'double', 'time']
@@ -158,7 +159,10 @@ export function stallCount(sessions) {
 export function nextPrescription(S, cfg, routine) {
   const mode = modeOf(cfg)
   const policy = policyFor(cfg, routine, mode)
-  const unit = S.unit || 'kg'
+  // Everything in here reasons in the unit the exercise is logged in — "add five pounds" is a
+  // statement about the plates on the bar, not about storage — so the stored kilograms are
+  // converted in at the top and the decided weight is converted back out at every return.
+  const unit = loadUnit(S, cfg.id)
   const inc = cfg.inc > 0 ? cfg.inc : (mode === 'time' ? DEFAULT_SEC_INCREMENT : defaultIncrement(cfg.id, unit))
   if (policy === 'off') return { policy, kind: 'off' }
 
@@ -181,7 +185,7 @@ export function nextPrescription(S, cfg, routine) {
     return { policy, kind: 'hold', sec: last.goal || cfg.sec, why: ['Last time came up short — same target again.'] }
   }
 
-  const w = last.weight
+  const w = toDisplay(last.weight, unit)
   // Bodyweight work carries no external load, so there is nothing to add or take away —
   // "deload your push-ups to 2.5 kg" is not advice. Progress in reps instead. This runs ahead
   // of the individual policies because it is true for all of them. Note the trigger is the
@@ -209,13 +213,13 @@ export function nextPrescription(S, cfg, routine) {
   if (policy === 'double') {
     const top = cfg.reps || last.goal || 10
     const bottom = Math.min(cfg.repsMin || Math.max(1, top - 2), top)
-    if (last.ok) return { policy, kind: 'up', weight: snap(w + inc, inc), reps: bottom, why: ['Top of the rep range in every set — {0} {1} more, back to {2} reps.', inc, unit, bottom] }
+    if (last.ok) return { policy, kind: 'up', weight: fromDisplay(snap(w + inc, inc), unit), reps: bottom, why: ['Top of the rep range in every set — {0} {1} more, back to {2} reps.', inc, unit, bottom] }
     if (stalls >= deloadAt) {
       const dw = deloadTo(w, inc)
-      return { policy, kind: 'deload', weight: dw, reps: bottom, why: ['Stalled {0} sessions — deload to {1} {2}.', stalls, dw, unit] }
+      return { policy, kind: 'deload', weight: fromDisplay(dw, unit), reps: bottom, why: ['Stalled {0} sessions — deload to {1} {2}.', stalls, dw, unit] }
     }
     const aim = Math.min(top, Math.max(bottom, last.low + repStep(cfg)))
-    return { policy, kind: 'hold', weight: w, reps: aim, why: ['Same weight — aim for {0} reps this time.', aim] }
+    return { policy, kind: 'hold', weight: fromDisplay(w, unit), reps: aim, why: ['Same weight — aim for {0} reps this time.', aim] }
   }
 
   // linear + greyskull
@@ -225,7 +229,7 @@ export function nextPrescription(S, cfg, routine) {
     const dbl = policy === 'greyskull' && last.goal > 0 && last.amrap >= last.goal * 2
     const step = dbl ? inc * 2 : inc
     return {
-      policy, kind: 'up', weight: snap(w + step, inc),
+      policy, kind: 'up', weight: fromDisplay(snap(w + step, inc), unit),
       why: dbl
         ? ['Last set hit {0} reps — twice the target, so take a double jump of {1} {2}.', last.amrap, step, unit]
         : ['Every rep last time — {0} {1} more.', step, unit]
@@ -234,13 +238,13 @@ export function nextPrescription(S, cfg, routine) {
   if (stalls >= deloadAt) {
     const dw = deloadTo(w, inc)
     return {
-      policy, kind: 'deload', weight: dw,
+      policy, kind: 'deload', weight: fromDisplay(dw, unit),
       why: stalls > 1
         ? ['Missed reps {0} sessions running — reset to {1} {2} and work back up.', stalls, dw, unit]
         : ['Missed reps — reset to {0} {1} and work back up.', dw, unit]
     }
   }
-  return { policy, kind: 'hold', weight: w, why: ['Missed reps last time — same weight again ({0} of {1} to go).', deloadAt - stalls, deloadAt] }
+  return { policy, kind: 'hold', weight: fromDisplay(w, unit), why: ['Missed reps last time — same weight again ({0} of {1} to go).', deloadAt - stalls, deloadAt] }
 }
 
 /**

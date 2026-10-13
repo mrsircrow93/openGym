@@ -6,10 +6,17 @@ import { loadToken, setToken } from '../lib/mobile.js'
 import { DEMO, DEMO_SEEDED, STATIC } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 import { refreshBilling } from '../lib/entitlements.js'
+import { toCanonicalKg } from '../lib/units.js'
 
 const KEY = 'gym_state_v1'
 export const DEF = {
-  unit: 'kg', restSec: 90, restExerciseSec: 120, sound: true, keepAwake: true, lang: 'es',
+  // Weights are stored in kilograms (lib/units.js). `unit` is the default unit loads are typed
+  // and read in, `bwUnit` the one body weight uses — someone can train in pounds and weigh in
+  // kilos — and `exUnits` overrides the load unit for a single exercise, because one gym has
+  // pound dumbbells next to kilo machines. `wSchema` must stay 0 here so a profile written
+  // before the canonical change still migrates when it is merged over these defaults.
+  unit: 'kg', bwUnit: null, exUnits: {}, wSchema: 0,
+  restSec: 90, restExerciseSec: 120, sound: true, keepAwake: true, lang: 'es',
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
   bodyweight: [], routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
@@ -40,6 +47,10 @@ export const DEF = {
   reminder: { on: false, time: '08:00', tz: null }, effort: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
+// Every way state enters the app — local storage, a server pull, the native file mirror, the
+// demo seed and an imported backup — goes through here, so the weight migration cannot be
+// reached by one route and missed by another.
+const hydrate = o => toCanonicalKg(Object.assign(clone(DEF), o))
 // Drops the keys Object.assign treats specially, so a hand-edited backup or a tampered sync
 // payload can't re-parent the state object. Used wherever outside JSON is merged into S.
 export const noProto = (k, v) => (k === '__proto__' || k === 'constructor' || k === 'prototype') ? undefined : v
@@ -48,7 +59,7 @@ export const safeParse = str => JSON.parse(str, noProto)
 function loadState() {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return Object.assign(clone(DEF), safeParse(raw))
+    if (raw) return hydrate(safeParse(raw))
   } catch (e) { /* ignore */ }
   return clone(DEF)
 }
@@ -102,7 +113,7 @@ export const useStore = create((set, get) => {
     localStorage.removeItem('gym_guest')
     localStorage.removeItem('gym_dirty')
     localStorage.removeItem(KEY)
-    persist(clone(DEF), false)
+    persist(hydrate({}), false)
   }
 
   return {
@@ -116,7 +127,7 @@ export const useStore = create((set, get) => {
       mut(S)
       persist(S, push)
     },
-    replaceState(S, push = false) { persist(clone(S), push) },
+    replaceState(S, push = false) { persist(hydrate(S), push) },
 
     isGuest: () => localStorage.getItem('gym_guest') === '1',
     setGuest(v) { if (v) localStorage.setItem('gym_guest', '1'); else localStorage.removeItem('gym_guest'); set({}) },
@@ -147,7 +158,7 @@ export const useStore = create((set, get) => {
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
           const active = S.active
-          const next = Object.assign(clone(DEF), state)
+          const next = hydrate(state)
           if (active) next.active = active
           persist(next, false)
         } else if (hasData(S)) { await get().pushState() }
@@ -176,7 +187,7 @@ export const useStore = create((set, get) => {
     async resetDemo() {
       const { buildDemoState } = await import('../lib/demoSeed.js')
       localStorage.removeItem('gym_dirty')
-      persist(Object.assign(clone(DEF), buildDemoState()), false)
+      persist(hydrate(buildDemoState()), false)
     },
 
     // Boot: ask the server who we are, then pull.
@@ -188,7 +199,7 @@ export const useStore = create((set, get) => {
         const saved = await nativeLoad()
         const S = get().S
         if (saved && (!hasData(S) || (saved._ts || 0) >= (S._ts || 0))) {
-          persist(Object.assign(clone(DEF), saved), false)
+          persist(hydrate(saved), false)
         } else if (hasData(S)) {
           nativeSave(S)
         }

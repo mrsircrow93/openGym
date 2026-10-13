@@ -155,7 +155,7 @@ Suggested order is **rest timer → units per exercise → tutorial**: the timer
 something that breaks mid-set, the units question is the one that silently corrupts numbers if
 rushed, and the tutorial is the biggest but least urgent of the three.
 
-### 1. Rest timer that survives the screen going off
+### 1. ✅ 2026-10-12 — Rest timer that survives the screen going off
 
 The countdown is already built on an absolute `endsAt` (`useUI.startRest`), so elapsed time is
 never lost — the bar reads correctly the moment you look again. What is missing is the *alert*: the
@@ -176,7 +176,7 @@ that Capacitor does not cover, and is weeks, not days. Say so plainly rather tha
 
 Size: 1 day including tests.
 
-### 2. A unit per exercise, not only per profile
+### 2. ✅ 2026-10-12 — A unit per exercise, not only per profile
 
 A gym in Mexico mixes kilo machines with pound dumbbells, so one global unit is wrong for everybody
 who trains in one.
@@ -197,6 +197,14 @@ Also: `convertProfile` must leave `exUnits` alone, and the unit switch confirmat
 per-exercise choices are kept.
 
 Size: 2 days, most of it the display paths and the tests.
+
+**Shipped.** Storage is canonical kilograms behind a `wSchema` migration that runs on every path
+state can enter by — local storage, a server pull, the native file mirror, the demo seed and an
+imported backup. Switching a unit no longer rewrites a single logged number, which is what used to
+turn 20 lb into 20.1. Three units can now disagree on purpose: `S.unit` for loads, `S.bwUnit` for
+body weight, and `S.exUnits[id]` for one exercise, chosen in its config sheet. Verified against a
+real pre-change pounds profile: 200 lb stores as 90.718 kg and reads back as exactly 200 lb, and
+flipping the load unit to kilos left every stored number byte-identical.
 
 ### 3. First-run tutorial
 

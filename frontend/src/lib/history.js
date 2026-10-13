@@ -1,5 +1,5 @@
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
-import { todayISO, isoOf, weekKey, fmtNum } from './format.js'
+import { todayISO, isoOf, weekKey, fmtNum, fmtW} from './format.js'
 import { isCardio, isBodyweightEq } from './exercises.js'
 import { t } from './i18n.js'
 
@@ -90,22 +90,24 @@ const effortTail = s => {
 }
 
 // One-line summary of a logged set. `cfg` carries the mode when the caller has it (a routine
-// entry or a workout entry); passing an id alone keeps the old body-part behaviour.
-export function setLabel(id, s, cfg) {
+// entry or a workout entry); passing an id alone keeps the old body-part behaviour. `s.w` is
+// stored in kilograms, so `unit` says what to read it as — it defaults to kg rather than to the
+// profile, because a helper has no business reaching into the store.
+export function setLabel(id, s, cfg, unit = 'kg') {
   const c = cfg || { id }
   const mode = modeOf(c)
   if (mode === 'cardio') return `${s.min || 0} min @ ${fmtNum(s.speed || 0)} km/h`
-  if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
+  if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtW(s.w, unit)}` : '')
   // Bodyweight reads as what you did — "12", or "+10 × 12" once there is a belt involved —
   // rather than "0×12", which says a set was performed with no weight and means nothing.
   // A per-side set needs no mark here: the number logged is the total, the same as every
   // other set in the app.
   const reps = s.r || 0
   if (isBw({ ...c, id: c.id ?? id })) {
-    const load = s.w > 0 ? `+${fmtNum(s.w)} × ` : ''
+    const load = s.w > 0 ? `+${fmtW(s.w, unit)} × ` : ''
     return `${load}${reps}` + effortTail(s)
   }
-  return `${fmtNum(s.w || 0)}×${reps}` + effortTail(s)
+  return `${fmtW(s.w || 0, unit)}×${reps}` + effortTail(s)
 }
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
@@ -123,7 +125,7 @@ export function exLine(cfg, unit) {
   const mode = modeOf(cfg)
   const n = cfg.sets || 1
   // Added weight reads as added: "+10 kg" on a dip belt, "60 kg" on a barbell.
-  const load = cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtNum(cfg.weight) + ' ' + unit : ''
+  const load = cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtW(cfg.weight, unit) + ' ' + unit : ''
   // Only shown when it overrides the app-wide timer, same as the config sheet's toggle.
   const rest = cfg.rest > 0 ? ' · ' + fmtSec(cfg.rest) + ' ' + t('rest') : ''
   if (mode === 'cardio') return `${n} × ${cfg.min || 20} min @ ${fmtNum(cfg.speed || 8)} km/h`

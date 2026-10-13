@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { bodyUnit, loadUnit, toDisplay, fromDisplay } from './lib/units.js'
 import { importRoutineSheet } from './sheets-trainer.jsx'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, exOr } from './lib/exercises.js'
-import { fmtDate, fmtNum, fmtVol, fmtDur, durPart, todayISO, uid, exCount, fmtWater, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
+import { fmtDate, fmtNum, fmtVol, fmtDur, durPart, todayISO, uid, exCount, fmtWater, DAYN, MONTHS_LONG, ACCENTS, fmtW, fmtWU} from './lib/format.js'
 import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
@@ -114,20 +115,23 @@ function WeightInput({ value, setValue, unit }) {
 /* ============================ body weight ============================ */
 function BwSheet({ required, onDone, close }) {
   const st = useStore(s => s.S)
-  const unit = st.unit
+  // The picker works entirely in the unit on screen; the kilograms only appear on the way in
+  // and on the way out, which is the whole contract of this refactor.
+  const unit = bodyUnit(st)
   const bw = lastBW(st)
-  const [v, setV] = useState(bw ? bw.w : 70)
+  const [v, setV] = useState(bw ? Math.round(toDisplay(bw.w, unit) * 10) / 10 : (unit === 'lb' ? 155 : 70))
   const save = () => {
     const n = Math.round((v || 0) * 10) / 10
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
+    const kg = fromDisplay(n, unit)
     update(s => {
       const iso = todayISO()
       const ex = s.bodyweight.find(b => b.d === iso)
-      if (ex) { ex.w = n; ex.t = Date.now() } else s.bodyweight.push({ d: iso, w: n, t: Date.now() })
+      if (ex) { ex.w = kg; ex.t = Date.now() } else s.bodyweight.push({ d: iso, w: kg, t: Date.now() })
       s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1))
     })
     close()
-    if (onDone) onDone(n); else toast(t('Weight saved'))
+    if (onDone) onDone(kg); else toast(t('Weight saved'))
   }
   const recent = [...st.bodyweight].reverse().slice(0, 3)
   const delEntry = d => update(s => { s.bodyweight = s.bodyweight.filter(b => b.d !== d) })
@@ -147,7 +151,7 @@ function BwSheet({ required, onDone, close }) {
       <div className="list" style={{ gap: 0 }}>
         {recent.map(b => <div key={b.d} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
           <span className="small muted">{fmtDate(b.d, true)}</span>
-          <span className="row" style={{ gap: 12 }}><b>{fmtNum(b.w)} {unit}</b>
+          <span className="row" style={{ gap: 12 }}><b>{fmtWU(b.w, unit)}</b>
             <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={() => delEntry(b.d)} aria-label="delete"><Icon name="trash" /></button></span>
         </div>)}
       </div>
@@ -200,9 +204,9 @@ function ImportSummary({ parsed, close }) {
     </div>
 
     {parsed.mixedUnits ? <div className="small" style={{ color: 'var(--yellow)', marginBottom: 10 }}>
-      {t('The file mixes kg and lb — each set is converted to {0}.', st.unit)}
+      {t('The file mixes kg and lb — every set is converted as it is read.')}
     </div> : parsed.converted ? <div className="small" style={{ color: 'var(--yellow)', marginBottom: 10 }}>
-      {t('The file is in {0} and your profile is in {1} — weights will be converted.', parsed.fileUnit, st.unit)}
+      {t('The file is in {0} — the weights are converted as they are read.', parsed.fileUnit)}
     </div> : null}
     {!isBW && !parsed.fileUnit && !parsed.mixedUnits && <div className="small dim" style={{ marginBottom: 10 }}>
       {t('The file does not say which unit it uses — numbers are imported as they are.')}
@@ -263,17 +267,20 @@ export function bwDeltaColor(delta, currentW) {
 function GoalSheet({ close }) {
   const st = S()
   const bw = lastBW(st)
-  const [v, setV] = useState(st.targetW || (bw ? bw.w : 70))
+  const unit = bodyUnit(st)
+  const seed = st.targetW ?? (bw ? bw.w : null)
+  const [v, setV] = useState(seed != null ? Math.round(toDisplay(seed, unit) * 10) / 10 : (unit === 'lb' ? 155 : 70))
   return <>
     <h3>{t('Target weight')}</h3>
     <div className="muted small">{t('Your goal is drawn as a line through the weight charts, and gains/losses are colored by whether they move toward it.')}</div>
-    <WeightInput value={v} setValue={setV} unit={st.unit} />
+    <WeightInput value={v} setValue={setV} unit={unit} />
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={() => {
       const n = Math.round((v || 0) * 10) / 10
       if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
-      update(s => { s.targetW = n }); close()
-      const b = lastBW(S()); toast(t('Goal set: {0}', fmtNum(n) + ' ' + st.unit) + (b ? ' (' + t('{0} to go', fmtNum(Math.abs(n - b.w))) + ')' : ''))
+      const kg = fromDisplay(n, unit)
+      update(s => { s.targetW = kg }); close()
+      const b = lastBW(S()); toast(t('Goal set: {0}', fmtWU(kg, unit)) + (b ? ' (' + t('{0} to go', fmtW(Math.abs(kg - b.w), unit)) + ')' : ''))
     }}>{t('Save goal')}</Button>
     {st.targetW && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { update(s => { s.targetW = null }); close(); toast(t('Goal removed')) }}>{t('Remove goal')}</Button></>}
   </>
@@ -286,22 +293,26 @@ export const goalSheet = () => ui().openSheet(close => <GoalSheet close={close} 
 function OneRM({ ex }) {
   const st = useStore(s => s.S)
   const best = best1RM(st, ex.id)
-  const [w, setW] = useState(best ? best.w : (st.exWeights[ex.id] || {}).w || 20)
+  // The calculator is a scratchpad in the unit this exercise is logged in; nothing it computes
+  // is stored, so it never needs to come back to kilograms.
+  const unit = loadUnit(st, ex.id)
+  const seedKg = best ? best.w : (st.exWeights[ex.id] || {}).w || 0
+  const [w, setW] = useState(seedKg > 0 ? Math.round(toDisplay(seedKg, unit) * 10) / 10 : (unit === 'lb' ? 45 : 20))
   const [r, setR] = useState(best ? best.r : 5)
   const est = estimate1RM(w, r)
   return <>
     <h4 className="sec">{t('Estimated 1RM')}</h4>
     {best && <div className="small" style={{ marginBottom: 8 }}>
-      {t('From your log:')} <b className="accent">{fmtNum(best.est)} {st.unit}</b>
-      <span className="dim"> · {t('{0} × {1} on {2}', fmtNum(best.w) + ' ' + st.unit, best.r, fmtDate(best.d, true))}</span>
+      {t('From your log:')} <b className="accent">{fmtWU(best.est, unit)}</b>
+      <span className="dim"> · {t('{0} × {1} on {2}', fmtWU(best.w, unit), best.r, fmtDate(best.d, true))}</span>
     </div>}
     <div className="row cfgrow" style={{ marginBottom: 10 }}>
-      <Stepper label={t('Weight ({0})', st.unit)} value={w} step={plateStep(st.unit)} onChange={setW} />
+      <Stepper label={t('Weight ({0})', unit)} value={w} step={plateStep(unit)} onChange={setW} />
       <Stepper label={t('Reps')} value={r} step={1} decimal={false} onChange={setR} />
     </div>
     <div className="row between" style={{ marginBottom: 4 }}>
       <span className="muted small">{t('Estimate')}</span>
-      <b className="accent" style={{ fontSize: 20 }}>{est === null ? '—' : fmtNum(est) + ' ' + st.unit}</b>
+      <b className="accent" style={{ fontSize: 20 }}>{est === null ? '—' : fmtNum(est) + ' ' + unit}</b>
     </div>
     <div className="small dim">{est === null
       ? t('Enter a weight and 1–{0} reps — beyond that an estimate is guesswork.', REP_CAP)
@@ -324,7 +335,7 @@ function ExerciseDetail({ ex, close }) {
     </div>
     {ex.media && <div className="exmedia-wrap"><ExerciseMedia id={ex.media} /></div>}
     {ex.desc && <div className="exnote">{ex.desc}</div>}
-    {best > 0 && <div className="small row" style={{ marginBottom: 6, gap: 5 }}><Icon name="trophy" style={{ fontSize: 14, color: 'var(--yellow)' }} />{t('Best:')} <b className="accent">{fmtNum(best)} {st.unit}</b>{last ? ` · ${t('last')} ${fmtDate(last.d)}: ${last.sets.map(s => setLabel(ex.id, s, last.target)).join(', ')}` : ''}</div>}
+    {best > 0 && <div className="small row" style={{ marginBottom: 6, gap: 5 }}><Icon name="trophy" style={{ fontSize: 14, color: 'var(--yellow)' }} />{t('Best:')} <b className="accent">{fmtWU(best, loadUnit(st, ex.id))}</b>{last ? ` · ${t('last')} ${fmtDate(last.d)}: ${last.sets.map(s => setLabel(ex.id, s, last.target, loadUnit(st, ex.id))).join(', ')}` : ''}</div>}
     <Button variant="primary" icon="plus" style={{ margin: '10px 0 4px' }} onClick={() => addToRoutineSheet(ex)}>{t('Add to my plan')}</Button>
     {ex.custom && <div className="row" style={{ gap: 8, marginTop: 8 }}>
       <Button icon="pencil" style={{ flex: 1 }} onClick={() => { close(); customExSheet(ex) }}>{t('Edit')}</Button>
@@ -544,7 +555,14 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit }) {
 function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
   const st = useStore(s => s.S)
   const cardio = isCardio(ex.id)
-  const [c, setC] = useState(existing || defaultConfig(ex.id))
+  // This exercise's own unit, with its own picker further down: a gym has pound dumbbells next
+  // to kilo machines, so the profile default is only a starting point. `c.weight` is held in
+  // that unit while the sheet is open and crosses back to kilograms in `save`.
+  const [unit, setUnit] = useState(loadUnit(st, ex.id))
+  const [c, setC] = useState(() => {
+    const base = existing || defaultConfig(ex.id)
+    return base.weight ? { ...base, weight: Math.round(toDisplay(base.weight, loadUnit(st, ex.id)) * 100) / 100 } : base
+  })
   // Cardio keeps its own duration+speed form; the reps/time choice (issue #16) is offered for
   // everything else, which is where the gap was — planks, hangs, wall sits, loaded carries.
   const mode = cardio ? 'cardio' : modeOf({ ...c, id: ex.id })
@@ -555,6 +573,11 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
   const setMode = m => setC(x => ({ ...defaultConfig(ex.id, m), ...x, mode: m }))
   const save = () => {
     close()
+    // The picker is per exercise and lives outside the config object, because it describes how
+    // the exercise is read rather than what the plan asks for — a shared routine should not
+    // impose its author's unit on the person following it.
+    update(sx => { sx.exUnits = { ...(sx.exUnits || {}) }; if (unit === (sx.unit || 'kg')) delete sx.exUnits[ex.id]; else sx.exUnits[ex.id] = unit })
+    const kgOf = v => fromDisplay(Math.max(0, v || 0), unit)
     const sets = Math.max(1, Math.round(c.sets) || (cardio ? 1 : 3))
     // Only carry progression settings that differ from the inherited default, so a plan file
     // stays readable and "follow the routine" keeps meaning exactly that.
@@ -573,13 +596,13 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
     const rest = {}
     if (!cardio && c.rest > 0) rest.rest = Math.round(c.rest)
     if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8) })
-    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog, ...rest })
+    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: kgOf(c.weight), ...flags, ...prog, ...rest })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
       // otherwise plan seven reps on one side and eight on the other, every session.
       const typed = Math.max(1, Math.round(c.reps) || 10)
       const reps = perSide ? Math.ceil(typed / 2) * 2 : typed
-      const out = { sets, mode: 'reps', reps, weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog, ...rest }
+      const out = { sets, mode: 'reps', reps, weight: kgOf(c.weight), ...flags, ...(perSide ? { side: true } : {}), ...prog, ...rest }
       if (policyFor({ ...c, id: ex.id }, routine, 'reps') === 'double') out.repsMin = Math.min(reps, Math.max(1, Math.round(c.repsMin) || Math.max(1, reps - 2)))
       // A ceiling below the working reps would tell you to add a set on day one.
       if (bw && !(out.weight > 0) && c.repsMax > 0) out.repsMax = Math.max(reps, Math.round(c.repsMax))
@@ -607,13 +630,13 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       </> : mode === 'time' ? <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />
-        <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={plateStep(st.unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />
+        <Stepper label={t('Weight ({0})', unit)} value={c.weight} step={plateStep(unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />
       </> : <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Reps')} value={c.reps} step={perSide ? 2 : 1} decimal={false} onChange={v => setC(x => ({ ...x, reps: v }))} />
         {/* On bodyweight work the weight stepper is the click #32 is about, so it is not here
             until there is a belt to describe — see the added-weight row below. */}
-        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={plateStep(st.unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && <Stepper label={t('Weight ({0})', unit)} value={c.weight} step={plateStep(unit)} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </>}
     </div>
     {mode === 'time' && !bw && <div className="small dim" style={{ marginBottom: 18 }}>
@@ -647,7 +670,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
         reps, with its explanation underneath. */}
     {bw && <>
       <div className="row cfgrow" style={{ marginBottom: 8 }}>
-        <Stepper label={t('Added ({0})', st.unit)} value={c.weight || 0} step={plateStep(st.unit)}
+        <Stepper label={t('Added ({0})', unit)} value={c.weight || 0} step={plateStep(unit)}
           onChange={v => setC(x => ({ ...x, weight: v }))} />
       </div>
       <div className="small dim" style={{ marginBottom: 18 }}>
@@ -664,7 +687,16 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
         ? t('Reps climb to {0}, then a set is added and the reps start over. At {1} sets it asks you to add weight instead.', c.repsMax, MAX_BW_SETS)
         : t('Reps climb by one whenever every set was clean. Set a ceiling to add sets instead of reps forever.')}
     </div>}
-    <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} />
+    {/* The unit picker sits with the other per-exercise choices, right where someone editing a
+        dumbbell press would look for it. */}
+    {!cardio && <div className="sect-b" style={{ marginBottom: 14 }}>
+      <Row icon="scale" iconTint="var(--teal)" title={t('Unit for this exercise')}
+        subtitle={unit === (st.unit || 'kg') ? t('Same as your profile ({0})', st.unit || 'kg') : t('Only this exercise is logged in {0}.', unit)}>
+        <Segmented className="seg-inline" options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
+          value={unit} onChange={u => { setC(x => ({ ...x, weight: x.weight ? Math.round(toDisplay(fromDisplay(x.weight, unit), u) * 100) / 100 : x.weight })); setUnit(u) }} />
+      </Row>
+    </div>}
+    <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={unit} />
     <Button variant="primary" onClick={save}>{existing ? t('Save') : t('Add to routine')}</Button>
     {ex.custom && <><div style={{ height: 8 }} /><Button icon="pencil" onClick={() => { close(); customExSheet(ex) }}>{t('Edit or delete this exercise')}</Button></>}
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
@@ -827,13 +859,13 @@ function WorkoutDetail({ w, close }) {
   const st = useStore(s => s.S)
   return <>
     <div className="row between" style={{ alignItems: 'center', marginBottom: 4 }}><h3 style={{ margin: 0 }}>{w.name}</h3><Button size="sm" variant="tinted" icon="upload" onClick={() => shareWorkoutSheet(w, w.prs || [])}>{t('Share')}</Button></div>
-    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtWU(w.bw, bodyUnit(st))] : [])].join(' · ')}</div>
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
       return <div key={i} className="row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
         {ex && <Thumb ex={ex} />}
         <div className="grow"><div className="tt capitalize" style={{ fontWeight: 600 }}>{ex ? ex.n : (e.n || e.id)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
-          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div></div>
+          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target, loadUnit(st, e.id))).join('  ·  ') || t('no sets')}</div></div>
       </div>
     })}
     <Button variant="danger" onClick={() => confirmSheet({ title: t('Delete workout?'), message: t('This removes it from your history for good.'), confirmText: t('Delete'), danger: true, onConfirm: () => { update(s => { s.workouts = s.workouts.filter(x => x.id !== w.id) }); close(); toast(t('Workout deleted')) } })}>{t('Delete workout')}</Button>
@@ -929,7 +961,10 @@ function TopWeight({ entryIdx, close }) {
   const ex = entry && EXIDX[entry.id]
   const maxSet = entry ? Math.max(0, ...entry.sets.filter(s => s.done && !s.warmup).map(s => s.w || 0)) : 0
   const prevBest = entry ? Math.max((st.exWeights[entry.id] || {}).w || 0, bestWeightFor(st, entry.id)) : 0
-  const [v, setV] = useState(entry ? (Math.max(maxSet, prevBest) || entry.target.weight || 0) : 0)
+  // `unit` further down is the superset unit — an array of entry indexes — so the weight unit
+  // needs its own name here. The picker works in it; storage stays in kilograms.
+  const wu = entry ? loadUnit(st, entry.id) : 'kg'
+  const [v, setV] = useState(entry ? Math.round(toDisplay(Math.max(maxSet, prevBest) || entry.target.weight || 0, wu) * 10) / 10 : 0)
   useEffect(() => { if (!entry) close() }, [!entry])
 
   const units = supersetUnits(A ? A.entries : [])
@@ -942,23 +977,24 @@ function TopWeight({ entryIdx, close }) {
   const commit = advance => {
     const n = Math.round((v || 0) * 10) / 10
     if (!isFinite(n) || n < 0) { toast(t('Enter a valid weight')); return }
+    const kg = fromDisplay(n, wu)
     update(s => {
-      s.active.entries[entryIdx].topW = n
+      s.active.entries[entryIdx].topW = kg
       const cur = s.exWeights[entry.id]
-      s.exWeights[entry.id] = { w: Math.max(n, cur ? cur.w : 0), d: todayISO() }
+      s.exWeights[entry.id] = { w: Math.max(kg, cur ? cur.w : 0), d: todayISO() }
     })
     close()
     if (advance && unitDone) {
       if (isLastUnit) workoutCompleteSheet()               // whole workout done → finish/continue prompt
       else update(s => { s.active.cur = units[unitIdx + 1][0] })
-    } else toast(t('Tracked — next time starts at {0}', fmtNum(S().exWeights[entry.id].w) + ' ' + st.unit))
+    } else toast(t('Tracked — next time starts at {0}', fmtWU(S().exWeights[entry.id].w, wu)))
   }
   return <>
     <h3 className="capitalize row" style={{ gap: 8 }}><Icon name="checkCircle" style={{ color: 'var(--acc)' }} />{t('{0} done', ex.n)}</h3>
     <div className="muted small">{t('Confirm the weight you worked with — your highest becomes the default next time.')}{!unitDone && unit.length > 1 ? ' ' + t('Then finish the superset partner.') : ''}</div>
-    <WeightInput value={v} setValue={setV} unit={st.unit} />
+    <WeightInput value={v} setValue={setV} unit={wu} />
     <div style={{ height: 10 }} />
-    {prevBest > 0 ? <div className="small dim" style={{ textAlign: 'center', marginBottom: 12 }}>{t('Previous best:')} {fmtNum(prevBest)} {st.unit}{maxSet > prevBest && <span style={{ color: 'var(--yellow)' }}> — {t('new record!')}</span>}</div> : <div style={{ height: 4 }} />}
+    {prevBest > 0 ? <div className="small dim" style={{ textAlign: 'center', marginBottom: 12 }}>{t('Previous best:')} {fmtWU(prevBest, wu)}{maxSet > prevBest && <span style={{ color: 'var(--yellow)' }}> — {t('new record!')}</span>}</div> : <div style={{ height: 4 }} />}
     {unitDone ? <>
       <Button variant="primary" trailingIcon={isLastUnit ? null : 'chevronRight'} onClick={() => commit(true)}>{isLastUnit ? t('Save') : t('Save & next exercise')}</Button>
       <div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => commit(false)}>{t('Just close')}</Button>
@@ -1000,7 +1036,7 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
     {w.hrMax > 0 && <div className="small row" style={{ gap: 5, justifyContent: 'center', color: 'var(--red)', marginBottom: 4 }}><Icon name="heart" style={{ fontSize: 13 }} />{t('Peak heart rate: {0} bpm', w.hrMax)}</div>}
     {(prs.length > 0 || e1prs.length > 0) && <div style={{ textAlign: 'left', marginBottom: 12 }}>
       {prs.map(id => <div key={id} className="small accent capitalize row" style={{ gap: 5 }}><Icon name="trophy" style={{ fontSize: 13 }} />{t('New PR:')} {(EXIDX[id] || {}).n || id}</div>)}
-      {e1prs.map(p => <div key={p.id} className="small accent capitalize row" style={{ gap: 5 }}><Icon name="chartLine" style={{ fontSize: 13 }} />{t('Best estimated 1RM:')} {(EXIDX[p.id] || {}).n || p.id} · {fmtNum(p.est)} {st.unit}</div>)}
+      {e1prs.map(p => <div key={p.id} className="small accent capitalize row" style={{ gap: 5 }}><Icon name="chartLine" style={{ fontSize: 13 }} />{t('Best estimated 1RM:')} {(EXIDX[p.id] || {}).n || p.id} · {fmtWU(p.est, loadUnit(st, p.id))}</div>)}
     </div>}
     <h4 className="sec" style={{ textAlign: 'left' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />

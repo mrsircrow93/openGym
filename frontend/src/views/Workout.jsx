@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { loadUnit, toDisplay, fromDisplay } from '../lib/units.js'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { plateStep, roundPlate } from '../lib/units.js'
 import { useUI } from '../store/useUI.js'
 import { exOr } from '../lib/exercises.js'
 import { effectiveRoutine, lastEntryFor, bestWeightFor, buildSets, setsDoneActive, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, sideReps, repStep, EFFORT, effortOf, stepEffort, capEffort } from '../lib/history.js'
-import { fmtNum, fmtDate, todayISO, exCount, DAYN } from '../lib/format.js'
+import { fmtNum, fmtDate, todayISO, exCount, DAYN, fmtWU} from '../lib/format.js'
 import { beep, vibrate } from '../lib/sound.js'
 import { t } from '../lib/i18n.js'
 import { api } from '../lib/api.js'
@@ -76,7 +77,13 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   const cfg = { ...(entry.target || {}), id: entry.id }
   const bw = !cardio && isBw(cfg)
   const added = bw && entry.sets.some(s => s.w > 0)
-  const loadCol = { f: 'w', step: plateStep(S.unit), dec: true, hd: bw ? t('Added ({0})', S.unit) : t('Weight ({0})', S.unit) }
+  // The load column is the one that is not stored in the units it is shown in. `get` and `set`
+  // move a value across that line, so the row, the steppers and the typed field all work in the
+  // unit this exercise is logged in while storage stays in kilograms. Every other column —
+  // reps, seconds, speed, effort — is unitless and carries neither.
+  const exU = loadUnit(S, entry.id)
+  const loadCol = { f: 'w', step: plateStep(exU), dec: true, hd: bw ? t('Added ({0})', exU) : t('Weight ({0})', exU),
+    get: v => toDisplay(v, exU), set: v => fromDisplay(v, exU) }
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
   const repCol = { f: 'r', step: repStep(cfg), dec: false, hd: t('Reps') }
@@ -96,7 +103,10 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
   // with no ceiling, as they always did.
   const bump = (s, i, col, dir) => {
     if (col.eff) return onField(i, col.f, stepEffort(col.eff, s[col.f], dir))
-    onField(i, col.f, Math.max(0, Math.round(((s[col.f] || 0) + dir * col.step) * 100) / 100))
+    // Stepping happens in the unit on screen, so a pound column walks in pounds.
+    const cur = col.get ? col.get(s[col.f] || 0) : (s[col.f] || 0)
+    const next = Math.max(0, Math.round((cur + dir * col.step) * 100) / 100)
+    onField(i, col.f, col.set ? col.set(next) : next)
   }
   // Uses the shared stepper markup so a set row picks up the same control styling
   // as every other +/- field in the app.
@@ -104,8 +114,9 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     <div className={'stp ' + cls}>
       <button aria-label="Decrease" onClick={() => bump(s, i, col, -1)}><Icon name="minus" /></button>
       {/* a typed effort is capped — there is no RPE 12, and 12 reps in reserve is a warm-up */}
-      <span className="val"><NumberField decimal={col.dec} nullable={col.opt} value={s[col.f] ?? ''}
-        onChange={v => onField(i, col.f, col.eff ? capEffort(col.eff, v) : v)} /></span>
+      <span className="val"><NumberField decimal={col.dec} nullable={col.opt}
+        value={s[col.f] == null ? '' : (col.get ? Math.round(col.get(s[col.f]) * 100) / 100 : s[col.f])}
+        onChange={v => onField(i, col.f, col.eff ? capEffort(col.eff, v) : col.set ? col.set(v) : v)} /></span>
       <button aria-label="Increase" onClick={() => bump(s, i, col, 1)}><Icon name="plus" /></button>
     </div>
   )
@@ -117,19 +128,19 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onRemov
     <div className="chips" style={{ marginBottom: 10 }}>
       <button className="chip nocap" onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /> {t('How to')}</button>
       {!cardio && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="timer" /> {t('Rest')} {fmtRest(restSec)}</span>}
-      {mode === 'reps' && <button className="chip nocap" onClick={() => aiQuickLogSheet(ex, S.unit, r => {
+      {mode === 'reps' && <button className="chip nocap" onClick={() => aiQuickLogSheet(ex, exU, r => {
         const i = entry.sets.findIndex(s => !s.done)
         const idx = i === -1 ? entry.sets.length - 1 : i
         if (r.reps != null) onField(idx, 'r', r.reps)
-        if (r.weight != null) onField(idx, 'w', r.weight)
+        if (r.weight != null) onField(idx, 'w', fromDisplay(r.weight, exU))   // the model answered in exU
       })}><Icon name="sparkles" /> {t('Say it')}</button>}
       <button className="chip nocap" onClick={() => swapExerciseSheet(entryIdx)}><Icon name="shuffle" /> {t('Swap')}</button>
       {(ex.tg || ex.bp) && <span className="chip" style={{ cursor: 'default' }}>{t(ex.tg || ex.bp)}</span>}
-      {best > 0 && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="trophy" /> {t('Best')} {fmtNum(best)} {S.unit}</span>}
+      {best > 0 && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="trophy" /> {t('Best')} {fmtWU(best, exU)}</span>}
       {cardio && <span className="chip nocap" style={{ cursor: 'default' }}><Icon name="figureRun" /> {t('Cardio')}</span>}
       {!cardio && !timed && isPerSide(cfg) && <span className="chip nocap" style={{ cursor: 'default' }}>{t('{0} per side', fmtNum(sideReps(entry.sets.find(s => !s.done)?.r ?? entry.sets[0]?.r)))}</span>}
     </div>
-    {last && <div className="pill nocap" style={{ marginBottom: 6, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', fontWeight: 500 }}><Icon name="history" style={{ verticalAlign: '-2px', marginRight: 5 }} />{t('Last time')} · {fmtDate(last.d, true)}: {last.sets.map(s => setLabel(entry.id, s, last.target)).join(', ')}</div>}
+    {last && <div className="pill nocap" style={{ marginBottom: 6, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', fontWeight: 500 }}><Icon name="history" style={{ verticalAlign: '-2px', marginRight: 5 }} />{t('Last time')} · {fmtDate(last.d, true)}: {last.sets.map(s => setLabel(entry.id, s, last.target, exU)).join(', ')}</div>}
     {plan && plan.why && plan.kind !== 'off' && <div className={'progline' + (plan.kind === 'deload' ? ' warn' : '')}>
       <Icon name={plan.kind === 'up' ? 'arrowUp' : plan.kind === 'deload' ? 'arrowDown' : 'lightbulb'} />
       <span>{t(...plan.why)}</span>
@@ -205,7 +216,10 @@ function ActiveWorkout() {
   // ~half the first working set's weight (rounded to a plate-friendly step) to save typing.
   const addWarmup = idx => mutEntry(idx, e => {
     const base = e.sets.find(x => !x.warmup)
-    const w = base && base.w > 0 ? roundPlate(base.w * 0.5, S.unit) : 0
+    // Plates are a fact about the gym, so the halving and the rounding happen in the unit this
+    // exercise is logged in and the result goes back to storage in kilograms.
+    const u = loadUnit(S, e.id)
+    const w = base && base.w > 0 ? fromDisplay(roundPlate(toDisplay(base.w, u) * 0.5, u), u) : 0
     const r = base && base.r ? base.r : (e.target?.reps || 10)
     e.sets.unshift({ w, r, warmup: true, done: false })
   })

@@ -1,5 +1,6 @@
 // Formatting + date helpers (ported from the vanilla app, unit taken from the store where needed).
 import { dateLocale, t } from './i18n.js'
+import { toDisplay } from './units.js'
 export const todayISO = () => {
   const d = new Date()
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
@@ -25,10 +26,15 @@ export const durPart = ms => (ms >= 60000 ? [fmtDur(ms)] : [])
 // Numbers follow the UI language, like the dates above — a hardcoded locale put Swiss
 // apostrophes ("7'535 kg") in front of every user, in every language.
 export const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString(dateLocale())
-// Volume stays in the profile's unit throughout: the old shorthand turned anything over
+// Weights are stored in kilograms and read in whatever unit was asked for; these two are the
+// only places that should turn a stored weight into text, so a number can never reach a screen
+// without having been converted.
+export const fmtW = (kg, unit) => fmtNum(toDisplay(kg, unit) || 0)
+export const fmtWU = (kg, unit) => fmtW(kg, unit) + ' ' + unit
+// Volume reads in the unit asked for throughout: the old shorthand turned anything over
 // 10 000 into "t", which is wrong for a pound profile and made one list mix "18.8t" with
 // "7'535 kg" — two numbers you can't compare at a glance.
-export const fmtVol = (v, unit) => fmtNum(v) + ' ' + unit
+export const fmtVol = (v, unit) => fmtW(v, unit) + ' ' + unit
 // Plural forms are not automatic when the English string is the key.
 export const exCount = n => t(n === 1 ? '{0} exercise' : '{0} exercises', n)
 // Water intake reads in litres once it's past a litre, millilitres below — "1.5 L" is easier

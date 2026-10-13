@@ -1,6 +1,7 @@
 // Calorie goal assistant: four short steps, plain words, and a result the person can read
 // before anything is saved. Maths and guard-rails live in lib/nutrition-goal.js.
 import { useState } from 'react'
+import { bodyUnit, toDisplay, fromDisplay } from './lib/units.js'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtNum, fmtDate, todayISO } from './lib/format.js'
@@ -31,7 +32,9 @@ function Choice({ options, value, onChange, label, desc, icon }) {
 
 function GoalWizard({ close }) {
   const S = useStore.getState().S
-  const unit = S.unit || 'kg'
+  // A calorie wizard is about body weight, so it reads in the body-weight unit. Everything it
+  // stores — nutriGoal and targetW alike — is kilograms.
+  const unit = bodyUnit(S)
   const prev = S.nutriGoal || {}
   const bw = lastBW(S)
   const [step, setStep] = useState(0)
@@ -40,9 +43,9 @@ function GoalWizard({ close }) {
     sex: prev.sex || (S.body === 'female' ? 'female' : 'male'),
     age: prev.age || (S.trainer && S.trainer.answers && S.trainer.answers.age) || 30,
     heightCm: prev.heightCm || S.heightCm || 170,
-    weight: bw ? bw.w : (prev.weightKg ? Math.round(fromKg(prev.weightKg, unit) * 10) / 10 : 70),
+    weight: Math.round(toDisplay(bw ? bw.w : (prev.weightKg || (unit === 'lb' ? 70 : 70)), unit) * 10) / 10,
     activity: prev.activity || 'moderate',
-    targetW: S.targetW || null
+    targetW: S.targetW != null ? Math.round(toDisplay(S.targetW, unit) * 10) / 10 : null
   })
   const set = p => setA(x => ({ ...x, ...p }))
   const params = { sex: a.sex, age: a.age, heightCm: a.heightCm, weightKg: toKg(a.weight, unit), activity: a.activity, goal: a.goal, pace: a.pace, targetKg: a.targetW ? toKg(a.targetW, unit) : null }
@@ -58,7 +61,7 @@ function GoalWizard({ close }) {
       s.macroGoal = { ...macroGoalOf(s), kcal: res.kcal, protein: res.protein, carbs: res.carbs, fat: res.fat }
       s.nutriGoal = { goal: a.goal, pace: a.pace, sex: a.sex, age: a.age, heightCm: a.heightCm, weightKg: params.weightKg, activity: a.activity, targetKg: params.targetKg, kcal: res.kcal, weeklyKg: res.weeklyKg, eta: res.eta, at: Date.now() }
       s.heightCm = a.heightCm
-      if (a.targetW) s.targetW = a.targetW
+      if (a.targetW) s.targetW = fromDisplay(a.targetW, unit)
     })
     close(); toast(t('Targets updated'))
   }

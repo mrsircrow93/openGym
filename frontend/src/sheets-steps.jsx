@@ -48,7 +48,7 @@ function StepsSheet({ close }) {
   const fromPhone = row && row.src === 'health'
   const streak = stepStreak(S, iso)
   const bw = lastBW(S)
-  const stats = stepStats(n, { weightKg: bw ? (S.unit === 'lb' ? bw.w * 0.4536 : bw.w) : null })
+  const stats = stepStats(n, { weightKg: bw ? bw.w : null })
   return <>
     <h3 className="row" style={{ gap: 8 }}><Icon name="footsteps" style={{ color: 'var(--teal)' }} />{t('Steps today')}</h3>
     <div className="muted small">{fmtDate(iso, true)}{fromPhone ? ' · ' + t('from your phone') : ''}</div>

@@ -4,6 +4,7 @@
 //   S.checkins: [{ id, d: 'YYYY-MM-DD', t, w: bodyweight or null, photos: { front, side, back }: ids,
 //                  review: { headline, summary, observations, tips, comparable, mood, at } | null }]
 import { api } from './api.js'
+import { bodyUnit, toDisplay } from './units.js'
 import { API_BASE, getToken } from './mobile.js'
 import { readUpload } from './upload.js'
 import { coachOf } from './coach.js'
@@ -69,7 +70,8 @@ export function reviewFacts(S, c) {
   const between = prev ? S.workouts.filter(w => w.d > prev.d && w.d <= c.d).length : S.workouts.filter(w => w.d <= c.d).length
   return {
     current: c.photos, previous: prev ? prev.photos : null,
-    weightNow: c.w, weightBefore: prev ? prev.w : null, unit: S.unit || 'kg',
+    // Stored in kilograms, told to the model in the unit the person actually reads.
+    weightNow: toDisplay(c.w, bodyUnit(S)), weightBefore: prev ? toDisplay(prev.w, bodyUnit(S)) : null, unit: bodyUnit(S),
     daysBetween: prev ? Math.max(0, daysSince(prev.d) - daysSince(c.d)) : 0, workoutsBetween: between,
     goal: (S.trainer && S.trainer.answers && S.trainer.answers.goal) || '', sex: S.body === 'female' ? 'female' : 'male',
     checkinNumber: checkinsOf(S).findIndex(x => x.id === c.id) + 1, lang: S.lang || 'en',

@@ -98,13 +98,15 @@ describe('importing effort from another app', () => {
   })
 
   it('carries the rating through the unit conversion', () => {
-    // lb -> kg rewrites the weight; the rating must survive that pass untouched
+    // lb -> kg rewrites the weight; the rating must survive that pass untouched. Three decimals
+    // rather than one: 135 lb rounded to 61.2 kg reads back as 134.9 lb, and that drift is the
+    // whole reason storage went canonical.
     const p = parseWorkoutCSV([
       'Date,Exercise,Weight,Weight Unit,Reps,RPE',
       '2026-01-12,Bench Press,135,lbs,10,8',
     ].join('\n'), { unit: 'kg' })
     const s = setsOf(p)[0]
-    expect(s.w).toBe(61.2)
+    expect(s.w).toBe(61.235)
     expect(s.rpe).toBe(8)
     expect('u' in s).toBe(false)              // the row's unit marker never reaches the set
   })

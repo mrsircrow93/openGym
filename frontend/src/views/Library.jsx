@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { loadUnit } from '../lib/units.js'
+import { fmtWU } from '../lib/format.js'
 import { useStore } from '../store/useStore.js'
 import { EXDB, BODYPARTS, allExercises, equipmentOf } from '../lib/exercises.js'
 import { bestWeightFor } from '../lib/history.js'
@@ -47,7 +49,7 @@ export default function Library() {
         const best = bestWeightFor(S, e.id)
         return <div key={e.id} className="item" onClick={() => exerciseDetailSheet(e)}>
           <Thumb ex={e} />
-          <div className="grow"><div className="tt capitalize">{e.n}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}{best > 0 ? ' · ' + t('Best') + ' ' + fmtNum(best) + ' ' + S.unit : ''}</div></div>
+          <div className="grow"><div className="tt capitalize">{e.n}</div><div className="ss capitalize">{t(e.tg || e.bp)} · {t(e.eq)}{best > 0 ? ' · ' + t('Best') + ' ' + fmtWU(best, loadUnit(S, e.id)) : ''}</div></div>
           <Button size="sm" variant="tinted" icon="plus" onClick={ev => { ev.stopPropagation(); addToRoutineSheet(e) }} aria-label={t('Add to a routine')}>{t('Add')}</Button>
         </div>
       })}

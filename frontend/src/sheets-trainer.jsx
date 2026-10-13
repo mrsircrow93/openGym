@@ -1,6 +1,7 @@
 // Personal trainer: a five-step questionnaire, then a plan preview you can apply as-is, add to what
 // you have, or regenerate. Plan maths + validation live in lib/trainer.js.
 import { useState, useRef } from 'react'
+import { bodyUnit, toDisplay, fromDisplay } from './lib/units.js'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { fmtNum, DAYN, uid } from './lib/format.js'
@@ -45,7 +46,11 @@ function Choice({ options, value, onChange, label, desc, icon, multi }) {
 function Trainer({ close, imported }) {
   const S = useStore.getState().S
   const prev = (S.trainer && S.trainer.answers) || {}
-  const [a, setA] = useState({ ...DEFAULT_ANSWERS, weight: lastBW(S)?.w || null, targetW: S.targetW || null, ...prev })
+  // The questionnaire is typed and read in the body-weight unit; `trainer.answers` is stored
+  // in kilograms like every other weight, so both cross the line in one place each.
+  const bwU = bodyUnit(S)
+  const toU = v => (v == null ? null : Math.round(toDisplay(v, bwU) * 10) / 10)
+  const [a, setA] = useState({ ...DEFAULT_ANSWERS, ...prev, weight: toU(prev.weight ?? lastBW(S)?.w ?? null), targetW: toU(prev.targetW ?? S.targetW ?? null) })
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -76,7 +81,7 @@ function Trainer({ close, imported }) {
       s.routines.push(...routines)
       for (const d in week) s.week[d] = week[d]
       if (applyNutrition && plan.nutrition) s.macroGoal = { ...macroGoalOf(s), kcal: plan.nutrition.kcal, protein: plan.nutrition.protein, carbs: plan.nutrition.carbs, fat: plan.nutrition.fat }
-      if (!imported) s.trainer = { answers: a, at: Date.now(), split: plan.split, summary: plan.summary }
+      if (!imported) s.trainer = { answers: { ...a, weight: a.weight == null ? null : fromDisplay(a.weight, bwU), targetW: a.targetW == null ? null : fromDisplay(a.targetW, bwU) }, at: Date.now(), split: plan.split, summary: plan.summary }
     })
     close()
     toast(t('Plan ready — see your week'))
@@ -195,8 +200,8 @@ function Trainer({ close, imported }) {
         {FOCUS.map(f => <button key={f} className={'chip' + ((a.focus || []).includes(f) ? ' on' : '')} onClick={() => set({ focus: (a.focus || []).includes(f) ? a.focus.filter(x => x !== f) : [...(a.focus || []), f] })}>{t(f)}</button>)}
       </div>
       <div className="row cfgrow" style={{ marginBottom: 12 }}>
-        <Stepper label={t('Body weight') + ' (' + S.unit + ')'} value={a.weight || 0} step={1} onChange={v => set({ weight: v || null })} />
-        <Stepper label={t('Target weight') + ' (' + S.unit + ')'} value={a.targetW || 0} step={1} onChange={v => set({ targetW: v || null })} />
+        <Stepper label={t('Body weight') + ' (' + bwU + ')'} value={a.weight || 0} step={1} onChange={v => set({ weight: v || null })} />
+        <Stepper label={t('Target weight') + ' (' + bwU + ')'} value={a.targetW || 0} step={1} onChange={v => set({ targetW: v || null })} />
         <Stepper label={t('Age')} value={a.age || 0} step={1} decimal={false} onChange={v => set({ age: v || null })} />
       </div>
       <div className="small muted" style={{ marginBottom: 6 }}>{t('Injuries, pain or anything to avoid (optional)')}</div>

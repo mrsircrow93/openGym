@@ -10,7 +10,7 @@
 
 import { EXIDX, isBodyweightEq } from './exercises.js'
 import { modeOf, fmtSec, isBw, isPerSide, sideReps } from './history.js'
-import { uid, todayISO, DAYN, fmtNum, exCount } from './format.js'
+import { uid, todayISO, DAYN, fmtNum, exCount, fmtW} from './format.js'
 import { t } from './i18n.js'
 
 const PLAN_FMT = 1
@@ -151,7 +151,7 @@ function scheme(e, unit) {
     return sets > 1 ? `${sets} × ${body}` : body
   }
   let s = mode === 'time' ? `${sets} × ${fmtSec(e.sec || 45)}` : `${sets} × ${e.reps ?? 10}`
-  if (e.weight) s += ` · ${isBw(e) ? '+' : ''}${fmtNum(e.weight)} ${unit}`
+  if (e.weight) s += ` · ${isBw(e) ? '+' : ''}${fmtW(e.weight, unit)} ${unit}`
   // A printed plan is read at the rack, so the split earns its four characters.
   if (mode !== 'time' && isPerSide(e)) s += ` · ${t('{0}/side', fmtNum(sideReps(e.reps ?? 10)))}`
   return s

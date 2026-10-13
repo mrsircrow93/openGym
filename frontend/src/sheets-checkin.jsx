@@ -2,9 +2,10 @@
 // with the previous set and a short coach's note on what changed. Storage + facts live in
 // lib/progress-photos.js; the review itself is the server's progress-review route.
 import { useEffect, useRef, useState } from 'react'
+import { bodyUnit, toDisplay, fromDisplay } from './lib/units.js'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { fmtNum, fmtDate, todayISO } from './lib/format.js'
+import { fmtNum, fmtDate, todayISO, fmtWU} from './lib/format.js'
 import { t } from './lib/i18n.js'
 import { lastBW } from './lib/history.js'
 import { aiProgressReview, aiErrorMessage } from './lib/api.js'
@@ -24,7 +25,9 @@ function Checkin({ close }) {
   const S = useStore.getState().S
   const [files, setFiles] = useState({ front: null, side: null, back: null })
   const [urls, setUrls] = useState({})
-  const [w, setW] = useState((lastBW(S) || {}).w || 70)
+  // The stepper works in the body-weight unit; `w` crosses back to kilograms when saved.
+  const bwU = bodyUnit(S)
+  const [w, setW] = useState(Math.round(toDisplay((lastBW(S) || {}).w || (bwU === 'lb' ? 155 : 70), bwU) * 10) / 10)
   const [busy, setBusy] = useState('')
   const [pose, setPose] = useState('front')
   const camRef = useRef(null), galRef = useRef(null)
@@ -48,10 +51,11 @@ function Checkin({ close }) {
       for (const p of POSES) if (files[p]) { i++; setBusy(t('Uploading photo {0} of {1}…', i, count)); photos[p] = await uploadPhoto(files[p]) }
       setBusy(t('Saving…'))
       const n = Math.round((w || 0) * 10) / 10
-      const c = newCheckin(todayISO(), n > 0 ? n : null, photos)
+      const kg = n > 0 ? fromDisplay(n, bwU) : null
+      const c = newCheckin(todayISO(), kg, photos)
       update(s => {
         s.checkins = [...(s.checkins || []), c]
-        if (n > 0) { const iso = todayISO(); const ex = s.bodyweight.find(b => b.d === iso); if (ex) { ex.w = n; ex.t = Date.now() } else { s.bodyweight.push({ d: iso, w: n, t: Date.now() }); s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1)) } }
+        if (kg > 0) { const iso = todayISO(); const ex = s.bodyweight.find(b => b.d === iso); if (ex) { ex.w = kg; ex.t = Date.now() } else { s.bodyweight.push({ d: iso, w: kg, t: Date.now() }); s.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1)) } }
       })
       close()
       reviewSheet(c.id, { auto: true })
@@ -74,7 +78,7 @@ function Checkin({ close }) {
       <Button icon="folder" style={{ flex: 1 }} onClick={() => galRef.current?.click()}>{t('From gallery')}</Button>
     </div>
     <h4 className="sec">{t('Today’s weight')}</h4>
-    <div className="row cfgrow"><Stepper label={t('Body weight') + ' (' + S.unit + ')'} value={w} step={0.5} onChange={setW} /></div>
+    <div className="row cfgrow"><Stepper label={t('Body weight') + ' (' + bwU + ')'} value={w} step={bwU === 'lb' ? 1 : 0.5} onChange={setW} /></div>
     <div style={{ height: 14 }} />
     {err && <div className="small" style={{ color: 'var(--red)', marginBottom: 8 }}>{err}</div>}
     {busy ? <div className="row small dim" style={{ gap: 8, padding: '8px 0' }}><span className="spin" />{busy}</div>
@@ -118,7 +122,7 @@ function Review({ id, auto, close }) {
     {big && <button className="ph-big" onClick={() => setBig(null)}><Photo id={big} /></button>}
     <h3 className="row" style={{ gap: 8 }}><Icon name="camera" style={{ color: 'var(--acc)' }} />{fmtDate(c.d, true)}</h3>
     <div className="small muted" style={{ marginBottom: 10 }}>
-      {c.w ? fmtNum(c.w) + ' ' + S.unit : ''}{delta !== null ? ' · ' + (delta > 0 ? '+' : '') + fmtNum(delta) + ' ' + S.unit + ' ' + t('since last time') : ''}
+      {c.w ? fmtWU(c.w, bodyUnit(S)) : ''}{delta !== null ? ' · ' + (delta > 0 ? '+' : '') + fmtWU(delta, bodyUnit(S)) + ' ' + t('since last time') : ''}
       {prev ? ' · ' + t('vs {0}', fmtDate(prev.d, true)) : ' · ' + t('Your starting point')}
     </div>
 
@@ -164,7 +168,7 @@ function Timeline({ close }) {
         <div className="ph-strip">{POSES.map(p => <Photo key={p} id={c.photos[p]} />)}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>{fmtDate(c.d, true)}</div>
-          <div className="dim small">{[c.w ? fmtNum(c.w) + ' ' + S.unit : '', c.review ? c.review.headline : t('No note yet')].filter(Boolean).join(' · ')}</div>
+          <div className="dim small">{[c.w ? fmtWU(c.w, bodyUnit(S)) : '', c.review ? c.review.headline : t('No note yet')].filter(Boolean).join(' · ')}</div>
         </div>
         <Icon name="chevronRight" className="dim" />
       </div>

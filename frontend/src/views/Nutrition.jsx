@@ -8,7 +8,7 @@ import { macroGoalOf, mealsOn, dayTotals, totalsOf, kcalByDay, MEAL_TYPE_ICON, M
 import { SupplementsCard } from '../sheets-supplements.jsx'
 import { analyzeMealSheet, describeMealSheet, manualMealSheet, mealFormSheet, addMealSheet, macroGoalSheet, nutritionCalendarSheet, planMealSheet, recipeSheet, removeDietPlan, DaySummary, MacroLine, MicroLine } from '../sheets-nutrition.jsx'
 import { goalWizardSheet, sourcesSheet } from '../sheets-goal.jsx'
-import { reviewDue, toKg } from '../lib/nutrition-goal.js'
+import { reviewDue } from '../lib/nutrition-goal.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import Ring from '../components/Ring.jsx'
@@ -71,7 +71,7 @@ export default function Nutrition() {
 
     <StreakCard title={t('Nutrition streak')} unitWord="{0} days" streak={mealStreak(S)} badges={computeBadges(S).filter(b => b.cat === 'nutrition')} color="var(--orange)" />
 
-    {S.nutriGoal && reviewDue(S.nutriGoal, lastBW(S) ? toKg(lastBW(S).w, S.unit || 'kg') : null) && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }} onClick={goalWizardSheet}>
+    {S.nutriGoal && reviewDue(S.nutriGoal, lastBW(S) ? lastBW(S).w : null) && <button className="card tappable banner" style={{ width: '100%', textAlign: 'left' }} onClick={goalWizardSheet}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Icon name="target" style={{ color: 'var(--yellow)', fontSize: 20 }} />
         <div style={{ flex: 1, minWidth: 0 }}><b>{t('Time to review your calorie goal')}</b><div className="dim small">{t('Four weeks passed or your weight moved — what you burn has changed too. Takes a minute.')}</div></div>

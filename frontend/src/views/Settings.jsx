@@ -13,7 +13,7 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, STATIC, REPO } from '../lib/demo.js'
 import { COACHES } from '../lib/coach.js'
-import { convertProfile } from '../lib/units.js'
+import { bodyUnit } from '../lib/units.js'
 import { getAIKey, setAIKey, getAIModel, setAIModel, hasUserKey, AI_MODELS, testAIKey } from '../lib/ai.js'
 import { MOBILE, shareExport, syncReminder, nudgesOf, NUDGE_DEF } from '../lib/mobile.js'
 import { healthSupported, healthAvailable, installHealthConnect, requestHealth, syncHealth, IS_IOS_SHELL } from '../lib/health.js'
@@ -134,14 +134,20 @@ export default function Settings() {
       <SelectRow icon="sparkles" iconTint="var(--acc)" title={t('Coach')} sheetTitle={t('Choose your coach')}
         value={S.coach || ''} onChange={v => update(s => { s.coach = v })}
         options={[{ value: '', label: t('Not chosen') }, ...COACHES.map(c => ({ value: c.id, label: c.name + ' · ' + t(c.desc) }))]} />
-      <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')}>
+      {/* Weights are stored in kilograms, so a unit is only ever a way to read and type them.
+          Switching one no longer rewrites a single logged number — which is what used to turn
+          20 lb into 20.1 on the way back — and the two can disagree on purpose: training in
+          pounds while weighing yourself in kilos is normal wherever the gym and the bathroom
+          scale disagree. */}
+      <Row icon="scale" iconTint="var(--teal)" title={t('Weight unit')} subtitle={t('How the weights you lift are shown')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
-          value={S.unit} onChange={v => { if (v === S.unit) return
-            const has = S.workouts.length || S.bodyweight.length || S.routines.some(r => r.ex.some(e => e.weight))
-            if (!has) return update(s => { s.unit = v })
-            confirmSheet({ title: t('Switch to {0}?', v), message: t('Your logged weights, routines and body weight will be converted from {0} to {1} so the numbers keep meaning the same thing.', S.unit, v),
-              confirmText: t('Convert to {0}', v), onConfirm: () => { update(s => { convertProfile(s, s.unit, v) }); toast(t('Converted to {0}', v)) } }) }} />
+          value={S.unit} onChange={v => update(s => { s.unit = v })} />
+      </Row>
+      <Row icon="scale" iconTint="var(--teal)" title={t('Body weight unit')} subtitle={t('Your weigh-ins, independent of the weights you lift')}>
+        <Segmented className="seg-inline"
+          options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
+          value={bodyUnit(S)} onChange={v => update(s => { s.bwUnit = v })} />
       </Row>
     </Section>
 

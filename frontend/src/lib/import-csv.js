@@ -389,16 +389,17 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
   // "185 lb" into 185 kg.
   const fileUnit = sawLb && !sawKg ? 'lb' : sawKg && !sawLb ? 'kg' : ''
   const mixedUnits = sawLb && sawKg
-  const toKg = x => Math.round(x * LB_TO_KG * 10) / 10
-  const toLb = x => Math.round(x / LB_TO_KG * 10) / 10
-  // A row without its own unit follows the file's, and a file that says nothing is taken
-  // to already be in the profile's unit.
+  // Storage is kilograms, so that is what every row is converted *to*. Three decimals, not
+  // one: a pound value rounded to a tenth of a kilo does not read back as the pound value.
+  const toKg = x => Math.round(x * LB_TO_KG * 1000) / 1000
+  // A row without its own unit follows the file's, and a file that says nothing is taken to
+  // be in the unit this profile types in — which is the likeliest thing the export meant.
   const convRow = s => {
-    const u = s.u || fileUnit
-    if (!u || u === unit) return s.w
-    return u === 'lb' ? toKg(s.w) : toLb(s.w)
+    const u = s.u || fileUnit || unit
+    return u === 'lb' ? toKg(s.w) : Math.round(s.w * 1000) / 1000
   }
-  const converted = (!!fileUnit && fileUnit !== unit) || mixedUnits
+  // Only worth telling the person about when something actually moved.
+  const converted = (!!fileUnit && fileUnit !== 'kg') || mixedUnits || (!fileUnit && unit === 'lb')
 
   const dates = [...byDate.keys()].sort()
   const workouts = dates.map(d => {
@@ -479,10 +480,10 @@ export function parseBodyweight(text, { unit = 'kg' } = {}) {
   }
 
   if (!out.size) return { error: 'unrecognised' }
-  const converted = !!fileUnit && fileUnit !== unit
-  const conv = converted
-    ? (fileUnit === 'lb' ? x => Math.round(x * LB_TO_KG * 10) / 10 : x => Math.round(x / LB_TO_KG * 10) / 10)
-    : x => Math.round(x * 10) / 10
+  // Body weight lands in kilograms too; a file that names no unit is read as the profile's.
+  const src = fileUnit || unit
+  const converted = src === 'lb'
+  const conv = converted ? x => Math.round(x * LB_TO_KG * 1000) / 1000 : x => Math.round(x * 1000) / 1000
   const dates = [...out.keys()].sort()
   return {
     kind: 'bodyweight', source: 'Apple Health',

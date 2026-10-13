@@ -49,7 +49,9 @@ export async function syncHealth(update) {
     for (const [d, r] of Object.entries(byDay)) {
       const w = Math.round((+r.value || 0) * 10) / 10
       if (!(w > 20 && w < 400)) continue
-      const kg = S.unit === 'lb' ? Math.round(w * 2.20462 * 10) / 10 : w
+      // Both platforms report kilograms and that is now what we store, so there is nothing
+      // to convert. This used to multiply by a hand-typed 2.20462 under a variable called `kg`.
+      const kg = w
       const ex = S.bodyweight.find(b => b.d === d)
       if (ex && ex.src !== 'health') continue        // typed by hand: theirs
       if (ex) { if (ex.w !== kg) { ex.w = kg; weights++ } }

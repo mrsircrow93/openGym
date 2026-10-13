@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
+import { bodyUnit, toDisplay } from '../lib/units.js'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDone, workoutVolume } from '../lib/history.js'
-import { fmtNum, fmtDate, fmtDur, fmtVol, fmtWater, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
+import { fmtNum, fmtDate, fmtDur, fmtVol, fmtWater, todayISO, isoOf, weekKey, DAYS, fmtW, fmtWU} from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
 import { daysLeft } from '../lib/entitlements.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor, coachSheet, COACH_QUESTIONS, waterSheet, addWater, waterToday } from '../sheets.jsx'
@@ -63,7 +64,10 @@ export default function Home() {
 
   const wThisWeek = S.workouts.filter(w => weekKey(w.d) === weekKey(todayISO())).length
   const plannedPerWeek = Object.keys(S.week).filter(k => S.week[k]).length
-  const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  // Body weight is stored in kilograms; the card, the goal line and the curve all read in
+  // the body-weight unit, which can differ from the one loads are logged in.
+  const bwU = bodyUnit(S)
+  const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: toDisplay(b.w, bwU), d: b.d }))
   const water = waterToday(S)
   const waterGoal = S.waterGoal || 2000
   const waterPct = Math.min(100, Math.round((water / waterGoal) * 100))
@@ -194,17 +198,17 @@ export default function Home() {
       <div className="row between" style={{ marginBottom: 6 }}>
         <div className="eyebrow">{t('Body weight')}</div>
         <div className="row" style={{ gap: 8 }}>
-          <Button size="xs" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+          <Button size="xs" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtW(S.targetW, bwU) : t('Goal')}</Button>
           <Button size="xs" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
         </div>
       </div>
       {bw ? <>
         <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-          <div className="big">{fmtNum(bw.w)} <span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}>{S.unit}</span></div>
+          <div className="big">{fmtW(bw.w, bwU)} <span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}>{bwU}</span></div>
           {!!delta && (
             <span className="small row" style={{ gap: 2, fontWeight: 600, color: bwDeltaColor(delta, bw.w) }}>
               <Icon name={delta > 0 ? 'arrowUp' : 'arrowDown'} style={{ fontSize: 12 }} />
-              {fmtNum(Math.abs(delta))}
+              {fmtW(Math.abs(delta), bwU)}
             </span>
           )}
           <span className="dim small" style={{ marginLeft: 'auto' }}>{fmtDate(bw.d, true)}</span>
@@ -212,10 +216,10 @@ export default function Home() {
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
-            <span>{t('Goal')} {fmtNum(S.targetW)} {S.unit} · {Math.abs(S.targetW - bw.w) < 0.05 ? t('reached!') : t(S.targetW > bw.w ? '{0} to gain' : '{0} to lose', fmtNum(Math.abs(S.targetW - bw.w)) + ' ' + S.unit)}</span>
+            <span>{t('Goal')} {fmtWU(S.targetW, bwU)} · {Math.abs(S.targetW - bw.w) < 0.05 ? t('reached!') : t(S.targetW > bw.w ? '{0} to gain' : '{0} to lose', fmtWU(Math.abs(S.targetW - bw.w), bwU))}</span>
           </div>
         )}
-        <div className="chart" style={{ marginTop: 8 }}><LineChart points={bwPoints} h={120} unit={S.unit} goal={S.targetW} /></div>
+        <div className="chart" style={{ marginTop: 8 }}><LineChart points={bwPoints} h={120} unit={bwU} goal={toDisplay(S.targetW, bwU)} /></div>
       </> : <div className="muted small">{t("No entries yet — log your weight to start the curve. It's also asked before every workout.")}</div>}
     </div>
 
