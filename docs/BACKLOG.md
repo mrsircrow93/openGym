@@ -149,14 +149,66 @@ Suggested order by value/effort: 3 → 4 → 2 → 1.
    account. Tests: `lib/exercise-media.test.js` (inspector, tampered and oversized files) and
    `lib/exmedia-server.test.js` (routes, cross-account access, path traversal, ranges).
 
-## First-run tutorial (owner, 2026-10-09)
+## Next three features (owner, 2026-10-12), in the order they should be built
+
+Suggested order is **rest timer → units per exercise → tutorial**: the timer is a day and fixes
+something that breaks mid-set, the units question is the one that silently corrupts numbers if
+rushed, and the tutorial is the biggest but least urgent of the three.
+
+### 1. Rest timer that survives the screen going off
+
+The countdown is already built on an absolute `endsAt` (`useUI.startRest`), so elapsed time is
+never lost — the bar reads correctly the moment you look again. What is missing is the *alert*: the
+`setInterval` stops when the WebView is suspended, and the existing fallback is a **server Web
+Push**, which does not reach a Capacitor build on either platform. So on a phone with the screen
+off, nothing buzzes and the set is missed. That is the whole complaint.
+
+Fix: in store builds, schedule a **local notification** for `endsAt` via the
+`@capacitor/local-notifications` plugin already in the bundle, cancel it in `stopRest`, reschedule
+in `addRest`. Keep the Web Push path for the browser. Reserve an id range of its own (the workout,
+nutrition and supplement ranges are 100s, 300s and 400s). The notification must be
+time-sensitive/high-priority so it fires through Do Not Disturb at the gym.
+
+**The watch comes free with this.** A local notification is mirrored to a paired Apple Watch and to
+Wear OS by the system, so the wrist buzzes with no extra work. A real watch *app* — starting and
+skipping the timer from the wrist — is a separate native project (WatchKit target, Wear OS module)
+that Capacitor does not cover, and is weeks, not days. Say so plainly rather than half-building it.
+
+Size: 1 day including tests.
+
+### 2. A unit per exercise, not only per profile
+
+A gym in Mexico mixes kilo machines with pound dumbbells, so one global unit is wrong for everybody
+who trains in one.
+
+**The trap:** weights are stored *as typed, in the profile unit* (`lib/units.js`), and switching the
+unit rewrites every logged number through `convertProfile`. There is no canonical storage. So the
+one thing this feature must not do is store mixed units — every PR, volume total, chart, progression
+suggestion and AI prompt reads those numbers raw and would start comparing pounds against kilos.
+
+Design: **storage stays in the profile unit; the override lives only at the edge.** An exercise gets
+an optional display unit (`S.exUnits[exerciseId]`, absent = follow the profile). Input converts to
+the profile unit on save; display converts back. Everything downstream is untouched. `roundPlate`
+and `plateStep` take the exercise's unit so a pound dumbbell suggests 5 lb steps and a kilo machine
+2.5 kg. The set row, the exercise sheet and the history line show the exercise's unit next to the
+number, always — an unlabelled number is what makes this confusing today.
+
+Also: `convertProfile` must leave `exUnits` alone, and the unit switch confirmation should say that
+per-exercise choices are kept.
+
+Size: 2 days, most of it the display paths and the tests.
+
+### 3. First-run tutorial
+
 
 A mini walkthrough the first time the app opens, skippable from the first step and never shown
 again once finished or dismissed. Testers land on a full app with no idea where anything is.
 
 Shape: 4 to 6 steps, each one sentence over the real screen, not a slideshow of mockups. Home and
 the day's workout, starting and logging a set, the Nutrition tab and the photo of a meal, the
-coach, and where the calendar and progress live. Every step has **Saltar** as well as **Siguiente**,
+coach, and where the calendar and progress live. **Connecting a watch** gets its own step: testers
+asked for it unprompted, and the Apple Health / Health Connect toggle is currently buried where
+nobody finds it. Every step has **Saltar** as well as **Siguiente**,
 and a **Ver el tutorial** entry in Settings so it can be replayed. State goes in `S.tourDone` so it
 syncs and does not re-run on a second device. Do not gate anything behind it, and do not start it on
 top of the sign-up flow — wait until the first Home render.
