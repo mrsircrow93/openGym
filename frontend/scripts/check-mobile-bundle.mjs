@@ -9,6 +9,10 @@ const files = fs.readdirSync(dir).filter(f => f.startsWith('index-') && f.endsWi
 const src = files.map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n')
 const problems = []
 if (!/https:\/\/app\.vantixgym\.app/.test(src)) problems.push('VITE_API_BASE missing: the app would call relative /api URLs inside the WebView')
-if (!/appl_[A-Za-z0-9]{20,}/.test(src)) problems.push('RevenueCat public key missing: storePurchases() would be false and the app would open Stripe')
+if (!/appl_[A-Za-z0-9]{20,}/.test(src)) problems.push('RevenueCat Apple key missing: storePurchases() would be false on iOS and the app would open Stripe')
+// Android shipped once with no Google key at all: the paywall rendered, the plans were listed,
+// and there was simply no button, because Play billing was not configured yet. Testers hit a
+// dead end they could not report usefully. The bundle now has to carry both stores' keys.
+if (!/goog_[A-Za-z0-9]{20,}/.test(src)) problems.push('RevenueCat Google key missing: storePurchases() would be false on Android and the paywall would dead-end')
 if (problems.length) { console.error('✖ mobile bundle check failed:\n  - ' + problems.join('\n  - ')); process.exit(1) }
 console.log('✓ mobile bundle: API base + store purchases present')

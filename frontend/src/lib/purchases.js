@@ -8,7 +8,7 @@ import { MOBILE } from './mobile.js'
 import { api } from './api.js'
 
 const APPLE_KEY = import.meta.env.VITE_RC_APPLE_KEY || 'appl_nmMQgvALvDgBGabnJSGqOEEmciz'
-const GOOGLE_KEY = import.meta.env.VITE_RC_GOOGLE_KEY || ''
+const GOOGLE_KEY = import.meta.env.VITE_RC_GOOGLE_KEY || 'goog_UUkXOCiyIUyVBBWPyVTcdRJdAgZ'
 const IOS = MOBILE && /iPhone|iPad|iPod/i.test(navigator.userAgent)
 const ANDROID = MOBILE && /Android/i.test(navigator.userAgent)
 const KEY = IOS ? APPLE_KEY : ANDROID ? GOOGLE_KEY : ''
