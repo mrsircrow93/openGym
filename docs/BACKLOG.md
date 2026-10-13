@@ -37,26 +37,31 @@ sign-in (web + iOS + Android), progress photos with monthly coach note and remin
 diet import from photo/PDF (HEIC, PDFs to 12 MB), security pass (docs/SECURITY_REVIEW.md), new
 pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), English marketing site.
 
-### Where things stand — 2026-10-12
+### Where things stand — 2026-10-12 (evening)
 
-Apple is done and selling. Everything live now hangs on Google Play, in this order:
+Apple is live and selling. Android is configured end to end; what is left is uploading the build,
+two money items and the testers.
 
-| # | Step | State | Blocks |
-|---|---|---|---|
-| A | Play payments profile (public commerce profile uses the café address, not the owner's home) | ✅ 2026-10-12 | B, D |
-| B | Google 15 % service-fee programme | open, 2 min | money |
-| C | **Apple Small Business Programme (15 % instead of 30 %)** | open, urgent | money on live sales |
-| D | Payment method (bank account) on the Play payments profile | open | getting paid |
-| E | Google Cloud service account linked to Play, JSON key | open, **up to 36 h to propagate** | F, G |
-| F | Three subscription products in Play, base plans *activated* | open | G |
-| G | RevenueCat Play app, products on `vantixgym_pro` / `default` offering | open | H |
-| H | `VITE_RC_GOOGLE_KEY` in `build:mobile`, versionCode 33, upload | mine, waiting on G | Android selling |
-| I | 12 testers for 14 continuous days | 6 of 12 | Play production |
-| J | Comp 90 days to each tester so the 7-day trial does not dead-end them | open, urgent | keeping testers |
+| # | Step | State |
+|---|---|---|
+| A | Play payments profile, public address = the café, not the owner's home | ✅ |
+| C | Apple Small Business Programme (15 % instead of 30 %) | form filled — **confirm it was submitted** |
+| E | Google Cloud service account + JSON, financial permissions granted | ✅ created; RevenueCat's "validate purchases" check still amber, pure Google propagation (up to 36 h) |
+| F | Three Play subscriptions, base plans activated, all regions | ✅ |
+| G | RevenueCat Play app, 3 products imported, `vantixgym_pro`, `default` offering | ✅ each package now carries Apple + Play |
+| H | versionCode 33 with the `goog_` key, verified bundle | ✅ built, `~/Downloads/VantixGym-1.0-33.aab` — **owner to upload** |
+| B | Google 15 % service-fee programme | open, 2 min, banner on the Play payments page |
+| D | Bank account on the Play payments profile | open — Google cannot pay out without it |
+| I | 12 testers for 14 continuous days | 7 of 12 |
+| J | Comp 90 days to each tester so the 7-day trial does not dead-end them | open, urgent |
+| K | Licence testing list, then verify a real Play purchase end to end | after H and E go green |
 
-C and E have clocks: Apple's enrolment applies from the first of the following month, and E takes
-up to 36 hours, so both should start before anything else. J is urgent for a different reason —
-testers who hit the paywall uninstall, and the 14-day count restarts.
+Two code fixes shipped today, both silent-failure classes:
+- `planByProduct` missed a product id spelled in Spanish, so a 6-month Android buyer would have kept
+  their access but fallen out of MRR with nothing logged. Aliases added, unmatched ids now logged.
+- `check-mobile-bundle.mjs` only checked for the Apple key, so an Android build with no store key at
+  all passed — which is exactly how a tester got a paywall with no purchase button. It now demands
+  both stores' keys.
 
 ### Pending — owner (needs the owner's accounts or decisions)
 
