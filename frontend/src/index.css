@@ -1401,3 +1401,26 @@ body.console #tabbar{display:none}
 /* reference photo / clip on a custom exercise */
 .exmedia-wrap{margin:0 0 12px;border-radius:var(--r);overflow:hidden;background:var(--surface-2);max-height:260px;display:flex;justify-content:center}
 .exmedia{display:block;width:100%;max-height:260px;object-fit:contain;background:var(--surface-2)}
+
+/* ---------- first-run tour ---------- */
+/* The scrim is deliberately light: the point is to read the screen underneath, not to hide it.
+   The card clears the tab bar and the home indicator so nothing it says sits under a thumb. */
+.tour{position:fixed;inset:0;z-index:90;pointer-events:none}
+.tour-scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);pointer-events:auto}
+.tour-card{
+  position:absolute;left:12px;right:12px;bottom:calc(76px + var(--sab));pointer-events:auto;
+  background:var(--bg-el);border-radius:var(--r-lg);padding:16px;
+  box-shadow:0 20px 60px -12px rgba(0,0,0,.6);animation:pop .28s var(--ease);
+  max-height:calc(100dvh - 140px);overflow-y:auto;
+}
+:root[data-theme="light"] .tour-card{background:#fff}
+@media (min-width:640px){.tour-card{left:50%;right:auto;width:420px;margin-left:-210px}}
+.tour-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tour-head b{font-size:17px;letter-spacing:-.01em;flex:1;min-width:0}
+.tour-icon{display:flex;color:var(--acc);font-size:20px;flex:none}
+.tour-skip{color:var(--label-3);font-size:13px;flex:none}
+.tour-body{color:var(--label-2);font-size:14px;line-height:1.5;margin-bottom:14px}
+.tour-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tour-dots{display:flex;gap:5px}
+.tour-dots i{width:6px;height:6px;border-radius:99px;background:var(--label-4)}
+.tour-dots i.on{background:var(--acc);width:16px}

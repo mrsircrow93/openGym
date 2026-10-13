@@ -206,7 +206,7 @@ body weight, and `S.exUnits[id]` for one exercise, chosen in its config sheet. V
 real pre-change pounds profile: 200 lb stores as 90.718 kg and reads back as exactly 200 lb, and
 flipping the load unit to kilos left every stored number byte-identical.
 
-### 3. First-run tutorial
+### 3. ✅ 2026-10-12 — First-run tutorial
 
 
 A mini walkthrough the first time the app opens, skippable from the first step and never shown
@@ -221,8 +221,13 @@ and a **Ver el tutorial** entry in Settings so it can be replayed. State goes in
 syncs and does not re-run on a second device. Do not gate anything behind it, and do not start it on
 top of the sign-up flow — wait until the first Home render.
 
-Size: 2 days. Worth doing before the Play production release, because it is the cheapest fix for
-the "no entendí qué hacer" feedback.
+**Shipped.** Six steps over the real screens — each one navigates to the tab it describes, so the
+thing being explained is underneath the words. Home, the week, starting a session, logging a meal
+from a photo, progress, and connecting a watch, which testers asked for unprompted. **Skip** sits in
+the header of every step, and skipping counts as finishing. State is `S.tourDone` in the synced
+profile, so a second device does not repeat it, and it defaults to false so the testers already
+installed — the eight with zero workouts — get it on their next update. Settings has
+"Ver el tutorial otra vez", which just clears the flag.
 
 ## Mobile security review (OWASP MASVS) — pending, owner asked 2026-10-09
 

@@ -44,6 +44,9 @@ export const DEF = {
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
+  // First-run tour (components/Tour.jsx). Synced, so a second device does not run it again, and
+  // false by default so the people already installed — the testers who logged nothing — get it too.
+  tourDone: false,
   reminder: { on: false, time: '08:00', tz: null }, effort: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))

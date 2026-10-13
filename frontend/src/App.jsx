@@ -36,6 +36,7 @@ import { locked } from './lib/entitlements.js'
 import { MOBILE } from './lib/mobile.js'
 import { syncHealth } from './lib/health.js'
 import { initBackButton } from './lib/backbutton.js'
+import Tour, { useTour } from './components/Tour.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
 
@@ -107,6 +108,8 @@ function Shell() {
   useWakeLock(!!S.active && S.keepAwake !== false)
 
   const authed = user || isGuest
+  // Shown once, the first time someone gets past the sign-in screen, over the real screens.
+  const tour = useTour(ready, authed)
   // Links from the account emails work whether or not someone is signed in on this device.
   const authLink = loc.pathname === '/verify' ? <Verify /> : loc.pathname === '/reset' ? <Reset /> : (loc.pathname === '/terms' || loc.pathname === '/privacy') ? <Legal /> : null
   if (authLink) return <><div id="app" className="vfade"><ErrorBoundary>{authLink}</ErrorBoundary></div><Toast /></>
@@ -146,6 +149,7 @@ function Shell() {
         </ErrorBoundary>
       </div>
       <TabBar onStart={startFlow} />
+      {authed && tour.open && <Tour onClose={tour.close} />}
       <RestTimer />
       <Modals />
       <Toast />

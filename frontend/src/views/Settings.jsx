@@ -144,6 +144,11 @@ export default function Settings() {
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
           value={S.unit} onChange={v => update(s => { s.unit = v })} />
       </Row>
+      {/* Replaying is just clearing the flag: App watches it and opens the tour on the next
+          render, so Settings needs no handle on the component. */}
+      <Row icon="lightbulb" iconTint="var(--yellow)" title={t('Show the tutorial again')}
+        subtitle={t('A quick tour of the app, from the start')}
+        onClick={() => { update(s => { s.tourDone = false }); goto('/home') }} />
       <Row icon="scale" iconTint="var(--teal)" title={t('Body weight unit')} subtitle={t('Your weigh-ins, independent of the weights you lift')}>
         <Segmented className="seg-inline"
           options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
