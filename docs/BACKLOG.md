@@ -37,31 +37,30 @@ sign-in (web + iOS + Android), progress photos with monthly coach note and remin
 diet import from photo/PDF (HEIC, PDFs to 12 MB), security pass (docs/SECURITY_REVIEW.md), new
 pricing 129/599/999 with hybrid trial and drip messages (docs/BILLING.md), English marketing site.
 
-### Where things stand — 2026-10-12 (evening)
+### Where things stand — 2026-10-12 (night)
 
-Apple is live and selling. Android is configured end to end; what is left is uploading the build,
-two money items and the testers.
+Apple is live and selling. Android is fully configured and build 33 is uploaded. Nothing is
+blocked on engineering; what remains is Google paperwork, testers, and one verification.
 
-| # | Step | State |
+**Blocking the Play launch**
+| # | Item | State |
 |---|---|---|
-| A | Play payments profile, public address = the café, not the owner's home | ✅ |
-| C | Apple Small Business Programme (15 % instead of 30 %) | form filled — **confirm it was submitted** |
-| E | Google Cloud service account + JSON, financial permissions granted | ✅ created; RevenueCat's "validate purchases" check still amber, pure Google propagation (up to 36 h) |
-| F | Three Play subscriptions, base plans activated, all regions | ✅ |
-| G | RevenueCat Play app, 3 products imported, `vantixgym_pro`, `default` offering | ✅ each package now carries Apple + Play |
-| H | versionCode 33 with the `goog_` key, verified bundle | ✅ built, `~/Downloads/VantixGym-1.0-33.aab` — **owner to upload** |
-| B | Google 15 % service-fee programme | open, 2 min, banner on the Play payments page |
+| I | 12 testers opted in for 14 continuous days | 7 of 12 |
+| E | RevenueCat "can validate purchases" turns green | waiting on Google propagation, up to 36 h |
+| K | Licence-testing list, then one real Play purchase verified end to end | after E |
 | D | Bank account on the Play payments profile | open — Google cannot pay out without it |
-| I | 12 testers for 14 continuous days | 7 of 12 |
-| J | Comp 90 days to each tester so the 7-day trial does not dead-end them | open, urgent |
-| K | Licence testing list, then verify a real Play purchase end to end | after H and E go green |
+| B | Google 15 % service-fee programme | open, 2 min, banner on the Play payments page |
 
-Two code fixes shipped today, both silent-failure classes:
-- `planByProduct` missed a product id spelled in Spanish, so a 6-month Android buyer would have kept
-  their access but fallen out of MRR with nothing logged. Aliases added, unmatched ids now logged.
-- `check-mobile-bundle.mjs` only checked for the Apple key, so an Android build with no store key at
-  all passed — which is exactly how a tester got a paywall with no purchase button. It now demands
-  both stores' keys.
+**Done 2026-10-12:** Play payments profile with the café as the public address; Google Cloud service
+account and permissions; three Play subscriptions with activated base plans in all regions;
+RevenueCat Play app, products, `vantixgym_pro` and the `default` offering carrying both stores;
+versionCode 33 built, verified and uploaded; Apple Small Business Programme submitted; every
+tester's trial extended rather than comped, which keeps the conversion metric honest.
+
+**Product risk, not paperwork:** 8 of 11 testers have logged **zero** workouts. They installed and
+left. That satisfies Google's counter but means nobody has really used the product, and an idle
+tester is the first to uninstall — which resets the 14-day clock. It is also the strongest argument
+for the first-run tutorial below.
 
 ### Pending — owner (needs the owner's accounts or decisions)
 
@@ -92,7 +91,7 @@ Two code fixes shipped today, both silent-failure classes:
 
 ### Pending — build (once the items above unlock them)
 
-- Continue with Apple (needs #2). Same shape as Google: ID token verified server-side.
+- ✅ Continue with Apple, ID token verified server-side (Services ID app.vantixgym.web).
 - ✅ 2026-10-03 In-app purchases via RevenueCat — sandbox purchase verified end to end on the owner's iPhone (INITIAL_PURCHASE → webhook → PRO). (iOS live in code; `REVENUECAT_WEBHOOK_AUTH` + webhook in the dashboard, optional `REVENUECAT_SECRET_KEY`). Android: add the Play app in RevenueCat and `VITE_RC_GOOGLE_KEY` once Play is approved. Owner: Apple Small Business Program (15 % instead of 30 %) before the first payout; optional introductory free trial on the ASC subscriptions.
 - ✅ 2026-10-12 **VantixGym 1.0 is live on the App Store** (build 33), with the three subscriptions
   APPROVED, after three review rounds. `https://apps.apple.com/mx/app/vantixgym/id6818728682`.
