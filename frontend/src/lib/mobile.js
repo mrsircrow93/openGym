@@ -126,6 +126,50 @@ export function supplementNudges(S, now = new Date()) {
     }))
 }
 
+// Rest-timer alert (id 500, clear of the workout 100s, photos 200, nutrition 300s and
+// supplements 400s). The countdown itself runs off an absolute `endsAt`, so the bar is always
+// right when you look at it. What the WebView cannot do is wake up and buzz once the screen is
+// off — it gets suspended, the interval stops, and the browser-only fallback is a server Web Push
+// that never reaches a Capacitor build. A one-shot local notification fires at the exact instant
+// regardless, and the system mirrors it to a paired Apple Watch or Wear OS watch, which is the
+// timer on the wrist without building a watch app.
+export const REST_ALERT_ID = 500
+
+async function restPlugin() {
+  if (!MOBILE) return null
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications')
+    return LocalNotifications
+  } catch { return null }
+}
+
+export async function scheduleRestAlert(endsAt) {
+  const LN = await restPlugin()
+  if (!LN) return false
+  try {
+    await LN.cancel({ notifications: [{ id: REST_ALERT_ID }] }).catch(() => {})
+    if (!(endsAt > Date.now() + 500)) return false      // already over, or so close the beep covers it
+    // Asking here is the one moment the request explains itself: they just started a rest and
+    // the alert is the thing being offered. Never re-asked once answered either way.
+    let perm = await LN.checkPermissions()
+    if (perm.display === 'prompt' || perm.display === 'prompt-with-rationale') perm = await LN.requestPermissions()
+    if (perm.display !== 'granted') return false
+    await LN.schedule({ notifications: [{
+      id: REST_ALERT_ID,
+      title: t('Rest over'),
+      body: t('Next set — let’s go!'),
+      schedule: { at: new Date(endsAt), allowWhileIdle: true }
+    }] })
+    return true
+  } catch { return false }                               // nothing here is worth interrupting a workout for
+}
+
+export async function cancelRestAlert() {
+  const LN = await restPlugin()
+  if (!LN) return
+  try { await LN.cancel({ notifications: [{ id: REST_ALERT_ID }] }) } catch { /* nothing scheduled */ }
+}
+
 // (Re)schedule the workout-day reminder: one repeating notification per weekday that has a
 // routine in the weekly plan. Cheap enough to run after any state change — the plan or the
 // reminder time may just have been edited. `interactive` gates the OS permission prompt to

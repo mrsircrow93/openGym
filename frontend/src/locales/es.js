@@ -162,6 +162,8 @@ export default {
   'Freestyle workout — add your first exercise.': 'Entrenamiento libre — añade tu primer ejercicio.',
   'Finish workout early · {0} exercises': 'Terminar antes · {0} ejercicios',
   'Rest over — next set!': '¡Descanso terminado — siguiente serie!',
+  'Rest over': 'Fin del descanso',
+  'Next set — let’s go!': 'Siguiente serie, ¡vamos!',
   'Hi {0}': 'Hola {0}',
   'This week': 'Esta semana',
   '{0} — in progress': '{0} — en curso',
